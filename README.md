@@ -25,6 +25,9 @@ npm run verify   # check dist/ for branding leaks
 
 `npm run all` chains the three.
 
+For the full operator runbook (daily-sync mechanics, reviewing PRs,
+adding rebrand rules, asset replacement) see [OPERATING.md](OPERATING.md).
+
 ## How updates work
 
 A scheduled GitHub Action runs daily. If GSD Redux has a new release:
