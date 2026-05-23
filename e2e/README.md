@@ -62,13 +62,17 @@ would have shipped without an e2e gate.
   block for the install-state file. Drop the patch entry once the equivalent
   fix lands upstream.
 - **`--profile=standard` install fails: "Failed to install agents:
-  directory is empty".** Suite 09 surfaced this. The standard profile's
-  transitive closure resolves to zero agents, and `verifyInstalled()` bails
-  with a non-zero exit. `--profile=core` and `--profile=full` install
-  cleanly; `--minimal` matches core. Suite 09 tolerates this with a
-  documented expected behavior and includes an inverted assertion that
-  flags the day the install starts succeeding, so we can tighten the
-  ordering assertion back up. Filed as a follow-up.
+  directory is empty".** Suite 09 surfaced this. Root cause: upstream's
+  `parseCallsAgents()` regex literal `/\bgsd-[a-z][a-z-]*/g` was not
+  rewritten by the rebrand-map (the `\b` puts a word character `b` directly
+  before `gsd`, so `id:gsd-dash`'s `/\bgsd-/` rule didn't match). With the
+  prefix wrong, every skill resolved to zero agent references and the
+  standard profile's filtered agents stage dir came up empty. `core` and
+  `full` bypass that codepath via separate fast paths in `install.js`,
+  which is why only `standard` failed. Fixed downstream via
+  `overlay/text-patches.mjs` (entry `install-profiles-parse-calls-agents-prefix`)
+  — surgical regex rewrite to `/\becl-[a-z][a-z-]*/g`. Suite 09 now
+  asserts strict `core < standard < full` ordering.
 
 ## Out of scope (follow-ups)
 
