@@ -1,0 +1,52 @@
+name: ci
+
+# Runs on every PR (and pushes to dev/main) to give a green check before
+# merging. There is no branch protection on this repo (private repos on
+# the free GitHub tier don't get rulesets), so this CI run is the only
+# automated quality gate — reviewers should treat a red CI as a hard
+# block on merging.
+
+on:
+  pull_request:
+    branches: [dev, main]
+  push:
+    branches: [dev, main]
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  build-and-verify:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+
+      - name: Smoke-test rebrand map
+        run: node scripts/smoke-rebrand-map.mjs
+
+      - name: Synthetic sync test
+        run: node scripts/test-sync-synthetic.mjs
+
+      - name: Re-bake src/ from upstream/ + overlay
+        run: node overlay/bake.mjs
+
+      - name: Verify no branding leaks in src/
+        run: node scripts/verify-rebrand.mjs
+
+      - name: Assert committed src/ matches a fresh bake
+        # Catches drift: if someone hand-edits src/ without re-baking, the
+        # working tree won't be clean after `bake.mjs` runs, and CI fails.
+        # Excludes REBRAND-MANIFEST.json because it embeds a timestamp.
+        run: |
+          if [ -n "$(git status --porcelain -- 'src/' ':!src/REBRAND-MANIFEST.json')" ]; then
+            echo "::error::src/ has drifted from upstream/ + overlay/. Run 'npm run build' and commit."
+            git status --short -- 'src/' ':!src/REBRAND-MANIFEST.json'
+            exit 1
+          fi
