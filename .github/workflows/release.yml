@@ -71,6 +71,17 @@ jobs:
         working-directory: src
         run: npm ci || npm install --no-audit --no-fund
 
+      - name: Pre-install SDK dependencies
+        # `npm publish` propagates --dry-run to child npm calls, which
+        # breaks the `npm ci` inside prepublishOnly's build:sdk script
+        # (it runs in dry-run mode, prints "add X" lines but never
+        # actually populates node_modules, then tsc fails with
+        # "command not found"). Pre-installing here means the lifecycle
+        # script's `npm ci` is a no-op (deps already match lockfile),
+        # and tsc finds typescript in node_modules/.bin/.
+        working-directory: src/sdk
+        run: npm ci
+
       - name: Publish to npm (dry-run)
         if: inputs.dry_run == 'true'
         working-directory: src
