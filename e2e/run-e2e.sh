@@ -31,10 +31,10 @@ if [ ! -f "$REPO_ROOT/src/package.json" ] || [ ! -f "$REPO_ROOT/src/REBRAND-MANI
 fi
 echo -e "${CYAN}Step 1: Using existing src/ (baked at $(jq -r .bakedAt "$REPO_ROOT/src/REBRAND-MANIFEST.json"))${NC}"
 
-echo -e "${CYAN}Step 2: Pre-install SDK deps (so prepublishOnly tsc works)${NC}"
-# prepublishOnly fires on `npm pack` and runs `cd sdk && npm ci && npm run build`.
-# But we need sdk/node_modules to exist before npm pack runs — see HANDOVER watch-out.
-( cd "$REPO_ROOT/src/sdk" && npm ci --silent )
+echo -e "${CYAN}Step 2: Build SDK (npm pack does NOT run prepublishOnly — npm 7+)${NC}"
+# `prepublishOnly` only fires on `npm publish`, not `npm pack`. We use pack, so
+# build the SDK explicitly here so sdk/dist/ is present in the tarball.
+( cd "$REPO_ROOT/src/sdk" && npm ci --silent && npm run build --silent )
 
 echo -e "${CYAN}Step 3: npm pack from src/${NC}"
 ( cd "$REPO_ROOT/src" && rm -f evolvconsulting-evolv-coder-lite-*.tgz && npm pack --silent )
