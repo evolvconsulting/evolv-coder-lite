@@ -17,12 +17,6 @@
 # standard >= full means routing is broken.
 #
 # --minimal alias is exercised separately and asserted to match core.
-#
-# Known bug: --profile=standard currently fails the install with
-# "Failed to install agents: directory is empty" — the standard closure
-# resolves to no agents, and verifyInstalled() bails. The strict
-# ordering assertion is relaxed for standard with an explicit flag if
-# the bug ever gets fixed (so we can tighten this back up).
 set -uo pipefail
 
 SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
@@ -83,26 +77,13 @@ else
   test_fail "core profile produced 0 skills (install probably failed)"
 fi
 
-# Known regression: --profile=standard exits non-zero with
-# "Failed to install agents: directory is empty" (the standard closure
-# resolves to no agents). When that's true, the strict ordering
-# assertion (core < standard < full) is meaningless because standard
-# isn't installing at all. Tolerate it here with a documented expected
-# behavior so this suite stays useful for catching new regressions, and
-# emit an explicit flag if standard ever starts succeeding so we can
-# tighten the assertion back up.
-test_start "standard profile install behavior (tolerates known bug: no agents in closure)"
+test_start "core < standard < full"
 if [ "${STANDARD_FAIL:-0}" -ne 0 ] || [ "$STANDARD" -eq 0 ]; then
-  echo -e "    ${YELLOW}known: standard install fails ('Failed to install agents: directory is empty')${NC}"
+  test_fail "standard profile install failed or produced 0 skills"
+elif [ "$CORE" -lt "$STANDARD" ] && [ "$STANDARD" -lt "$FULL" ]; then
   test_pass
 else
-  # Standard now succeeds — tighten this assertion.
-  if [ "$CORE" -lt "$STANDARD" ] && [ "$STANDARD" -lt "$FULL" ]; then
-    echo -e "    ${YELLOW}standard install now works! core=$CORE < standard=$STANDARD < full=$FULL${NC}"
-    test_pass
-  else
-    test_fail "standard install no longer fails — tighten assertion: expected core ($CORE) < standard ($STANDARD) < full ($FULL)"
-  fi
+  test_fail "expected core ($CORE) < standard ($STANDARD) < full ($FULL)"
 fi
 
 test_start "core < full"
