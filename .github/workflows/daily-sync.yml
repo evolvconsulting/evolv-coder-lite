@@ -1,14 +1,25 @@
 name: daily-sync
 
-# Daily upstream sync. Fetches the latest open-gsd/get-shit-done-redux
-# release, applies the rebrand overlay surgically to src/, runs the verifier,
-# and opens a PR. PRs are NOT auto-merged — human review is required.
+# Daily release watcher for open-gsd/get-shit-done-redux.
+#
+# Phase 1 (cheap):  Ask GitHub releases API for the latest tag.
+# Phase 2 (heavy):  Only if Phase 1 reports a new tag, run sync-and-patch
+#                   to compute the diff, translate through the rebrand
+#                   overlay, and open a PR against `dev`.
+#
+# PRs are NOT auto-merged at this layer. The bot pushes a branch and
+# opens a PR against dev; reviewers (or the auto-merge-dev-to-main
+# workflow) handle promotion to main.
 
 on:
   schedule:
-    # 13:17 UTC daily (off the top of the hour to avoid GitHub API rush).
-    - cron: '17 13 * * *'
-  workflow_dispatch: {}
+    - cron: '17 13 * * *'   # daily, 13:17 UTC
+  workflow_dispatch:
+    inputs:
+      force_sync:
+        description: 'Run sync even if no new release (for debugging)'
+        required: false
+        default: 'false'
 
 permissions:
   contents: write
@@ -19,12 +30,35 @@ concurrency:
   cancel-in-progress: false
 
 jobs:
+  poll-release:
+    name: Poll upstream releases
+    runs-on: ubuntu-latest
+    outputs:
+      new_release: ${{ steps.poll.outputs.new_release }}
+      current_ref: ${{ steps.poll.outputs.current_ref }}
+      latest_ref: ${{ steps.poll.outputs.latest_ref }}
+      release_name: ${{ steps.poll.outputs.release_name }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+      - name: Check for new upstream release
+        id: poll
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: node scripts/check-upstream-release.mjs
+
   sync:
+    name: Sync and open PR
+    needs: poll-release
+    if: needs.poll-release.outputs.new_release == 'true' || inputs.force_sync == 'true'
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
         with:
           fetch-depth: 0
+          ref: dev
 
       - uses: actions/setup-node@v4
         with:
@@ -45,51 +79,41 @@ jobs:
         run: |
           if [ -z "$(git status --porcelain)" ]; then
             echo "changed=false" >> "$GITHUB_OUTPUT"
-            echo "No working-tree changes — upstream already in sync."
+            echo "No working-tree changes after sync."
           else
             echo "changed=true" >> "$GITHUB_OUTPUT"
-            git status --short
+            git status --short | head -30
           fi
 
-      - name: Verify rebrand (no leaks in src/)
+      - name: Verify rebrand
         if: steps.changes.outputs.changed == 'true'
         run: node scripts/verify-rebrand.mjs
 
-      - name: Read new upstream tag
-        if: steps.changes.outputs.changed == 'true'
-        id: tag
-        run: |
-          TAG=$(node -e "console.log(JSON.parse(require('fs').readFileSync('UPSTREAM.lock','utf8')).ref)")
-          echo "tag=${TAG}" >> "$GITHUB_OUTPUT"
-
-      - name: Create PR
+      - name: Open / update PR against dev
         if: steps.changes.outputs.changed == 'true'
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          NEW_TAG: ${{ needs.poll-release.outputs.latest_ref }}
         run: |
-          BRANCH="upstream-sync/${{ steps.tag.outputs.tag }}"
-          # If a branch for this tag already exists, reuse it (re-running the
-          # workflow shouldn't open duplicate PRs).
+          BRANCH="upstream-sync/${NEW_TAG}"
           if git ls-remote --exit-code --heads origin "$BRANCH" >/dev/null 2>&1; then
             git fetch origin "$BRANCH"
-            git checkout -B "$BRANCH" "origin/$BRANCH"
-            # Re-stage current changes on top of the existing branch.
+            git checkout -B "$BRANCH" "origin/$BRANCH" || git checkout -B "$BRANCH"
           else
             git checkout -B "$BRANCH"
           fi
           git add -A
-          git commit -m "chore(sync): bump upstream to ${{ steps.tag.outputs.tag }}"
+          git commit -m "chore(sync): bump upstream to ${NEW_TAG}"
           git push -u origin "$BRANCH" --force-with-lease
 
-          # Open PR if one doesn't exist for this branch.
-          if ! gh pr view "$BRANCH" >/dev/null 2>&1; then
+          if ! gh pr view "$BRANCH" --json number >/dev/null 2>&1; then
             gh pr create \
-              --base main \
+              --base dev \
               --head "$BRANCH" \
-              --title "chore(sync): bump upstream to ${{ steps.tag.outputs.tag }}" \
+              --title "chore(sync): bump upstream to ${NEW_TAG}" \
               --body-file SYNC-REPORT.md \
               --label upstream-sync \
               --label needs-review
           else
-            echo "PR for $BRANCH already exists; force-pushed updated commit."
+            echo "PR for $BRANCH already exists; updated branch in place."
           fi
