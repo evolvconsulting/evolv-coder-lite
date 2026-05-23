@@ -24,7 +24,11 @@ on:
 
 permissions:
   contents: read
-  id-token: write   # for npm provenance (https://docs.npmjs.com/generating-provenance-statements)
+  # NOTE: id-token: write is needed only for `npm publish --provenance`.
+  # Provenance was removed because the npm account's 2FA-on-writes setting
+  # blocked it (EOTP from GitHub Actions). Sibling @evolvconsulting packages
+  # publish without provenance for the same reason. Re-add this permission
+  # plus --provenance to both steps below if/when the 2FA setting changes.
 
 concurrency:
   group: release-${{ github.ref }}
@@ -87,11 +91,11 @@ jobs:
         working-directory: src
         env:
           NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
-        run: npm publish --dry-run --provenance --access public
+        run: npm publish --dry-run --access public
 
       - name: Publish to npm
         if: github.event_name == 'push' || inputs.dry_run != 'true'
         working-directory: src
         env:
           NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
-        run: npm publish --provenance --access public
+        run: npm publish --access public
