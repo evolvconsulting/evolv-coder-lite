@@ -8,7 +8,8 @@
     "sync": "node scripts/sync-upstream.mjs",
     "build": "node overlay/apply.mjs",
     "verify": "node scripts/verify-rebrand.mjs",
-    "all": "npm run sync && npm run build && npm run verify"
+    "all": "npm run sync && npm run build && npm run verify",
+    "test:e2e": "bash e2e/run-e2e.sh"
   },
   "engines": {
     "node": ">=20"
