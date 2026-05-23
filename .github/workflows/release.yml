@@ -38,8 +38,9 @@ jobs:
 
       - uses: actions/setup-node@v4
         with:
-          # SDK declares engines: node >=22; 20 fails its prepublishOnly tsc build.
-          node-version: '22'
+          # Match upstream's NODE_VERSION (24). 22 still ICE'd the SDK tsc build
+          # despite engines: node>=22 — upstream's release pins to 24.
+          node-version: '24'
           registry-url: 'https://registry.npmjs.org'
 
       - name: Verify rebrand (no leaks)
