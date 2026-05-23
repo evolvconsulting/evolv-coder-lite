@@ -32,7 +32,9 @@ Requires Docker (with the Compose plugin) on the host.
 | 04 | hooks executable   | every `.sh` under installed `hooks/` has +x |
 | 05 | rebrand leaks      | zero GSD / get-shit-done / @opengsd / TÂCHES references in the installed tree (mirrors `scripts/verify-rebrand.mjs` patterns) |
 | 06 | wizard scaffold    | `evolv-coder-lite --claude --global` runs against an isolated `HOME` and writes into `$HOME/.claude` |
-| 07 | uninstall          | `--claude --global --uninstall` cleanly removes eCL-written files from `$HOME/.claude` (no `ecl-*` / `evolv-*` leaks) |
+| 07 | uninstall          | `--claude --global --uninstall` cleanly removes eCL-written files from `$HOME/.claude` (no `ecl-*` / `evolv-*` leaks, including `ecl-install-state.json`) |
+| 08 | multi-runtime      | wizard succeeds for every supported runtime flag (`--claude`/`--gemini`/`--codex`/`--copilot`/`--antigravity`/`--cursor`/`--windsurf`/`--augment`/`--trae`/`--qwen`/`--hermes`/`--cline`/`--codebuddy`/`--opencode`/`--kilo`) and `--all` populates multiple dirs |
+| 09 | profile coverage   | `--profile=core` < `--profile=standard` < `--profile=full` (strict ascending skill counts); `--minimal` matches `--profile=core` |
 
 ## Bugs the harness has caught
 
@@ -54,13 +56,26 @@ would have shipped without an e2e gate.
 - **Uninstall leaves `ecl-install-state.json` behind.** Suite 07 surfaced
   this. Upstream's `src/tests/installer-migration-install-integration.test.cjs`
   asserts the file does NOT exist after install rollback (lines 352, 380, 413),
-  so the post-uninstall presence is a regression. Suite 07 tolerates it (with a
-  documented exclusion) so CI stays a useful gate; fix is a follow-up in the
-  installer.
+  so the post-uninstall presence was a regression. Fixed downstream via
+  `overlay/text-patches.mjs` (a small surgical post-bake patch on the
+  baked `bin/install.js`) — the patch mirrors the existing manifest-removal
+  block for the install-state file. Drop the patch entry once the equivalent
+  fix lands upstream.
+- **`--profile=standard` install fails: "Failed to install agents:
+  directory is empty".** Suite 09 surfaced this. The standard profile's
+  transitive closure resolves to zero agents, and `verifyInstalled()` bails
+  with a non-zero exit. `--profile=core` and `--profile=full` install
+  cleanly; `--minimal` matches core. Suite 09 tolerates this with a
+  documented expected behavior and includes an inverted assertion that
+  flags the day the install starts succeeding, so we can tighten the
+  ordering assertion back up. Filed as a follow-up.
 
 ## Out of scope (follow-ups)
 
 - Bedrock-backed lifecycle simulation (model calls).
-- Multi-runtime install matrix (only `--claude` is exercised).
 - ~~CI integration~~ — `.github/workflows/e2e.yml` runs the harness on PRs to
-  `dev`/`main` and via `workflow_dispatch`.
+  `dev`/`main` and via `workflow_dispatch`. Uses GHA layer cache via
+  `docker/build-push-action@v5` + `e2e/docker-compose.ci.yml` override.
+- ~~Multi-runtime install matrix~~ — Suite 08 covers all 15 supported runtimes.
+- ~~Profile flag coverage~~ — Suite 09 covers `--profile=core/standard/full`
+  and `--minimal`.
