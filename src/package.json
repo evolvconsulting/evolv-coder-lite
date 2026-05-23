@@ -1,6 +1,6 @@
 {
   "name": "@evolvconsulting/evolv-coder-lite",
-  "version": "0.0.0",
+  "version": "1.0.0",
   "description": "evolv Coder Lite (eCL) — a meta-prompting, context engineering and spec-driven development system for AI coding assistants.",
   "bin": {
     "evolv-coder-lite": "bin/install.js",
@@ -45,7 +45,7 @@
     "url": "https://github.com/evolvconsulting/evolv-coder-lite/issues"
   },
   "publishConfig": {
-    "access": "restricted"
+    "access": "public"
   },
   "engines": {
     "node": ">=22.0.0"
