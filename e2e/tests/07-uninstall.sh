@@ -88,14 +88,8 @@ else
   test_fail "expected <= $THRESHOLD files remaining, found $POST_UNINSTALL_COUNT (of $POST_INSTALL_COUNT installed)"
 fi
 
-test_start "no eCL-named files remain (excluding known-residue: ecl-install-state.json)"
-# Known residue: `ecl-install-state.json` survives uninstall (regression vs.
-# upstream's installer-migration tests at src/tests/installer-migration-install-
-# integration.test.cjs:352,380,413 which assert the file does NOT exist after
-# install rollback). Filed as a follow-up; suite tolerates it for now so the
-# CI gate stays meaningful for new regressions.
-LEAKS=$(find "$WIZARD_HOME/.claude" \( -name 'ecl-*' -o -name 'evolv-*' \) -type f \
-  ! -name 'ecl-install-state.json' 2>/dev/null | head -20)
+test_start "no eCL-named files remain"
+LEAKS=$(find "$WIZARD_HOME/.claude" \( -name 'ecl-*' -o -name 'evolv-*' \) -type f 2>/dev/null | head -20)
 if [ -z "$LEAKS" ]; then
   test_pass
 else

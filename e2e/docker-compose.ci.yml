@@ -1,0 +1,9 @@
+# CI-only compose override. Pins the e2e service to a fixed image tag that
+# the workflow pre-builds via docker/build-push-action with GHA layer cache.
+# Combine with `up --no-build` so compose doesn't rebuild from the inherited
+# `build:` directive in docker-compose.yml. Local `bash e2e/run-e2e.sh` runs
+# ignore this file and keep using compose's own build path.
+services:
+  e2e:
+    image: evolv-coder-lite-e2e:ci
+    pull_policy: never

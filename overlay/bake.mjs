@@ -15,6 +15,7 @@ import { readFile, readdir, writeFile, mkdir, rm, copyFile, stat, chmod } from '
 import { dirname, join, relative } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { rebrandPath, rebrandContent, isContentPreserved, looksLikeText, mergeHits } from './rebrand-map.mjs';
+import { applyTextPatches } from './text-patches.mjs';
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
 const REPO = join(__dirname, '..');
@@ -118,6 +119,11 @@ async function main() {
     }
   }
 
+  let textPatchesApplied = [];
+  if (!CHECK_ONLY) {
+    textPatchesApplied = await applyTextPatches(SRC);
+  }
+
   let patched = false;
   if ((await exists(PACKAGE_PATCH)) && (await exists(join(SRC, 'package.json')))) {
     const base = JSON.parse(await readFile(join(SRC, 'package.json'), 'utf8'));
@@ -140,7 +146,7 @@ async function main() {
   const manifest = {
     bakedAt: new Date().toISOString(),
     upstream: { repo: 'open-gsd/get-shit-done-redux', ref: upstreamRef, tarball_sha256: upstreamSha },
-    counts: { textFiles: textCount, binaryFiles: binaryCount, contentPreserved: preservedCount, overlayOverrides: overrideCount, packagePatched: patched },
+    counts: { textFiles: textCount, binaryFiles: binaryCount, contentPreserved: preservedCount, overlayOverrides: overrideCount, packagePatched: patched, textPatchesApplied: textPatchesApplied.length },
     ruleHits: totalHits,
   };
 
@@ -152,6 +158,7 @@ async function main() {
   console.log(`  binary files copied:    ${binaryCount}`);
   console.log(`  content-preserved:      ${preservedCount}`);
   console.log(`  overlay overrides:      ${overrideCount}`);
+  console.log(`  text patches applied:   ${textPatchesApplied.length}${textPatchesApplied.length ? ' (' + textPatchesApplied.join(', ') + ')' : ''}`);
   console.log(`  package.json patched:   ${patched}`);
   console.log(`  total rule hits:        ${Object.values(totalHits).reduce((a, b) => a + b, 0)}`);
   if (CHECK_ONLY) {

@@ -37,5 +37,39 @@ jobs:
       - name: Bake src/ from upstream/ + overlay
         run: node overlay/bake.mjs
 
-      - name: Run e2e harness
-        run: bash e2e/run-e2e.sh
+      - name: Build SDK + npm pack (stages tarball at repo root)
+        # run-e2e.sh does this too, but pre-staging here lets the docker build
+        # step be a clean cached step independent of the test run. Mirrors
+        # steps 2-3 of run-e2e.sh.
+        run: |
+          ( cd src/sdk && npm ci --silent && npm run build --silent )
+          ( cd src && rm -f evolvconsulting-evolv-coder-lite-*.tgz && npm pack --silent )
+          cp src/evolvconsulting-evolv-coder-lite-*.tgz ./
+
+      - name: Build e2e image with GHA layer cache
+        uses: docker/build-push-action@v5
+        with:
+          context: .
+          file: e2e/Dockerfile
+          load: true
+          tags: evolv-coder-lite-e2e:ci
+          cache-from: type=gha
+          cache-to: type=gha,mode=max
+
+      - name: Run e2e suite (against pre-built cached image)
+        # Compose uses image: from the .ci.yml override instead of building
+        # from scratch. --no-build prevents compose from rebuilding via the
+        # inherited build: directive in docker-compose.yml. The pre-built
+        # tarball was baked into the image in the previous step.
+        run: |
+          docker compose \
+            -f e2e/docker-compose.yml \
+            -f e2e/docker-compose.ci.yml \
+            up --no-build --abort-on-container-exit --exit-code-from e2e
+
+      - name: Tear down
+        if: always()
+        run: |
+          docker compose -f e2e/docker-compose.yml -f e2e/docker-compose.ci.yml \
+            down --remove-orphans || true
+          rm -f evolvconsulting-evolv-coder-lite-*.tgz
