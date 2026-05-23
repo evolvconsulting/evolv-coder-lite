@@ -11,7 +11,7 @@
 //   node overlay/bake.mjs            # bake into src/
 //   node overlay/bake.mjs --check    # dry-run, exit non-zero if src/ would differ
 
-import { readFile, readdir, writeFile, mkdir, rm, copyFile, stat } from 'node:fs/promises';
+import { readFile, readdir, writeFile, mkdir, rm, copyFile, stat, chmod } from 'node:fs/promises';
 import { dirname, join, relative } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { rebrandPath, rebrandContent, isContentPreserved, looksLikeText, mergeHits } from './rebrand-map.mjs';
@@ -29,6 +29,10 @@ const CHECK_ONLY = args.has('--check');
 
 async function exists(p) {
   try { await stat(p); return true; } catch { return false; }
+}
+
+function modeFor(srcMode) {
+  return (srcMode & 0o111) ? 0o755 : 0o644;
 }
 
 async function* walk(dir, base = dir) {
@@ -76,11 +80,15 @@ async function main() {
     const newRel = rebrandPath(rel);
     const dest = join(SRC, newRel);
     if (!CHECK_ONLY) await mkdir(dirname(dest), { recursive: true });
+    const srcStat = await stat(abs);
 
     const buf = await readFile(abs);
     if (!looksLikeText(buf)) {
       binaryCount++;
-      if (!CHECK_ONLY) await copyFile(abs, dest);
+      if (!CHECK_ONLY) {
+        await copyFile(abs, dest);
+        await chmod(dest, modeFor(srcStat.mode));
+      }
       continue;
     }
 
@@ -90,7 +98,10 @@ async function main() {
 
     const { text, hits } = rebrandContent(buf.toString('utf8'), rel);
     totalHits = mergeHits(totalHits, hits);
-    if (!CHECK_ONLY) await writeFile(dest, text);
+    if (!CHECK_ONLY) {
+      await writeFile(dest, text);
+      await chmod(dest, modeFor(srcStat.mode));
+    }
   }
 
   let overrideCount = 0;
@@ -98,9 +109,11 @@ async function main() {
     for await (const { abs, rel } of walk(OVERLAY_FILES)) {
       overrideCount++;
       const dest = join(SRC, rel);
+      const srcStat = await stat(abs);
       if (!CHECK_ONLY) {
         await mkdir(dirname(dest), { recursive: true });
         await copyFile(abs, dest);
+        await chmod(dest, modeFor(srcStat.mode));
       }
     }
   }
