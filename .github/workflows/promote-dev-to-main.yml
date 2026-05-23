@@ -3,15 +3,14 @@ name: promote-dev-to-main
 # After a daily-sync PR is merged into dev, automatically open (or update)
 # a fast-forward PR from dev to main and enable auto-merge on it.
 #
-# Branch protection on main should require:
-#   - PR with at least 1 approving review (or, if you've granted
-#     github-actions[bot] the bypass, that's the approval), AND
-#   - All required status checks passing.
+# NOTE: this repo currently has NO branch protection (private repo on
+# free GitHub tier — rulesets unavailable). gh pr merge --auto will
+# therefore merge as soon as required checks pass. The CI workflow
+# (`ci.yml`) runs on every PR; a green CI is the only gate.
 #
-# This workflow does NOT bypass review — it just keeps the dev→main PR
-# always open and ready to merge. If you want zero-touch promotion,
-# grant github-actions[bot] a CODEOWNERS exception or add it to the
-# bypass list for the main ruleset.
+# If/when the org upgrades to Team/Enterprise, add a ruleset on `main`
+# requiring the `build-and-verify` check, with github-actions[bot] in
+# the bypass list, and this workflow will work as designed.
 
 on:
   push:
@@ -45,21 +44,20 @@ jobs:
             echo "skip=false" >> "$GITHUB_OUTPUT"
           fi
 
-      - name: Open or update dev→main PR
+      - name: Open or update dev->main PR
         if: steps.gate.outputs.skip != 'true'
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
-          # One persistent PR; subsequent dev pushes update it in place.
           if ! gh pr view dev --json number >/dev/null 2>&1; then
             gh pr create \
               --base main \
               --head dev \
-              --title "promote: dev → main" \
-              --body "Automated promotion of dev into main. Created by promote-dev-to-main workflow on each push to dev. Auto-merge enabled; will land when required checks/approvals are satisfied." \
+              --title "promote: dev -> main" \
+              --body "Automated promotion of dev into main. Created by promote-dev-to-main on each push to dev. Auto-merge enabled; will land when CI passes." \
               --label promote
           else
-            echo "dev→main PR already exists; nothing to (re)create."
+            echo "dev->main PR already exists; nothing to (re)create."
           fi
 
       - name: Enable auto-merge
@@ -69,4 +67,4 @@ jobs:
         run: |
           PR_NUMBER=$(gh pr view dev --json number --jq .number)
           gh pr merge "$PR_NUMBER" --auto --squash || \
-            echo "Could not enable auto-merge (likely: branch protection requires approval that the bot can't satisfy yet). PR is open and waiting."
+            echo "Could not enable auto-merge — likely no required checks are defined yet, in which case the PR may have merged immediately. Check the PR state."
