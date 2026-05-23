@@ -66,5 +66,10 @@ jobs:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
           PR_NUMBER=$(gh pr view dev --json number --jq .number)
-          gh pr merge "$PR_NUMBER" --auto --squash || \
+          # Use --merge (not --squash) so main keeps dev's commits as
+          # ancestors. Squash-merging creates new SHAs on main that aren't
+          # in dev's history, which makes every subsequent dev->main PR
+          # conflict (a "squash ratchet"). With merge commits, main always
+          # contains dev's tip, so future promotes are clean.
+          gh pr merge "$PR_NUMBER" --auto --merge || \
             echo "Could not enable auto-merge — likely no required checks are defined yet, in which case the PR may have merged immediately. Check the PR state."
