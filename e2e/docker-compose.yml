@@ -1,0 +1,7 @@
+services:
+  e2e:
+    build:
+      context: ..
+      dockerfile: e2e/Dockerfile
+    mem_limit: 2g
+    memswap_limit: 2g
