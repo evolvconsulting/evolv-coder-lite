@@ -1,7 +1,13 @@
 node_modules/
-dist/
 *.log
 .DS_Store
 .env
 .env.*
 !.env.example
+
+# Local IDE / agent state — not part of the project
+.claude/
+
+# Sync artifact — written fresh by each daily-sync run; useful in PRs but
+# not meaningful to commit on its own.
+SYNC-REPORT.md
