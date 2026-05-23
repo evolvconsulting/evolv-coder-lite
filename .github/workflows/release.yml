@@ -1,0 +1,84 @@
+name: release
+
+# Publishes src/ to npm as @evolvconsulting/evolv-coder-lite when a
+# version tag is pushed.
+#
+# Trigger: `git tag v<X.Y.Z> && git push --tags`
+# The tag's <X.Y.Z> must match src/package.json's version exactly, or
+# the workflow fails fast (prevents accidentally publishing the wrong
+# version).
+#
+# Requires repo secret NPM_TOKEN (npm automation token with publish
+# rights to the @evolvconsulting scope).
+
+on:
+  push:
+    tags:
+      - 'v*.*.*'
+  workflow_dispatch:
+    inputs:
+      dry_run:
+        description: 'If true, run npm publish --dry-run instead of publishing'
+        required: false
+        default: 'false'
+
+permissions:
+  contents: read
+  id-token: write   # for npm provenance (https://docs.npmjs.com/generating-provenance-statements)
+
+concurrency:
+  group: release-${{ github.ref }}
+  cancel-in-progress: false
+
+jobs:
+  publish:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+          registry-url: 'https://registry.npmjs.org'
+
+      - name: Verify rebrand (no leaks)
+        run: node scripts/verify-rebrand.mjs
+
+      - name: Confirm src/ matches a fresh bake
+        run: |
+          node overlay/bake.mjs
+          if [ -n "$(git status --porcelain -- 'src/' ':!src/REBRAND-MANIFEST.json')" ]; then
+            echo "::error::src/ does not match a fresh bake. Re-run 'npm run build' locally and commit before tagging."
+            git status --short -- 'src/' ':!src/REBRAND-MANIFEST.json'
+            exit 1
+          fi
+
+      - name: Cross-check tag against package version
+        if: github.event_name == 'push'
+        run: |
+          TAG="${GITHUB_REF#refs/tags/v}"
+          PKG_VERSION=$(node -p "require('./src/package.json').version")
+          if [ "$TAG" != "$PKG_VERSION" ]; then
+            echo "::error::Tag v$TAG does not match src/package.json version $PKG_VERSION."
+            echo "Either retag, or bump src/package.json (via overlay/package.patch.json) and re-bake first."
+            exit 1
+          fi
+          echo "Tag and package.json version both at $PKG_VERSION."
+
+      - name: Install src/ dependencies
+        working-directory: src
+        run: npm ci || npm install --no-audit --no-fund
+
+      - name: Publish to npm (dry-run)
+        if: inputs.dry_run == 'true'
+        working-directory: src
+        env:
+          NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
+        run: npm publish --dry-run --provenance --access public
+
+      - name: Publish to npm
+        if: github.event_name == 'push' || inputs.dry_run != 'true'
+        working-directory: src
+        env:
+          NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
+        run: npm publish --provenance --access public
