@@ -1,0 +1,41 @@
+name: e2e
+
+# Docker-based end-to-end smoke harness. Bakes src/, packs the tarball,
+# spins up a Node 24 container that installs the tarball globally, and
+# runs the smoke suite under e2e/tests/. No Bedrock / no model calls —
+# install-and-inventory only.
+#
+# Catches things ci.yml can't: tarball-time mode-bit drops, missing
+# bin entries, files-array regressions, wizard scaffold breakage.
+
+on:
+  pull_request:
+    branches: [dev, main]
+  push:
+    branches: [dev, main]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: e2e-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  e2e:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '24'
+
+      - uses: docker/setup-buildx-action@v3
+
+      - name: Bake src/ from upstream/ + overlay
+        run: node overlay/bake.mjs
+
+      - name: Run e2e harness
+        run: bash e2e/run-e2e.sh
