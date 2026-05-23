@@ -1,0 +1,217 @@
+/**
+ * Regression tests for Gemini namespacing (PR #2768)
+ * 
+ * Verifies that slash commands are correctly converted to colon format (/ecl:)
+ * while preserving URLs, file paths, and agent names.
+ */
+
+'use strict';
+
+process.env.ECL_TEST_MODE = '1';
+
+const { test, describe, beforeEach, afterEach } = require('node:test');
+const assert = require('node:assert/strict');
+const fs = require('fs');
+const path = require('path');
+const { createTempDir, cleanup } = require('./helpers.cjs');
+
+const {
+  convertSlashCommandsToGeminiMentions,
+  convertClaudeToGeminiMarkdown,
+  convertClaudeToGeminiAgent,
+  _resetGsdCommandRoster,
+  install
+} = require('../bin/install.js');
+
+/**
+ * Minimal parser for the simple TOML emitted by convertClaudeToGeminiToml —
+ * exactly two top-level keys (`description` and `prompt`), each a JSON-quoted
+ * string. Throws on unparseable lines so a regression in the emitter shape
+ * fails loudly rather than silently mis-parsing.
+ */
+function parseGeminiCommandToml(toml) {
+  const result = {};
+  for (const rawLine of toml.split('\n')) {
+    const line = rawLine.trim();
+    if (!line) continue;
+    const match = line.match(/^([a-z_]+)\s*=\s*(.*)$/);
+    if (!match) throw new Error(`Unparseable TOML line: ${rawLine}`);
+    const [, key, value] = match;
+    // Values are JSON-encoded strings — JSON.parse handles all escapes.
+    result[key] = JSON.parse(value);
+  }
+  return result;
+}
+
+describe('Gemini Slash Command Namespacing (Regex)', () => {
+  test('converts simple slash commands', () => {
+    const input = 'Run /ecl-plan-phase to start.';
+    const expected = 'Run /ecl:plan-phase to start.';
+    assert.strictEqual(convertSlashCommandsToGeminiMentions(input), expected);
+  });
+
+  test('preserves URLs with /ecl- in them', () => {
+    const input = 'Documentation: https://example.com/ecl-tools/info';
+    assert.strictEqual(convertSlashCommandsToGeminiMentions(input), input);
+  });
+
+  // The roster check is the safety property: a token like /ecl-plan-phase IS
+  // a known command name, but when it appears inside a URL path it must NOT
+  // be converted. This pins that the roster check actually fires — a regex-only
+  // approach without a roster would convert this incorrectly.
+  test('preserves URLs even when path contains a KNOWN command name', () => {
+    const input = 'See https://example.com/ecl-plan-phase for context.';
+    assert.strictEqual(convertSlashCommandsToGeminiMentions(input), input);
+  });
+
+  test('preserves sub-paths: bin/ecl-tools.cjs', () => {
+    const input = 'See bin/ecl-tools.cjs for details.';
+    assert.strictEqual(convertSlashCommandsToGeminiMentions(input), input);
+  });
+
+  test('preserves sub-paths even when leaf is a KNOWN command name', () => {
+    // bin/ecl-plan-phase looks like a known command but is a file path.
+    // The leading / on a sub-path follows a non-slash char so the regex
+    // boundary is the safety net here, not the roster.
+    const input = 'Reference bin/ecl-plan-phase for details.';
+    assert.strictEqual(convertSlashCommandsToGeminiMentions(input), input);
+  });
+
+  test('preserves root-relative paths with extensions: /ecl-tools.cjs', () => {
+    const input = 'Load /ecl-tools.cjs now.';
+    assert.strictEqual(convertSlashCommandsToGeminiMentions(input), input);
+  });
+
+  test('preserves agent names: ecl-planner', () => {
+    const input = 'The ecl-planner agent will help you.';
+    assert.strictEqual(convertSlashCommandsToGeminiMentions(input), input);
+  });
+
+  test('converts commands in backticks', () => {
+    const input = 'Run `/ecl-new-project` in a terminal.';
+    const expected = 'Run `/ecl:new-project` in a terminal.';
+    assert.strictEqual(convertSlashCommandsToGeminiMentions(input), expected);
+  });
+
+  test('converts commands ending with punctuation', () => {
+    // Use two stable, foundational commands so this test doesn't drift when
+    // the roster gets consolidated (cf. #2790, which removed `scan`). `help`
+    // and `health` are both bedrock; if either ever gets removed, swap to
+    // any other entry currently in commands/ecl/.
+    const input = 'Run /ecl-help. Or /ecl-health!';
+    const expected = 'Run /ecl:help. Or /ecl:health!';
+    assert.strictEqual(convertSlashCommandsToGeminiMentions(input), expected);
+  });
+
+  test('roster has loaded — non-empty (would otherwise silently no-op all conversions)', () => {
+    _resetGsdCommandRoster();
+    // First conversion call lazily populates the roster. If it returned an
+    // empty Set (because commands/ecl/ was not found), every conversion
+    // becomes a no-op — exactly the bug this code exists to prevent.
+    const result = convertSlashCommandsToGeminiMentions('Run /ecl-plan-phase.');
+    assert.strictEqual(result, 'Run /ecl:plan-phase.',
+      'Roster failed to load — all /ecl- conversions would silently no-op');
+  });
+});
+
+describe('Gemini Markdown Processor', () => {
+  test('handles command to TOML conversion', () => {
+    const input = '---\ndescription: Test\n---\nRun /ecl-help.';
+    const result = convertClaudeToGeminiMarkdown(input, { isCommand: true });
+    const parsed = parseGeminiCommandToml(result);
+    assert.equal(parsed.description, 'Test', 'description must round-trip through TOML');
+    assert.match(parsed.prompt, /\/ecl:help/, 'prompt must contain namespaced command');
+    assert.doesNotMatch(parsed.prompt, /\/ecl-help/, 'prompt must not retain hyphen form');
+  });
+
+  test('strips <sub> tags from Gemini markdown output (#2768 regression)', () => {
+    // The pre-refactor command path called stripSubTags before TOML conversion.
+    // After centralizing through convertClaudeToGeminiMarkdown, sub tags must
+    // still be stripped — terminals can't render HTML subscript.
+    const input = 'Run <sub>tiny</sub> /ecl-help now.';
+    const result = convertClaudeToGeminiMarkdown(input, { isCommand: false });
+    assert.doesNotMatch(result, /<sub>|<\/sub>/, '<sub> tags must be stripped');
+    assert.match(result, /\/ecl:help/, 'slash command must still be converted');
+  });
+
+  test('removes AskUserQuestion and ask_user from Gemini agent tools and body (#3362)', () => {
+    const input = [
+      '---',
+      'name: tester',
+      'tools: Read, AskUserQuestion, ask_user',
+      '---',
+      'Use AskUserQuestion or ask_user to ask the user.'
+    ].join('\n');
+
+    const result = convertClaudeToGeminiAgent(input);
+
+    assert.match(result, /^  - read_file$/m, 'Read should still map to Gemini read_file');
+    assert.doesNotMatch(result, /^  - ask_user$/m, 'ask_user must not be emitted as a Gemini tool');
+    assert.doesNotMatch(result, /\bAskUserQuestion\b/, 'Claude tool references must be neutralized');
+    assert.doesNotMatch(result, /\bask_user\b/, 'lowercase ask_user references must be neutralized');
+    assert.match(result, /conversational prompting/, 'body should use runtime-neutral wording');
+  });
+});
+
+describe('Gemini Install (Behavioral)', () => {
+  let tmpDir;
+  let tmpHome;
+  let previousCwd;
+  let previousHome;
+  let previousUserprofile;
+
+  beforeEach(() => {
+    tmpDir = createTempDir('ecl-gemini-test-');
+    tmpHome = createTempDir('ecl-gemini-home-');
+    previousCwd = process.cwd();
+    previousHome = process.env.HOME;
+    previousUserprofile = process.env.USERPROFILE;
+    process.chdir(tmpDir);
+    // #3037: isolate HOME so the developer's real ~/.gemini/commands/ecl/
+    // doesn't trigger the local-install conflict-avoidance skip path. This
+    // test wants to assert that the local install populates commands/ecl/
+    // when no global eCL is present at the user scope.
+    process.env.HOME = tmpHome;
+    process.env.USERPROFILE = tmpHome;
+  });
+
+  afterEach(() => {
+    process.chdir(previousCwd);
+    if (previousHome === undefined) delete process.env.HOME;
+    else process.env.HOME = previousHome;
+    if (previousUserprofile === undefined) delete process.env.USERPROFILE;
+    else process.env.USERPROFILE = previousUserprofile;
+    cleanup(tmpDir);
+    cleanup(tmpHome);
+  });
+
+  test('install creates correct directory structure for Gemini', () => {
+    // Run install in silent mode
+    const oldLog = console.log;
+    console.log = () => {};
+    try {
+      install(false, 'gemini');
+    } finally {
+      console.log = oldLog;
+    }
+
+    const commandsDir = path.join(tmpDir, '.gemini', 'commands', 'ecl');
+    assert.ok(fs.existsSync(commandsDir), `Commands should be in ${commandsDir}`);
+    const agentsDir = path.join(tmpDir, '.gemini', 'agents');
+    assert.ok(fs.existsSync(agentsDir), 'Agents should be installed');
+
+    // Structurally verify a real installed command artifact: parse the TOML
+    // and assert the prompt body has been namespaced. A directory-only check
+    // would pass even if every conversion silently no-op'd.
+    const planPhaseToml = path.join(commandsDir, 'plan-phase.toml');
+    assert.ok(fs.existsSync(planPhaseToml), 'plan-phase.toml must be installed');
+    const parsed = parseGeminiCommandToml(fs.readFileSync(planPhaseToml, 'utf8'));
+    assert.equal(typeof parsed.prompt, 'string', 'plan-phase.toml must have a prompt');
+    // The plan-phase prompt cross-references other eCL commands; pin that at
+    // least one of those references survived as a colon-namespaced mention.
+    assert.match(parsed.prompt, /\/ecl:[a-z][a-z0-9-]*/,
+      'installed plan-phase.toml prompt must contain at least one /ecl: reference');
+    assert.doesNotMatch(parsed.prompt, /(?<![A-Za-z0-9./])\/ecl-plan-phase\b/,
+      'installed plan-phase.toml prompt must not retain unconverted /ecl-plan-phase');
+  });
+});

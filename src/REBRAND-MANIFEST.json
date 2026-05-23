@@ -1,0 +1,41 @@
+{
+  "bakedAt": "2026-05-23T14:48:24.050Z",
+  "upstream": {
+    "repo": "open-gsd/get-shit-done-redux",
+    "ref": "v1.0.0",
+    "tarball_sha256": "e1a161d120a68e5bbdfd6269f93fe8c53ad326a86a8225c07f3228552dbc77c3"
+  },
+  "counts": {
+    "textFiles": 1878,
+    "binaryFiles": 4,
+    "contentPreserved": 312,
+    "overlayOverrides": 0,
+    "packagePatched": true
+  },
+  "ruleHits": {
+    "name:gsd:c": 14,
+    "name:gsd:k": 2275,
+    "cmd:colon": 1428,
+    "tok:GSD": 2472,
+    "tok:gsd": 1729,
+    "name:redux": 416,
+    "org:open-gsd": 186,
+    "env:GSD-snake": 2154,
+    "pkg:redux": 451,
+    "cmd:dash": 4493,
+    "bin:sdk": 1227,
+    "id:gsd-dash": 5260,
+    "pkg:gsd-sdk": 81,
+    "bin:tools": 1234,
+    "auth:dash-taches": 6,
+    "name:gsd:upper": 6,
+    "auth:bare-taches": 5,
+    "org:gsd-build": 11,
+    "auth:by-taches": 3,
+    "id:gsd-snake": 72,
+    "id:gsd2": 55,
+    "id:gsd2-import": 19,
+    "pkg:scope": 5,
+    "id:dash-gsd": 17
+  }
+}

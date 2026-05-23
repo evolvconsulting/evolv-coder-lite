@@ -1,0 +1,17 @@
+{
+  "name": "@evolvconsulting/evolv-coder-lite",
+  "version": "0.0.0",
+  "private": true,
+  "description": "evolv Coder Lite (eCL) — evolv-branded distribution of GSD Redux, kept in sync daily.",
+  "type": "module",
+  "scripts": {
+    "sync": "node scripts/sync-upstream.mjs",
+    "build": "node overlay/apply.mjs",
+    "verify": "node scripts/verify-rebrand.mjs",
+    "all": "npm run sync && npm run build && npm run verify"
+  },
+  "engines": {
+    "node": ">=20"
+  },
+  "license": "MIT"
+}

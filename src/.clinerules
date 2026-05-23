@@ -1,0 +1,27 @@
+# eCL — evolv Coder Lite
+
+## What This Project Is
+eCL is a structured AI development workflow system. It coordinates AI agents through planning phases, not direct code edits.
+
+## Core Rule: Never Edit Outside a eCL Workflow
+Do not make direct repo edits. All changes must go through a eCL workflow:
+- `/ecl:plan-phase` → plan the work
+- `/ecl:execute-phase` → build it
+- `/ecl:verify-work` → verify results
+
+## Architecture
+- `evolv-coder-lite/bin/lib/` — Core Node.js library (CommonJS .cjs, no external deps)
+- `evolv-coder-lite/workflows/` — Workflow definition files (.md)
+- `agents/` — Agent definition files (.md)
+- `commands/ecl/` — Slash command definitions (.md)
+- `tests/` — Test files (.test.cjs, node:test + node:assert)
+
+## Coding Standards
+- **CommonJS only** — use `require()`, never `import`
+- **No external dependencies in core** — only Node.js built-ins
+- **Test framework** — `node:test` and `node:assert` ONLY, never Jest/Mocha/Chai
+- **File extensions** — `.cjs` for all test and lib files
+
+## Safety
+- Use `execFileSync` (array args) not `execSync` (string interpolation)
+- Validate user-provided paths with `validatePath()` from `evolv-coder-lite/bin/lib/security.cjs`
