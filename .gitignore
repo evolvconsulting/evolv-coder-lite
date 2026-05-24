@@ -15,3 +15,7 @@ SYNC-REPORT.md
 # Lifecycle E2E (#13): tracker repo bind-mount + per-run artifacts.
 e2e/lifecycle/.tracker-repo/
 e2e/lifecycle/runs/
+
+# Controller-side MCP config (host-specific; e2e/lifecycle/.mcp.json.template
+# is the committed reference).
+.mcp.json
