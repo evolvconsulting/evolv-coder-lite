@@ -1,0 +1,100 @@
+# syntax=docker/dockerfile:1.6
+#
+# evolv-coder-lite lifecycle E2E worker image (issue #13).
+#
+# Stacks on top of e2e/Dockerfile (the cheap-suite base) and adds:
+#   - Python 3.11 + uv
+#   - Claude Code CLI (via claude.ai/install.sh)
+#   - GitHub CLI
+#   - fast-mcp-claude server, pinned to FMC_REF, cloned anonymously over HTTPS
+#
+# The container's purpose is to host an interactive `claude /worker` session
+# whose MCP traffic is driven by an external controller (the operator's local
+# Claude Code session on the host). Real Bedrock dollars per turn — see
+# e2e/lifecycle/RUNBOOK.md for the cost model.
+
+ARG BASE_IMAGE=ecl-e2e-base
+FROM ${BASE_IMAGE}
+
+# Re-declare ARG after FROM so it's visible in the build stage.
+ARG FMC_REPO=https://github.com/jeremy-newhouse/fast-mcp-claude.git
+ARG FMC_REF=f9bcc6e3637e786475f0465b41492819e414a0af
+
+# --- System packages (root) -------------------------------------------------
+USER root
+RUN apt-get update && apt-get install -y --no-install-recommends \
+        python3 python3-venv python3-pip \
+        curl ca-certificates gnupg sudo \
+    && mkdir -p /etc/apt/keyrings \
+    && curl -fsSL https://cli.github.com/packages/githubcli-archive-keyring.gpg \
+       -o /etc/apt/keyrings/githubcli-archive-keyring.gpg \
+    && chmod go+r /etc/apt/keyrings/githubcli-archive-keyring.gpg \
+    && echo "deb [arch=$(dpkg --print-architecture) signed-by=/etc/apt/keyrings/githubcli-archive-keyring.gpg] https://cli.github.com/packages stable main" \
+       > /etc/apt/sources.list.d/github-cli.list \
+    && apt-get update && apt-get install -y --no-install-recommends gh \
+    && rm -rf /var/lib/apt/lists/*
+
+# Passwordless sudo for the tester user — useful for ad-hoc debugging inside
+# the worker container (e.g. installing extra apt packages mid-session). The
+# image is for interactive lifecycle work, not a production target.
+RUN usermod -aG sudo tester \
+    && echo 'tester ALL=(ALL) NOPASSWD:ALL' > /etc/sudoers.d/tester \
+    && chmod 0440 /etc/sudoers.d/tester
+
+# Workspace for fast-mcp-claude.
+RUN mkdir -p /opt/fmc && chown tester:tester /opt/fmc
+
+# --- Tester-side install ----------------------------------------------------
+USER tester
+WORKDIR /home/tester
+
+# Pre-acknowledge Claude Code onboarding so `claude /worker` can run
+# headlessly without the first-launch prompts. Mirrors kit's e2e pattern.
+RUN mkdir -p /home/tester/.claude \
+    && printf '%s\n' '{"hasCompletedOnboarding": true}' \
+       > /home/tester/.claude/settings.json
+
+# Claude Code CLI. Installs to /home/tester/.local/bin/claude.
+RUN curl -fsSL https://claude.ai/install.sh | bash \
+    && /home/tester/.local/bin/claude --version
+
+# uv (Astral) — fast Python package manager that fast-mcp-claude expects.
+# Installs to /home/tester/.local/bin/uv.
+RUN curl -LsSf https://astral.sh/uv/install.sh | sh
+
+# Path for both Claude and uv binaries.
+ENV PATH="/home/tester/.local/bin:${PATH}"
+
+# fast-mcp-claude — pinned clone, dependency install, global tool install
+# (`uv tool install .` exposes fast-mcp-claude-hook on PATH for the
+# permission-relay hook). Anonymous HTTPS clone; repo is public.
+RUN git clone "${FMC_REPO}" /opt/fmc \
+    && git -C /opt/fmc checkout "${FMC_REF}" \
+    && cd /opt/fmc \
+    && uv sync --all-extras \
+    && uv tool install .
+
+# --- Bedrock + worker defaults ---------------------------------------------
+# Overridable at runtime via docker-compose env passthrough.
+ENV CLAUDE_CODE_USE_BEDROCK=1 \
+    ANTHROPIC_DEFAULT_SONNET_MODEL=us.anthropic.claude-sonnet-4-6 \
+    AWS_REGION=us-west-2
+
+# fast-mcp-claude server defaults (overridden by .env / compose).
+ENV PEER_NAME=ecl-worker \
+    MCP_HOST=0.0.0.0 \
+    MCP_PORT=5473 \
+    POLL_MAX_WAIT_S=25 \
+    WORKSPACE_ROOTS=/home/tester/ecl-e2e-weather-app
+
+EXPOSE 5473
+
+# --- Entrypoint -------------------------------------------------------------
+USER root
+COPY --chown=tester:tester e2e/lifecycle/entrypoint-lifecycle.sh /usr/local/bin/entrypoint-lifecycle.sh
+RUN chmod +x /usr/local/bin/entrypoint-lifecycle.sh
+USER tester
+
+# Override the cheap-suite entrypoint inherited from BASE_IMAGE.
+ENTRYPOINT ["/usr/local/bin/entrypoint-lifecycle.sh"]
+CMD ["claude", "/worker"]

@@ -11,3 +11,7 @@ node_modules/
 # Sync artifact — written fresh by each daily-sync run; useful in PRs but
 # not meaningful to commit on its own.
 SYNC-REPORT.md
+
+# Lifecycle E2E (#13): tracker repo bind-mount + per-run artifacts.
+e2e/lifecycle/.tracker-repo/
+e2e/lifecycle/runs/
