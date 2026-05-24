@@ -89,6 +89,40 @@ ENV PEER_NAME=ecl-worker \
 
 EXPOSE 5473
 
+# --- Worker-side MCP wiring -------------------------------------------------
+# The worker session needs `claude-local:*` MCP tools (wait_for_instruction,
+# reply, etc.) — those come from the in-container fast-mcp-claude server on
+# :5473. We bake an .mcp.json at /opt/ecl/worker.mcp.json and a wrapper
+# script the operator invokes from inside the container. ${MCP_API_KEY}
+# resolves at claude-launch time (it's set in the container env via
+# docker-compose env passthrough).
+USER root
+RUN mkdir -p /opt/ecl \
+    && printf '%s\n' \
+       '{' \
+       '  "mcpServers": {' \
+       '    "claude-local": {' \
+       '      "type": "http",' \
+       '      "url": "http://localhost:5473/mcp",' \
+       '      "headers": { "Authorization": "Bearer ${MCP_API_KEY}" }' \
+       '    }' \
+       '  }' \
+       '}' \
+       > /opt/ecl/worker.mcp.json \
+    && printf '%s\n' \
+       '#!/usr/bin/env bash' \
+       '# Wrapper: launches claude with the worker-side MCP config and the' \
+       '# operator-friendly defaults. Type /worker once at the prompt.' \
+       'set -euo pipefail' \
+       'cd /home/tester/ecl-e2e-weather-app' \
+       'exec claude \' \
+       '    --dangerously-skip-permissions \' \
+       '    --mcp-config /opt/ecl/worker.mcp.json \' \
+       '    "$@"' \
+       > /usr/local/bin/ecl-worker-claude \
+    && chmod +x /usr/local/bin/ecl-worker-claude
+USER tester
+
 # --- Entrypoint -------------------------------------------------------------
 USER root
 COPY --chown=tester:tester e2e/lifecycle/entrypoint-lifecycle.sh /usr/local/bin/entrypoint-lifecycle.sh
@@ -96,5 +130,8 @@ RUN chmod +x /usr/local/bin/entrypoint-lifecycle.sh
 USER tester
 
 # Override the cheap-suite entrypoint inherited from BASE_IMAGE.
+# CMD is `tail -f /dev/null` so the container stays up after the entrypoint
+# starts fast-mcp-claude. The operator drives `claude /worker` interactively
+# via `docker exec -it ecl-lifecycle-worker bash`. See e2e/lifecycle/RUNBOOK.md.
 ENTRYPOINT ["/usr/local/bin/entrypoint-lifecycle.sh"]
-CMD ["claude", "/worker"]
+CMD ["tail", "-f", "/dev/null"]
