@@ -47,6 +47,19 @@ EOF
     exit 1
 fi
 
+# --- Make /worker slash command discoverable from the workspace ------------
+# The fast-mcp-claude package ships .claude/commands/worker.md; symlink it
+# into the tracker repo's .claude/commands/ so the operator's interactive
+# `claude` (launched from $WORKSPACE_ROOTS) can resolve `/worker`. Symlink
+# (not copy) so future fast-mcp-claude bumps in the image flow through
+# automatically.
+WORKSPACE_CMDS="$WORKSPACE_ROOTS/.claude/commands"
+mkdir -p "$WORKSPACE_CMDS"
+if [ ! -e "$WORKSPACE_CMDS/worker.md" ] && [ -f /opt/fmc/.claude/commands/worker.md ]; then
+    ln -sf /opt/fmc/.claude/commands/worker.md "$WORKSPACE_CMDS/worker.md"
+    log "linked /worker slash command into $WORKSPACE_CMDS"
+fi
+
 # --- fast-mcp-claude server (background) ------------------------------------
 log "starting fast-mcp-claude server on :${MCP_PORT:-5473}"
 mkdir -p /home/tester/.local/state/fmc
