@@ -19,7 +19,7 @@ log() { printf '[lifecycle] %s\n' "$*"; }
 
 # --- Required env -----------------------------------------------------------
 : "${MCP_API_KEY:?MCP_API_KEY must be set (see e2e/lifecycle/.env.example)}"
-: "${BEDROCK_BEARER_TOKEN:?BEDROCK_BEARER_TOKEN must be set (see e2e/lifecycle/.env.example)}"
+: "${AWS_BEARER_TOKEN_BEDROCK:?AWS_BEARER_TOKEN_BEDROCK must be set (see e2e/lifecycle/.env.example)}"
 : "${WORKSPACE_ROOTS:=/home/tester/ecl-e2e-weather-app}"
 
 # --- Model wiring -----------------------------------------------------------
