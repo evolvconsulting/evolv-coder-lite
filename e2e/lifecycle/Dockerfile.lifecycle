@@ -96,5 +96,8 @@ RUN chmod +x /usr/local/bin/entrypoint-lifecycle.sh
 USER tester
 
 # Override the cheap-suite entrypoint inherited from BASE_IMAGE.
+# CMD is `tail -f /dev/null` so the container stays up after the entrypoint
+# starts fast-mcp-claude. The operator drives `claude /worker` interactively
+# via `docker exec -it ecl-lifecycle-worker bash`. See e2e/lifecycle/RUNBOOK.md.
 ENTRYPOINT ["/usr/local/bin/entrypoint-lifecycle.sh"]
-CMD ["claude", "/worker"]
+CMD ["tail", "-f", "/dev/null"]
