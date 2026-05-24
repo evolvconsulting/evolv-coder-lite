@@ -112,22 +112,32 @@ fi
 cd "$CHECKOUT"
 
 # --- Seed FRD on main, branch dev off main ---------------------------------
-DEFAULT_BRANCH=$(git symbolic-ref --short HEAD 2>/dev/null || echo "")
-if [ -z "$DEFAULT_BRANCH" ]; then
-    # Fresh repo with no commits — start on main.
-    git checkout -b main
-    DEFAULT_BRANCH=main
+# Detect unborn HEAD (fresh `gh repo create` -> empty clone -> HEAD points
+# at refs/heads/<default> but no ref exists yet because there are no
+# commits). git symbolic-ref still returns the branch name; show-ref does
+# not. Fall through to the FRD seed, which will produce the first commit
+# and materialize refs/heads/main.
+UNBORN=0
+if ! git rev-parse --verify HEAD >/dev/null 2>&1; then
+    UNBORN=1
 fi
 
-# Move to main (create if needed for fresh repos).
-if ! git show-ref --verify --quiet refs/heads/main; then
-    if git ls-remote --exit-code --heads origin main >/dev/null 2>&1; then
-        git checkout -b main origin/main
-    else
-        git checkout -b main
+if [ "$UNBORN" -eq 1 ]; then
+    # Make sure HEAD points at main even on an unborn repo (gh defaults to
+    # main on new repos, but be defensive in case a future gh changes it).
+    git symbolic-ref HEAD refs/heads/main
+else
+    # Existing repo with at least one commit: ensure local main exists and
+    # is checked out.
+    if ! git show-ref --verify --quiet refs/heads/main; then
+        if git ls-remote --exit-code --heads origin main >/dev/null 2>&1; then
+            git checkout -b main origin/main
+        else
+            git checkout -b main
+        fi
     fi
+    git checkout main
 fi
-git checkout main
 
 # Drop the FRD if it's missing or differs from the fixture.
 mkdir -p "$(dirname "$FRD_DEST_REL")"
@@ -141,6 +151,8 @@ if ! cmp -s "$FRD_SRC" "$FRD_DEST_REL" 2>/dev/null; then
         git -c user.email="ecl-e2e@evolvconsulting.local" \
             -c user.name="eCL Lifecycle Bootstrap" \
             commit -m "seed: WA-1 weather-lookup FRD" >/dev/null
+        # First push on a fresh repo needs -u to set upstream; subsequent
+        # pushes work either way.
         git push -u origin main >/dev/null 2>&1 || git push origin main >/dev/null
     fi
 else
