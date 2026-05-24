@@ -101,6 +101,21 @@ Each turn below has:
 > leave the hook off and let the worker auto-approve via its own
 > `--dangerously-skip-permissions` setting.
 
+> **`AskUserQuestion` blind spot:** worker-side `AskUserQuestion` prompts
+> render in the operator's `docker exec` TTY, not in the MCP message
+> bridge. The controller's `wait_for_completion` cannot distinguish a
+> long-running turn from a turn blocked on an `AskUserQuestion` —
+> both look like `ready: false` indefinitely. **Watchdog rule:** if a
+> turn exceeds 2× its budgeted duration (e.g. >30 min for a turn the
+> table below estimates at 5–15 min), tail the worker logs
+> (`docker compose -f e2e/lifecycle/docker-compose.lifecycle.yml logs --tail 50`)
+> *and* check the host TTY where `ecl-worker-claude` is running to see
+> whether the worker is waiting on a question. If yes, the operator
+> answers in that TTY (the controller can't relay). Verified 2026-05-24:
+> in YOLO mode the eCL skills make autonomous default decisions instead
+> of invoking `AskUserQuestion`, so this hasn't bitten yet — but the
+> blind spot exists for any non-YOLO run.
+
 ### Turn 1 — new-project
 
 | | |
@@ -114,10 +129,10 @@ Each turn below has:
 
 | | |
 |---|---|
-| **Skill** | `/ecl:discuss-phase 1 --auto` |
+| **Skill** | `/ecl:discuss-phase 1` |
 | **Pre-turn** | None. |
-| **Controller prompt** | `Run /ecl:discuss-phase 1 --auto. Lock the tech-stack and AC scope for phase 1 based on the FRD AC-01..AC-05.` |
-| **Expected** | A discussion artifact under `docs/phases/phase-1/` with explicit AC mappings; no source code yet. |
+| **Controller prompt** | `Run /ecl:discuss-phase 1. Lock the tech-stack and AC scope for phase 1 based on the FRD AC-01..AC-05.` |
+| **Expected** | A discussion artifact under `.planning/` with explicit AC mappings; no source code yet. **Do not pass `--auto`** — `--auto` autonomously chains discuss → plan → execute and collapses turns 2/4/5/6 into a single turn (verified 2026-05-24). |
 
 ### Turn 3 — create-feature → milestone
 

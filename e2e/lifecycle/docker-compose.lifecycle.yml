@@ -49,19 +49,15 @@ services:
       # Tracker repo bind-mount. bootstrap-tracker.sh clones (or refreshes)
       # this on the host before the container is started.
       - ${TRACKER_REPO_PATH:-./.tracker-repo}:/home/tester/ecl-e2e-weather-app
-      # Persist Claude Code state across container restarts (theme picker,
-      # session history, etc). Without this, the operator picks the theme
-      # every fresh `up`. Named volume rather than bind-mount because the
-      # contents are claude-managed and shouldn't pollute the host repo.
-      - ecl-lifecycle-claude-home:/home/tester/.claude
-    # tty/stdin_open are kept so `docker exec -it` can attach to a TTY for
-    # the operator's interactive `claude` session. The container's primary
-    # process is now `tail -f /dev/null` (see Dockerfile.lifecycle CMD); the
-    # operator runs claude themselves via docker exec.
+      # NOTE: We deliberately do NOT mount /home/tester/.claude. The
+      # Dockerfile installs eCL into that directory at build time
+      # (`evolv-coder-lite --claude --global` writes ~/.claude/skills/etc.),
+      # and a named-volume mount would shadow those files on first start —
+      # the worker would come up with an empty .claude/ and no `/ecl:*`
+      # skills available. The lost upside is theme-picker persistence
+      # across container restarts, which is acceptable for a one-shot
+      # lifecycle smoke harness (the operator re-picks the theme once per
+      # session). See e2e/lifecycle/RUNBOOK.md.
     stdin_open: true
     tty: true
     mem_limit: 4g
-
-volumes:
-  ecl-lifecycle-claude-home:
-    name: ecl-lifecycle-claude-home
