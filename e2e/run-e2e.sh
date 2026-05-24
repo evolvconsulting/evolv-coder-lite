@@ -13,7 +13,7 @@
 # Lifecycle mode: same bake/pack, then builds an extended image containing
 # Claude CLI + fast-mcp-claude + Bedrock env, starts it detached. The
 # operator drives the 12-turn flow interactively from another Claude Code
-# session whose .mcp.json points at localhost:5473. Real Bedrock dollars
+# session whose .mcp.json points at localhost:5474. Real Bedrock dollars
 # per turn — see e2e/lifecycle/RUNBOOK.md.
 set -euo pipefail
 
@@ -118,7 +118,7 @@ if [ "$MODE" = "lifecycle" ]; then
 ${GREEN}=== Lifecycle worker is up ===${NC}
 
   Container:  ecl-lifecycle-worker
-  MCP URL:    http://localhost:5473/mcp
+  MCP URL:    http://localhost:5474/mcp
   Tracker:    $TRACKER_PATH
 
 Drive the 12 turns from a fresh Claude Code session:
@@ -129,7 +129,7 @@ Drive the 12 turns from a fresh Claude Code session:
      e2e/lifecycle/.env:
        export MCP_API_KEY=...
   3. Launch \`claude\` in that repo. The session will see the
-     \`claude-worker:*\` MCP tools.
+     \`claude-docker:*\` MCP tools.
   4. Follow ${CYAN}e2e/lifecycle/RUNBOOK.md${NC} turn-by-turn.
 
 Stop the worker (between sessions or when done):

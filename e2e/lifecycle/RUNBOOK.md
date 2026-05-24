@@ -51,15 +51,15 @@ bash e2e/lifecycle/bootstrap-tracker.sh
 # 4. Bring up the worker container (detached).
 bash e2e/run-e2e.sh --lifecycle
 
-# 5. Wire up the controller. In a SEPARATE shell, on a SEPARATE eCL repo
-#    (or a worktree of this one — your choice; the controller doesn't have
-#    to live in this repo):
+# 5. Wire up the controller. From a fresh Claude Code session in this repo
+#    (or a worktree of it — the .mcp.json sits at <repo-root>/.mcp.json,
+#    gitignored, copied from e2e/lifecycle/.mcp.json.template):
 cp e2e/lifecycle/.mcp.json.template <controller-repo>/.mcp.json
 export MCP_API_KEY=<same value as in e2e/lifecycle/.env>
 cd <controller-repo>
 claude
 # Inside that session, verify the bridge:
-#   /mcp                       # confirms claude-worker is listed
+#   /mcp                       # confirms claude-docker (and claude-mini2) listed
 #   "What tools do you have for the worker?"
 ```
 
@@ -70,7 +70,7 @@ Each turn below has:
 - **Skill** — what the operator asks the worker to run.
 - **Controller prompt** — the natural-language instruction the operator
   gives their *local* Claude Code session. The local Claude calls
-  `claude-worker:send_prompt` with the body, then `wait_for_completion`.
+  `claude-docker:send_prompt` with the body, then `wait_for_completion`.
 - **Pre-turn setup** — one-shot harness state changes the operator (or
   Claude on the controller side) does *before* sending the prompt.
 - **Expected outcome** — what should be true on the worker side after
@@ -79,7 +79,7 @@ Each turn below has:
 > **Permission relay:** if you've enabled the optional `PreToolUse` hook
 > on the worker (see `fast-mcp-claude/.claude/settings.example.json`),
 > tool calls during the worker's reply pause for controller approval via
-> `claude-worker:pending_approvals` / `approve_tool`. For first runs,
+> `claude-docker:pending_approvals` / `approve_tool`. For first runs,
 > leave the hook off and let the worker auto-approve via its own
 > `--dangerously-skip-permissions` setting.
 
@@ -249,9 +249,10 @@ bash e2e/lifecycle/bootstrap-tracker.sh --reset
 
 ## Troubleshooting
 
-- **`/mcp` in the controller doesn't list `claude-worker`.** The controller's
+- **`/mcp` in the controller doesn't list `claude-docker`.** The controller's
   shell isn't exporting `MCP_API_KEY`, or the value doesn't match
-  `e2e/lifecycle/.env`. Re-export and relaunch `claude`.
+  `e2e/lifecycle/.env`. Re-export and relaunch `claude`. Also confirm
+  the worker is up (`docker compose ... ps`) and bound to host `:5474`.
 - **`send_prompt` returns 401 / 403.** Same as above — auth mismatch.
 - **`claude /worker` exits immediately on container start.** Check
   `docker compose -f e2e/lifecycle/docker-compose.lifecycle.yml logs`. Most
