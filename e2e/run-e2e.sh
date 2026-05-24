@@ -121,22 +121,30 @@ ${GREEN}=== Lifecycle worker is up ===${NC}
   MCP URL:    http://localhost:5474/mcp
   Tracker:    $TRACKER_PATH
 
-Drive the 12 turns from a fresh Claude Code session:
+Drive the 12 turns. Two sessions are involved:
 
-  1. Copy the controller-side MCP config to your repo root (or worktree):
-       cp e2e/lifecycle/.mcp.json.template <controller-repo>/.mcp.json
-  2. In the same shell, export the same key you put in
-     e2e/lifecycle/.env:
-       export MCP_API_KEY=...
-  3. Launch \`claude\` in that repo. The session will see the
-     \`claude-docker:*\` MCP tools.
-  4. Follow ${CYAN}e2e/lifecycle/RUNBOOK.md${NC} turn-by-turn.
+  WORKER-side (in the container, interactive):
+    1. docker exec -it ecl-lifecycle-worker ecl-worker-claude
+       (Wrapper bakes in --mcp-config and --dangerously-skip-permissions.
+       On first run only: dismiss the theme picker. State persists in
+       the ecl-lifecycle-claude-home docker volume.)
+    2. Type /worker and press Enter to start the worker loop.
+    3. Leave this terminal open; the worker now waits for
+       \`send_prompt\` calls from the controller.
+
+  CONTROLLER-side (your local Claude Code session driving the worker):
+    1. cp e2e/lifecycle/.mcp.json.template <controller-repo>/.mcp.json
+       (.mcp.json is gitignored.)
+    2. export MCP_API_KEY=... (same value as in e2e/lifecycle/.env)
+    3. Launch \`claude\` in that repo — \`/mcp\` shows
+       \`claude-docker:*\` and \`claude-mini2:*\` tools.
+    4. Follow ${CYAN}e2e/lifecycle/RUNBOOK.md${NC} turn-by-turn.
 
 Stop the worker (between sessions or when done):
 
   docker compose -f e2e/lifecycle/docker-compose.lifecycle.yml down
 
-Live logs (fast-mcp-claude + claude /worker):
+Live logs (fast-mcp-claude server inside the container):
 
   docker compose -f e2e/lifecycle/docker-compose.lifecycle.yml logs -f
 

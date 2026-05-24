@@ -49,9 +49,27 @@ bash e2e/lifecycle/bootstrap-tracker.sh
 # already exists. Use --reset to wipe and reseed.
 
 # 4. Bring up the worker container (detached).
+#    Starts fast-mcp-claude inside the container, but does NOT auto-launch
+#    `claude /worker` — the operator does that interactively (see step 5).
 bash e2e/run-e2e.sh --lifecycle
 
-# 5. Wire up the controller. From a fresh Claude Code session in this repo
+# 5. Start `claude` inside the container as a fast-mcp-claude worker.
+#    The wrapper script bakes in `--mcp-config /opt/ecl/worker.mcp.json`
+#    (so /worker can resolve `claude-local:wait_for_instruction`) and
+#    `--dangerously-skip-permissions`. State is persisted to a named
+#    docker volume `ecl-lifecycle-claude-home`, so subsequent up/down
+#    cycles skip the welcome flow.
+docker exec -it ecl-lifecycle-worker ecl-worker-claude
+# Inside that interactive claude session:
+#   - On first ever run: pick a theme (e.g. option 2, Dark), accept any
+#     terminal-trust prompts. Subsequent runs will skip these.
+#   - Type `/worker` and press Enter — primes the session as a fast-mcp-claude
+#     worker (long-poll wait_for_instruction → reply loop). The worker is
+#     now ready to receive prompts from the controller.
+#   - Leave this terminal open; close it (or detach with Ctrl-P, Ctrl-Q if
+#     using docker attach instead) once the lifecycle finishes.
+
+# 6. Wire up the controller. From a fresh Claude Code session in this repo
 #    (or a worktree of it — the .mcp.json sits at <repo-root>/.mcp.json,
 #    gitignored, copied from e2e/lifecycle/.mcp.json.template):
 cp e2e/lifecycle/.mcp.json.template <controller-repo>/.mcp.json

@@ -19,7 +19,7 @@ log() { printf '[lifecycle] %s\n' "$*"; }
 
 # --- Required env -----------------------------------------------------------
 : "${MCP_API_KEY:?MCP_API_KEY must be set (see e2e/lifecycle/.env.example)}"
-: "${BEDROCK_BEARER_TOKEN:?BEDROCK_BEARER_TOKEN must be set (see e2e/lifecycle/.env.example)}"
+: "${AWS_BEARER_TOKEN_BEDROCK:?AWS_BEARER_TOKEN_BEDROCK must be set (see e2e/lifecycle/.env.example)}"
 : "${WORKSPACE_ROOTS:=/home/tester/ecl-e2e-weather-app}"
 
 # --- Model wiring -----------------------------------------------------------
@@ -45,6 +45,19 @@ the container; the bootstrap script clones it on the host using your
 existing gh auth.
 EOF
     exit 1
+fi
+
+# --- Make /worker slash command discoverable from the workspace ------------
+# The fast-mcp-claude package ships .claude/commands/worker.md; symlink it
+# into the tracker repo's .claude/commands/ so the operator's interactive
+# `claude` (launched from $WORKSPACE_ROOTS) can resolve `/worker`. Symlink
+# (not copy) so future fast-mcp-claude bumps in the image flow through
+# automatically.
+WORKSPACE_CMDS="$WORKSPACE_ROOTS/.claude/commands"
+mkdir -p "$WORKSPACE_CMDS"
+if [ ! -e "$WORKSPACE_CMDS/worker.md" ] && [ -f /opt/fmc/.claude/commands/worker.md ]; then
+    ln -sf /opt/fmc/.claude/commands/worker.md "$WORKSPACE_CMDS/worker.md"
+    log "linked /worker slash command into $WORKSPACE_CMDS"
 fi
 
 # --- fast-mcp-claude server (background) ------------------------------------
