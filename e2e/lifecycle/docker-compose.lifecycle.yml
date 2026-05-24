@@ -1,0 +1,56 @@
+# evolv-coder-lite lifecycle worker (issue #13).
+#
+# Boots a single container exposing a fast-mcp-claude HTTP MCP server on
+# :5473 (container-internal), mapped to host :5474 to coexist with mini2's
+# local fast-mcp-claude on :5473. The operator's local Claude Code session
+# (with .mcp.json pointing at localhost:5474) drives the worker.
+#
+# Real Bedrock dollars per turn — see ../README.md and ./RUNBOOK.md for
+# the cost model. This compose file is NOT used by CI.
+services:
+  worker:
+    container_name: ecl-lifecycle-worker
+    build:
+      # Repo root is two levels up so the build context can reach
+      # `e2e/lifecycle/entrypoint-lifecycle.sh` for COPY in the Dockerfile.
+      context: ../..
+      dockerfile: e2e/lifecycle/Dockerfile.lifecycle
+      args:
+        # Built by `bash e2e/run-e2e.sh --lifecycle` immediately before this
+        # compose runs. If you're invoking compose directly, build the base
+        # first via `docker compose -f e2e/docker-compose.yml build`.
+        BASE_IMAGE: ecl-e2e-base
+        # Pinned in .env (see .env.example). Bumped deliberately only.
+        FMC_REF: ${FMC_REF:-f9bcc6e3637e786475f0465b41492819e414a0af}
+    env_file:
+      # required:false lets `docker compose config` work without a
+      # populated .env (CI lint, syntax checks). The actual harness gates
+      # on .env presence in run-e2e.sh before invoking compose `up`.
+      - path: .env
+        required: false
+    environment:
+      # CLAUDE_CODE_USE_BEDROCK is also baked into the image; set here for
+      # visibility. CLAUDE_MODEL flows through to the entrypoint which
+      # routes it to the right ANTHROPIC_DEFAULT_*_MODEL slot.
+      - CLAUDE_CODE_USE_BEDROCK=1
+      - CLAUDE_MODEL=${CLAUDE_MODEL:-us.anthropic.claude-sonnet-4-6}
+      - AWS_REGION=${AWS_REGION:-us-west-2}
+      # Tells the in-container fast-mcp-claude about mini2 (the host) as an
+      # outbound peer. host.docker.internal resolves to the Docker host on
+      # macOS / Docker Desktop. Mini2's FMC must be listening on :5473 with
+      # the same MCP_API_KEY (see ~/repos/fast-mcp-claude/.env).
+      - PEERS=[{"name":"mini2","url":"http://host.docker.internal:5473/mcp","api_key":"${MCP_API_KEY}"}]
+    ports:
+      # Worker's fast-mcp-claude HTTP server. Container internal stays :5473;
+      # host side is :5474 to avoid colliding with mini2's local FMC server
+      # (which owns :5473). Controller-side .mcp.json points at :5474.
+      - "127.0.0.1:5474:5473"
+    volumes:
+      # Tracker repo bind-mount. bootstrap-tracker.sh clones (or refreshes)
+      # this on the host before the container is started.
+      - ${TRACKER_REPO_PATH:-./.tracker-repo}:/home/tester/ecl-e2e-weather-app
+    # `claude /worker` is interactive; keep stdin/tty open so the controller
+    # can drive it via the MCP server.
+    stdin_open: true
+    tty: true
+    mem_limit: 4g

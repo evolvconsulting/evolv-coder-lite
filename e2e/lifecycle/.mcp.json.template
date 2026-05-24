@@ -1,0 +1,19 @@
+{
+  "_comment": "Copy to <repo-root>/.mcp.json (gitignored). Drives the eCL lifecycle from a Claude Code session: claude-docker is the in-container worker (host port 5474, container internal 5473); claude-mini2 is the host's local fast-mcp-claude server on 5473. MCP_API_KEY must be exported in the shell launching `claude` and must match e2e/lifecycle/.env and ~/repos/fast-mcp-claude/.env on the host.",
+  "mcpServers": {
+    "claude-docker": {
+      "type": "http",
+      "url": "http://localhost:5474/mcp",
+      "headers": {
+        "Authorization": "Bearer ${MCP_API_KEY}"
+      }
+    },
+    "claude-mini2": {
+      "type": "http",
+      "url": "http://localhost:5473/mcp",
+      "headers": {
+        "Authorization": "Bearer ${MCP_API_KEY}"
+      }
+    }
+  }
+}

@@ -1,29 +1,54 @@
 #!/usr/bin/env bash
 # evolv-coder-lite E2E harness
 #
-# Bakes src/ from upstream + overlay, packs the tarball, builds a Docker image
-# that installs the tarball globally on Node 24, and runs a smoke-test suite.
+# Two modes:
 #
-# No Bedrock / Claude CLI calls — these are install-and-inventory tests only.
-# Lifecycle / model-backed tests are out of scope for this harness.
+#   bash e2e/run-e2e.sh                  # cheap suites (01-09), no Bedrock
+#   bash e2e/run-e2e.sh --lifecycle      # bring up Bedrock-backed worker (#13)
 #
-# Usage: bash e2e/run-e2e.sh
+# Cheap mode: bakes src/ from upstream + overlay, packs the tarball, builds
+# a Docker image that installs the tarball globally on Node 24, and runs
+# install-and-inventory smokes. No model calls.
+#
+# Lifecycle mode: same bake/pack, then builds an extended image containing
+# Claude CLI + fast-mcp-claude + Bedrock env, starts it detached. The
+# operator drives the 12-turn flow interactively from another Claude Code
+# session whose .mcp.json points at localhost:5474. Real Bedrock dollars
+# per turn — see e2e/lifecycle/RUNBOOK.md.
 set -euo pipefail
 
 SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
 REPO_ROOT="$(cd "$SCRIPT_DIR/.." && pwd)"
+LIFECYCLE_DIR="$SCRIPT_DIR/lifecycle"
 
 RED='\033[0;31m'
 GREEN='\033[0;32m'
 CYAN='\033[0;36m'
+YELLOW='\033[0;33m'
 NC='\033[0m'
 
-echo -e "${CYAN}=== evolv-coder-lite E2E harness ===${NC}"
+# --- Mode -------------------------------------------------------------------
+MODE="cheap"
+for arg in "$@"; do
+  case "$arg" in
+    --lifecycle) MODE="lifecycle" ;;
+    -h|--help)
+      sed -n '2,/^set -euo/p' "$0" | sed 's/^# \?//'
+      exit 0
+      ;;
+    *) echo -e "${RED}unknown arg: $arg${NC}" >&2; exit 2 ;;
+  esac
+done
+
+if [ "$MODE" = "lifecycle" ]; then
+  echo -e "${CYAN}=== evolv-coder-lite E2E harness (lifecycle mode, #13) ===${NC}"
+else
+  echo -e "${CYAN}=== evolv-coder-lite E2E harness ===${NC}"
+fi
 
 cd "$REPO_ROOT"
 
-# Assumes src/ is already baked. Run `node overlay/bake.mjs` first if you've
-# changed upstream/ or overlay rules.
+# --- Common: bake check, SDK build, npm pack -------------------------------
 if [ ! -f "$REPO_ROOT/src/package.json" ] || [ ! -f "$REPO_ROOT/src/REBRAND-MANIFEST.json" ]; then
   echo -e "${RED}ERROR: src/ is missing or not baked (no src/package.json + REBRAND-MANIFEST.json).${NC}"
   echo -e "${RED}Run \`node overlay/bake.mjs\` first.${NC}"
@@ -32,8 +57,6 @@ fi
 echo -e "${CYAN}Step 1: Using existing src/ (baked at $(jq -r .bakedAt "$REPO_ROOT/src/REBRAND-MANIFEST.json"))${NC}"
 
 echo -e "${CYAN}Step 2: Build SDK (npm pack does NOT run prepublishOnly — npm 7+)${NC}"
-# `prepublishOnly` only fires on `npm publish`, not `npm pack`. We use pack, so
-# build the SDK explicitly here so sdk/dist/ is present in the tarball.
 ( cd "$REPO_ROOT/src/sdk" && npm ci --silent && npm run build --silent )
 
 echo -e "${CYAN}Step 3: npm pack from src/${NC}"
@@ -45,10 +68,83 @@ if [ -z "$TARBALL" ]; then
 fi
 echo -e "    Tarball: ${TARBALL}"
 
-# Stage tarball at repo root (the docker build context)
 cp "$TARBALL" "$REPO_ROOT/"
 STAGED_TARBALL="$REPO_ROOT/$(basename "$TARBALL")"
 
+# --- Lifecycle mode --------------------------------------------------------
+if [ "$MODE" = "lifecycle" ]; then
+  # Lifecycle EXIT trap: don't tear down the worker (the operator drives it
+  # interactively after this script returns). Just clean the staged tarball.
+  cleanup_lifecycle() { rm -f "$STAGED_TARBALL" "$TARBALL"; }
+  trap cleanup_lifecycle EXIT
+
+  # Preflight: .env present
+  if [ ! -f "$LIFECYCLE_DIR/.env" ]; then
+    echo -e "${RED}ERROR: $LIFECYCLE_DIR/.env not found${NC}"
+    echo -e "${YELLOW}  cp e2e/lifecycle/.env.example e2e/lifecycle/.env  # then fill in secrets${NC}"
+    exit 1
+  fi
+
+  # Preflight: tracker repo present at the bind-mount path
+  # shellcheck disable=SC1091
+  set -a; . "$LIFECYCLE_DIR/.env"; set +a
+  TRACKER_PATH="${TRACKER_REPO_PATH:-$LIFECYCLE_DIR/.tracker-repo}"
+  if [ ! -d "$TRACKER_PATH/.git" ]; then
+    echo -e "${RED}ERROR: tracker repo not found at $TRACKER_PATH${NC}"
+    echo -e "${YELLOW}  bash e2e/lifecycle/bootstrap-tracker.sh   # creates evolvconsulting/ecl-e2e-weather-app${NC}"
+    exit 1
+  fi
+  export TRACKER_REPO_PATH="$TRACKER_PATH"
+
+  echo -e "${CYAN}Step 4a: docker build base image (ecl-e2e-base)${NC}"
+  docker build -t ecl-e2e-base -f "$SCRIPT_DIR/Dockerfile" "$REPO_ROOT"
+
+  echo -e "${CYAN}Step 4b: docker compose build (lifecycle worker)${NC}"
+  docker compose -f "$LIFECYCLE_DIR/docker-compose.lifecycle.yml" build
+
+  echo -e "${CYAN}Step 5: docker compose up -d (lifecycle worker)${NC}"
+  docker compose -f "$LIFECYCLE_DIR/docker-compose.lifecycle.yml" up -d
+
+  # Brief readiness check.
+  sleep 2
+  if ! docker compose -f "$LIFECYCLE_DIR/docker-compose.lifecycle.yml" ps --status=running | grep -q ecl-lifecycle-worker; then
+    echo -e "${RED}ERROR: worker container is not running. Logs:${NC}"
+    docker compose -f "$LIFECYCLE_DIR/docker-compose.lifecycle.yml" logs --tail=80
+    exit 1
+  fi
+
+  cat <<EOF
+
+${GREEN}=== Lifecycle worker is up ===${NC}
+
+  Container:  ecl-lifecycle-worker
+  MCP URL:    http://localhost:5474/mcp
+  Tracker:    $TRACKER_PATH
+
+Drive the 12 turns from a fresh Claude Code session:
+
+  1. Copy the controller-side MCP config to your repo root (or worktree):
+       cp e2e/lifecycle/.mcp.json.template <controller-repo>/.mcp.json
+  2. In the same shell, export the same key you put in
+     e2e/lifecycle/.env:
+       export MCP_API_KEY=...
+  3. Launch \`claude\` in that repo. The session will see the
+     \`claude-docker:*\` MCP tools.
+  4. Follow ${CYAN}e2e/lifecycle/RUNBOOK.md${NC} turn-by-turn.
+
+Stop the worker (between sessions or when done):
+
+  docker compose -f e2e/lifecycle/docker-compose.lifecycle.yml down
+
+Live logs (fast-mcp-claude + claude /worker):
+
+  docker compose -f e2e/lifecycle/docker-compose.lifecycle.yml logs -f
+
+EOF
+  exit 0
+fi
+
+# --- Cheap mode (unchanged) ------------------------------------------------
 cleanup() {
   rm -f "$STAGED_TARBALL"
   rm -f "$TARBALL"

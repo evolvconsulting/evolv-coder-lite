@@ -74,11 +74,31 @@ would have shipped without an e2e gate.
   — surgical regex rewrite to `/\becl-[a-z][a-z-]*/g`. Suite 09 now
   asserts strict `core < standard < full` ordering.
 
+## Lifecycle (interactive, #13)
+
+The cheap suites above intentionally don't use Bedrock or the Claude CLI.
+For end-to-end coverage of the eCL skill set against a real model, there's
+a separate **interactive** harness under `e2e/lifecycle/`. It runs a
+12-turn flow driven by your local Claude Code session as the controller
+and a containerized `claude /worker` as the worker, bridged by
+[`fast-mcp-claude`](https://github.com/jeremy-newhouse/fast-mcp-claude).
+
+```bash
+cp e2e/lifecycle/.env.example e2e/lifecycle/.env  # then fill in secrets
+bash e2e/lifecycle/bootstrap-tracker.sh           # one-time tracker repo
+bash e2e/run-e2e.sh --lifecycle                   # bring up the worker
+# then follow e2e/lifecycle/RUNBOOK.md from a fresh `claude` session
+```
+
+This is **opt-in**, **not in CI**, and **costs real Bedrock dollars**
+(~$5–15/run on Sonnet 4.6; cheaper on Haiku for first-boot smokes). See
+`e2e/lifecycle/RUNBOOK.md` for the full turn-by-turn.
+
 ## Out of scope (follow-ups)
 
-- Bedrock-backed lifecycle simulation (model calls).
-- ~~CI integration~~ — `.github/workflows/e2e.yml` runs the harness on PRs to
-  `dev`/`main` and via `workflow_dispatch`. Uses GHA layer cache via
+- ~~Bedrock-backed lifecycle simulation~~ — see `e2e/lifecycle/` (above).
+- ~~CI integration~~ — `.github/workflows/e2e.yml` runs the cheap harness on
+  PRs to `dev`/`main` and via `workflow_dispatch`. Uses GHA layer cache via
   `docker/build-push-action@v5` + `e2e/docker-compose.ci.yml` override.
 - ~~Multi-runtime install matrix~~ — Suite 08 covers all 15 supported runtimes.
 - ~~Profile flag coverage~~ — Suite 09 covers `--profile=core/standard/full`
