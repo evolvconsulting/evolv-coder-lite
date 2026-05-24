@@ -1,0 +1,12 @@
+{
+  "_comment": "Copy this to the repo root (or the worktree you're driving from) as .mcp.json. The next `claude` session that launches in this directory will see `claude-worker:*` tools that drive the worker container started by `bash e2e/run-e2e.sh --lifecycle`. MCP_API_KEY must match the value in e2e/lifecycle/.env and be exported in the host shell before launching `claude`.",
+  "mcpServers": {
+    "claude-worker": {
+      "type": "http",
+      "url": "http://localhost:5473/mcp",
+      "headers": {
+        "Authorization": "Bearer ${MCP_API_KEY}"
+      }
+    }
+  }
+}
