@@ -53,15 +53,13 @@ bash e2e/lifecycle/bootstrap-tracker.sh
 #    `claude /worker` — the operator does that interactively (see step 5).
 bash e2e/run-e2e.sh --lifecycle
 
-# 5. Start `claude /worker` inside the container. This must be interactive
-#    so the operator can dismiss the v2.1.150 first-launch prompts (theme
-#    picker, terminal-trust). State is persisted to a named docker volume
-#    `ecl-lifecycle-claude-home`, so subsequent up/down cycles skip the
-#    welcome flow.
-docker exec -it ecl-lifecycle-worker bash -c '
-    cd /home/tester/ecl-e2e-weather-app
-    claude --dangerously-skip-permissions
-'
+# 5. Start `claude` inside the container as a fast-mcp-claude worker.
+#    The wrapper script bakes in `--mcp-config /opt/ecl/worker.mcp.json`
+#    (so /worker can resolve `claude-local:wait_for_instruction`) and
+#    `--dangerously-skip-permissions`. State is persisted to a named
+#    docker volume `ecl-lifecycle-claude-home`, so subsequent up/down
+#    cycles skip the welcome flow.
+docker exec -it ecl-lifecycle-worker ecl-worker-claude
 # Inside that interactive claude session:
 #   - On first ever run: pick a theme (e.g. option 2, Dark), accept any
 #     terminal-trust prompts. Subsequent runs will skip these.

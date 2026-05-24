@@ -124,14 +124,12 @@ ${GREEN}=== Lifecycle worker is up ===${NC}
 Drive the 12 turns. Two sessions are involved:
 
   WORKER-side (in the container, interactive):
-    1. docker exec -it ecl-lifecycle-worker bash
-    2. cd /home/tester/ecl-e2e-weather-app
-    3. claude --dangerously-skip-permissions
-       - On first run only: dismiss the theme picker and any
-         terminal-trust prompts. State persists in the
-         ecl-lifecycle-claude-home docker volume.
-    4. Type /worker and press Enter to start the worker loop.
-    5. Leave this terminal open; the worker now waits for
+    1. docker exec -it ecl-lifecycle-worker ecl-worker-claude
+       (Wrapper bakes in --mcp-config and --dangerously-skip-permissions.
+       On first run only: dismiss the theme picker. State persists in
+       the ecl-lifecycle-claude-home docker volume.)
+    2. Type /worker and press Enter to start the worker loop.
+    3. Leave this terminal open; the worker now waits for
        \`send_prompt\` calls from the controller.
 
   CONTROLLER-side (your local Claude Code session driving the worker):
