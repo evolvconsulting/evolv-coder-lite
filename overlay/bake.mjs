@@ -11,11 +11,12 @@
 //   node overlay/bake.mjs            # bake into src/
 //   node overlay/bake.mjs --check    # dry-run, exit non-zero if src/ would differ
 
-import { readFile, readdir, writeFile, mkdir, rm, copyFile, stat, chmod } from 'node:fs/promises';
+import { readFile, readdir, writeFile, mkdir, rm, copyFile, stat } from 'node:fs/promises';
 import { dirname, join, relative } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { rebrandPath, rebrandContent, isContentPreserved, looksLikeText, mergeHits } from './rebrand-map.mjs';
 import { applyTextPatches } from './text-patches.mjs';
+import { propagateMode, deepMerge, writeManifest } from './post-write.mjs';
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
 const REPO = join(__dirname, '..');
@@ -32,10 +33,6 @@ async function exists(p) {
   try { await stat(p); return true; } catch { return false; }
 }
 
-function modeFor(srcMode) {
-  return (srcMode & 0o111) ? 0o755 : 0o644;
-}
-
 async function* walk(dir, base = dir) {
   for (const ent of await readdir(dir, { withFileTypes: true })) {
     const p = join(dir, ent.name);
@@ -46,20 +43,6 @@ async function* walk(dir, base = dir) {
       yield { abs: p, rel: relative(base, p) };
     }
   }
-}
-
-function deepMerge(target, patch) {
-  if (Array.isArray(patch)) return patch;
-  if (typeof patch !== 'object' || patch === null) return patch;
-  const out = { ...(target ?? {}) };
-  for (const [k, v] of Object.entries(patch)) {
-    if (v && typeof v === 'object' && !Array.isArray(v) && out[k] && typeof out[k] === 'object' && !Array.isArray(out[k])) {
-      out[k] = deepMerge(out[k], v);
-    } else {
-      out[k] = v;
-    }
-  }
-  return out;
 }
 
 async function main() {
@@ -88,7 +71,7 @@ async function main() {
       binaryCount++;
       if (!CHECK_ONLY) {
         await copyFile(abs, dest);
-        await chmod(dest, modeFor(srcStat.mode));
+        await propagateMode(dest, srcStat.mode);
       }
       continue;
     }
@@ -101,7 +84,7 @@ async function main() {
     totalHits = mergeHits(totalHits, hits);
     if (!CHECK_ONLY) {
       await writeFile(dest, text);
-      await chmod(dest, modeFor(srcStat.mode));
+      await propagateMode(dest, srcStat.mode);
     }
   }
 
@@ -114,7 +97,7 @@ async function main() {
       if (!CHECK_ONLY) {
         await mkdir(dirname(dest), { recursive: true });
         await copyFile(abs, dest);
-        await chmod(dest, modeFor(srcStat.mode));
+        await propagateMode(dest, srcStat.mode);
       }
     }
   }
@@ -143,15 +126,14 @@ async function main() {
     upstreamSha = lock.tarball_sha256 ?? upstreamSha;
   }
 
-  const manifest = {
-    bakedAt: new Date().toISOString(),
-    upstream: { repo: 'open-gsd/get-shit-done-redux', ref: upstreamRef, tarball_sha256: upstreamSha },
-    counts: { textFiles: textCount, binaryFiles: binaryCount, contentPreserved: preservedCount, overlayOverrides: overrideCount, packagePatched: patched, textPatchesApplied: textPatchesApplied.length },
-    ruleHits: totalHits,
-  };
-
   if (!CHECK_ONLY) {
-    await writeFile(join(SRC, 'REBRAND-MANIFEST.json'), JSON.stringify(manifest, null, 2) + '\n');
+    await writeManifest(SRC, {
+      upstreamRepo: 'open-gsd/get-shit-done-redux',
+      upstreamRef,
+      upstreamSha,
+      counts: { textFiles: textCount, binaryFiles: binaryCount, contentPreserved: preservedCount, overlayOverrides: overrideCount, packagePatched: patched, textPatchesApplied: textPatchesApplied.length },
+      ruleHits: totalHits,
+    });
   }
 
   console.log(`  text files transformed: ${textCount}`);
