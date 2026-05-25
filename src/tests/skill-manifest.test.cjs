@@ -66,9 +66,9 @@ describe('skill-manifest', () => {
 
     const skillNames = manifest.skills.map((skill) => skill.name).sort();
     assert.deepStrictEqual(skillNames, [
+      'ecl-help',
       'global-claude',
       'global-codex',
-      'ecl-help',
       'legacy-import',
       'project-agents',
       'project-claude',

@@ -117,7 +117,7 @@ describe('bug-2801: ingest-docs.md workflow calls ecl-tools not ecl-sdk', () => 
     const sdkCalls = bashBlocks
       .join('\n')
       .split('\n')
-      .filter((line) => /\bgsd-sdk\b/.test(line));
+      .filter((line) => /\becl-sdk\b/.test(line));
 
     assert.deepStrictEqual(
       sdkCalls,
