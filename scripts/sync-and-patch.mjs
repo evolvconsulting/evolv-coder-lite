@@ -38,8 +38,24 @@ const UPSTREAM = join(REPO, 'upstream');
 const SRC = join(REPO, 'src');
 const LOCK_FILE = join(REPO, 'UPSTREAM.lock');
 const REPORT_FILE = join(REPO, 'SYNC-REPORT.md');
+const PACKAGE_PATCH = join(REPO, 'overlay', 'package.patch.json');
 const UPSTREAM_REPO = 'open-gsd/get-shit-done-redux';
 const UA = 'evolv-coder-lite-sync/1.0';
+
+// Mirror of overlay/bake.mjs deepMerge: arrays wholesale-replace; objects merge.
+function deepMerge(target, patch) {
+  if (Array.isArray(patch)) return patch;
+  if (typeof patch !== 'object' || patch === null) return patch;
+  const out = { ...(target ?? {}) };
+  for (const [k, v] of Object.entries(patch)) {
+    if (v && typeof v === 'object' && !Array.isArray(v) && out[k] && typeof out[k] === 'object' && !Array.isArray(out[k])) {
+      out[k] = deepMerge(out[k], v);
+    } else {
+      out[k] = v;
+    }
+  }
+  return out;
+}
 
 function ghHeaders() {
   const h = { 'User-Agent': UA, Accept: 'application/vnd.github+json' };
@@ -303,6 +319,22 @@ async function main() {
     }
   }
 
+  // -- Re-apply the package.json overlay patch.
+  // The orchestrator's translate-and-patch path operates against the rebranded
+  // upstream contents, but src/package.json on disk also carries the
+  // overlay/package.patch.json overrides (description, files[], etc.). After
+  // any change to src/package.json — clean patch, wholesale fallback, or
+  // even no change at all — re-merge the overlay on top so eCL-specific
+  // fields are reasserted and never lost. Mirrors overlay/bake.mjs.
+  let packagePatched = false;
+  if ((await exists(PACKAGE_PATCH)) && (await exists(join(SRC, 'package.json')))) {
+    const base = JSON.parse(await readFile(join(SRC, 'package.json'), 'utf8'));
+    const patch = JSON.parse(await readFile(PACKAGE_PATCH, 'utf8'));
+    const merged = deepMerge(base, patch);
+    await writeFile(join(SRC, 'package.json'), JSON.stringify(merged, null, 2) + '\n');
+    packagePatched = true;
+  }
+
   // -- Swap upstream/ to the new tree.
   // We do this AFTER all src/ writes succeeded, so a partial run is recoverable.
   await rm(UPSTREAM, { recursive: true, force: true });
@@ -339,6 +371,10 @@ async function main() {
   lines.push(`| Deleted | ${outcomes.deleted.length} |`);
   lines.push(`| Skipped | ${outcomes.skipped.length} |`);
   lines.push('');
+  if (packagePatched) {
+    lines.push('_`overlay/package.patch.json` was re-applied to `src/package.json` after the sync; eCL-specific fields (description, files[], etc.) are reasserted regardless of whether `package.json` appears in the fallback list above._');
+    lines.push('');
+  }
   if (outcomes.modified_fallback.length > 0) {
     lines.push('## Files needing extra review');
     lines.push('');
