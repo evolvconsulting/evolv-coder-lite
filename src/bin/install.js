@@ -7112,6 +7112,19 @@ function uninstall(isGlobal, runtime = 'claude') {
     console.log(`  ${green}✓${reset} Removed ${MANIFEST_NAME}`);
   }
 
+  // Remove the installer-migration state file that lib/installer-migrations.cjs
+  // writes at install time. Sibling of the manifest above; same lifecycle.
+  // Without this step the metadata file persists after uninstall — mirrors the
+  // upstream rollback contract pinned by installer-migration-install-integration.test.cjs.
+  // Patched in by overlay/text-patches.mjs (eCL #12). Remove once upstream
+  // lands an equivalent block.
+  const installStatePath = path.join(targetDir, 'ecl-install-state.json');
+  if (fs.existsSync(installStatePath)) {
+    fs.rmSync(installStatePath, { force: true });
+    removedCount++;
+    console.log(`  ${green}✓${reset} Removed ecl-install-state.json`);
+  }
+
   if (removedCount === 0) {
     console.log(`  ${yellow}⚠${reset} No eCL files found to remove.`);
   }

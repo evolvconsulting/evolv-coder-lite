@@ -1,4 +1,4 @@
-> ⚠️ This is an active fork. See the [English README](README.md) for the full notice about the original repo.
+> evolv Coder Lite (eCL) is the evolv Consulting rebrand of the upstream `@opengsd/get-shit-done-redux` project. See the [English README](README.md) for details.
 
 <div align="center">
 
@@ -10,8 +10,8 @@
 
 **コンテキストロット（Claudeがコンテキストウィンドウを消費するにつれ品質が劣化する現象）を解決します。**
 
-[![npm version](https://img.shields.io/npm/v/%40opengsd%2Fevolv-coder-lite?style=for-the-badge&logo=npm&logoColor=white&color=CB3837)](https://www.npmjs.com/package/@evolvconsulting/evolv-coder-lite)
-[![npm downloads](https://img.shields.io/npm/dm/%40opengsd%2Fevolv-coder-lite?style=for-the-badge&logo=npm&logoColor=white&color=CB3837)](https://www.npmjs.com/package/@evolvconsulting/evolv-coder-lite)
+[![npm version](https://img.shields.io/npm/v/%40evolvconsulting%2Fevolv-coder-lite?style=for-the-badge&logo=npm&logoColor=white&color=CB3837)](https://www.npmjs.com/package/@evolvconsulting/evolv-coder-lite)
+[![npm downloads](https://img.shields.io/npm/dm/%40evolvconsulting%2Fevolv-coder-lite?style=for-the-badge&logo=npm&logoColor=white&color=CB3837)](https://www.npmjs.com/package/@evolvconsulting/evolv-coder-lite)
 [![Tests](https://img.shields.io/github/actions/workflow/status/evolvconsulting/evolv-coder-lite/test.yml?branch=main&style=for-the-badge&logo=github&label=Tests)](https://github.com/evolvconsulting/evolv-coder-lite/actions/workflows/test.yml)
 [![Discord](https://img.shields.io/badge/Discord-Join-5865F2?style=for-the-badge&logo=discord&logoColor=white)](https://discord.gg/mYgfVNfA2r)
 [![GitHub stars](https://img.shields.io/github/stars/evolvconsulting/evolv-coder-lite?style=for-the-badge&logo=github&color=181717)](https://github.com/evolvconsulting/evolv-coder-lite)

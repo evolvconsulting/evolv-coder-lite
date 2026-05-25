@@ -49,6 +49,12 @@ const RULES = [
   // @opengsd in any context — package paths, escaped paths in test strings,
   // word-boundary mentions in prose. Catches @opengsd/ and @opengsd\/ alike.
   { track: 'pkg:scope',     find: /@opengsd\b/g,                    repl: '@evolvconsulting' },
+  // URL-encoded scope embedded in shields.io badge URLs and similar links.
+  // %40 → @, %2F → /. Without this rule the badges in README files keep
+  // pointing at the original npm package — visible drift on npmjs.com.
+  // Both upper- and lower-case forms appear in the wild, so we are case-
+  // insensitive on the percent-encoded letters but anchor on `opengsd`.
+  { track: 'pkg:scope-encoded', find: /%40opengsd%2F/gi,            repl: '%40evolvconsulting%2F' },
 
   // --- author attribution ---
   // TÂCHES is the original author; "100% rebranded" mode strips the name from

@@ -1,32 +1,8 @@
-> # ⚠️ This is the active fork
+> # evolv Coder Lite (eCL)
 >
-> 📢 **Read the announcement: [why the fork, what changed, what's next →](https://github.com/ecl-redux/evolv-coder-lite/discussions/109)**
+> eCL is the [evolv Consulting](https://evolvconsulting.com) rebrand of the upstream [`@opengsd/get-shit-done-redux`](https://github.com/open-gsd/get-shit-done-redux) project. Functionality, contracts, and command surface track upstream releases; identifiers, package names, and command prefixes are renamed to the `ecl-*` / `@evolvconsulting/*` namespace.
 >
-> The original repo at [evolvconsulting/evolv-coder-lite](https://github.com/evolvconsulting/evolv-coder-lite) appears compromised or abandoned. The maintainer (evolv Consulting) has not been reachable since **2026-04-01**. evolv Consulting social accounts appear deleted, and a **`$eCL` token associated with the project has been linked publicly to a rug-pull**.
->
-> I have **no inside information** beyond what is publicly visible. I am stating absence-of-information deliberately — absence of news is not the same as evidence.
->
-> ### What I can confirm
->
-> - No contact with the original maintainer since 2026-04-01.
-> - evolv Consulting social accounts appear deleted or unreachable.
-> - The `$eCL` token has been linked publicly to a rug-pull.
-> - The repo at `evolvconsulting/evolv-coder-lite` continues to exist but I cannot vouch for any changes pushed there from this point forward.
->
-> ### What changed
->
-> | | Before | After |
-> |---|---|---|
-> | GitHub | `evolvconsulting/evolv-coder-lite` | `evolvconsulting/evolv-coder-lite` |
-> | npm (main) | `evolv-coder-lite-cc` → `evolv-coder-lite` | `@evolvconsulting/evolv-coder-lite` |
-> | npm (sdk) | `@evolvconsulting/sdk` → `@ecl-redux/sdk` | `@evolvconsulting/ecl-sdk` |
-> | Issue numbers | per source | renumbered; original is in body as `[from evolvconsulting/evolv-coder-lite#N]` |
->
-> If you can reach the original maintainer, please open an issue here and CC them. If you have technical evidence that materially changes the picture above, please share it in an issue.
->
-> — trek-e, fork maintainer
->
-> ---
+> Issues, support, and roadmap for the eCL distribution: [evolvconsulting/evolv-coder-lite](https://github.com/evolvconsulting/evolv-coder-lite/issues).
 
 <div align="center">
 
@@ -38,8 +14,8 @@
 
 **Solves context rot — the quality degradation that happens as your AI fills its context window.**
 
-[![npm version](https://img.shields.io/npm/v/%40opengsd%2Fevolv-coder-lite?style=for-the-badge&logo=npm&logoColor=white&color=CB3837)](https://www.npmjs.com/package/@evolvconsulting/evolv-coder-lite)
-[![npm downloads](https://img.shields.io/npm/dm/%40opengsd%2Fevolv-coder-lite?style=for-the-badge&logo=npm&logoColor=white&color=CB3837)](https://www.npmjs.com/package/@evolvconsulting/evolv-coder-lite)
+[![npm version](https://img.shields.io/npm/v/%40evolvconsulting%2Fevolv-coder-lite?style=for-the-badge&logo=npm&logoColor=white&color=CB3837)](https://www.npmjs.com/package/@evolvconsulting/evolv-coder-lite)
+[![npm downloads](https://img.shields.io/npm/dm/%40evolvconsulting%2Fevolv-coder-lite?style=for-the-badge&logo=npm&logoColor=white&color=CB3837)](https://www.npmjs.com/package/@evolvconsulting/evolv-coder-lite)
 [![Tests](https://img.shields.io/github/actions/workflow/status/evolvconsulting/evolv-coder-lite/test.yml?branch=main&style=for-the-badge&logo=github&label=Tests)](https://github.com/evolvconsulting/evolv-coder-lite/actions/workflows/test.yml)
 [![Discord](https://img.shields.io/badge/Discord-Join-5865F2?style=for-the-badge&logo=discord&logoColor=white)](https://discord.gg/mYgfVNfA2r)
 [![GitHub stars](https://img.shields.io/github/stars/evolvconsulting/evolv-coder-lite?style=for-the-badge&logo=github&color=181717)](https://github.com/evolvconsulting/evolv-coder-lite)
