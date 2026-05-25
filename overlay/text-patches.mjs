@@ -381,6 +381,54 @@ const PATCHES = [
   }
 `,
   },
+  {
+    id: 'readme-en-ci-badge',
+    file: 'README.md',
+    issue: 'evolvconsulting/evolv-coder-lite#pre-release-remediation',
+    note: [
+      'Upstream README points the workflow-status badge at test.yml / "Tests".',
+      'eCL renamed the workflow file to ci.yml and the badge label to "CI" to',
+      'reflect that the workflow gates more than tests (lint, format, smoke,',
+      'release-tarball checks). The rebrand-map does not rewrite filenames in',
+      'badge URLs, so this swap lives here. Drop this patch when upstream',
+      'renames their workflow to ci.yml or eCL switches to a whole-file overlay',
+      'for README.md.',
+    ].join(' '),
+    find: `[![Tests](https://img.shields.io/github/actions/workflow/status/evolvconsulting/evolv-coder-lite/test.yml?branch=main&style=for-the-badge&logo=github&label=Tests)](https://github.com/evolvconsulting/evolv-coder-lite/actions/workflows/test.yml)`,
+    replace: `[![CI](https://img.shields.io/github/actions/workflow/status/evolvconsulting/evolv-coder-lite/ci.yml?branch=main&style=for-the-badge&logo=github&label=CI)](https://github.com/evolvconsulting/evolv-coder-lite/actions/workflows/ci.yml)`,
+  },
+  {
+    id: 'readme-ja-ci-badge',
+    file: 'README.ja-JP.md',
+    issue: 'evolvconsulting/evolv-coder-lite#pre-release-remediation',
+    note: 'Same workflow rename as readme-en-ci-badge, applied to the Japanese translation.',
+    find: `[![Tests](https://img.shields.io/github/actions/workflow/status/evolvconsulting/evolv-coder-lite/test.yml?branch=main&style=for-the-badge&logo=github&label=Tests)](https://github.com/evolvconsulting/evolv-coder-lite/actions/workflows/test.yml)`,
+    replace: `[![CI](https://img.shields.io/github/actions/workflow/status/evolvconsulting/evolv-coder-lite/ci.yml?branch=main&style=for-the-badge&logo=github&label=CI)](https://github.com/evolvconsulting/evolv-coder-lite/actions/workflows/ci.yml)`,
+  },
+  {
+    id: 'readme-ko-ci-badge',
+    file: 'README.ko-KR.md',
+    issue: 'evolvconsulting/evolv-coder-lite#pre-release-remediation',
+    note: 'Same workflow rename as readme-en-ci-badge, applied to the Korean translation.',
+    find: `[![Tests](https://img.shields.io/github/actions/workflow/status/evolvconsulting/evolv-coder-lite/test.yml?branch=main&style=for-the-badge&logo=github&label=Tests)](https://github.com/evolvconsulting/evolv-coder-lite/actions/workflows/test.yml)`,
+    replace: `[![CI](https://img.shields.io/github/actions/workflow/status/evolvconsulting/evolv-coder-lite/ci.yml?branch=main&style=for-the-badge&logo=github&label=CI)](https://github.com/evolvconsulting/evolv-coder-lite/actions/workflows/ci.yml)`,
+  },
+  {
+    id: 'readme-pt-ci-badge',
+    file: 'README.pt-BR.md',
+    issue: 'evolvconsulting/evolv-coder-lite#pre-release-remediation',
+    note: 'Same workflow rename as readme-en-ci-badge, applied to the Portuguese translation.',
+    find: `[![Tests](https://img.shields.io/github/actions/workflow/status/evolvconsulting/evolv-coder-lite/test.yml?branch=main&style=for-the-badge&logo=github&label=Tests)](https://github.com/evolvconsulting/evolv-coder-lite/actions/workflows/test.yml)`,
+    replace: `[![CI](https://img.shields.io/github/actions/workflow/status/evolvconsulting/evolv-coder-lite/ci.yml?branch=main&style=for-the-badge&logo=github&label=CI)](https://github.com/evolvconsulting/evolv-coder-lite/actions/workflows/ci.yml)`,
+  },
+  {
+    id: 'readme-zh-ci-badge',
+    file: 'README.zh-CN.md',
+    issue: 'evolvconsulting/evolv-coder-lite#pre-release-remediation',
+    note: 'Same workflow rename as readme-en-ci-badge, applied to the Chinese translation.',
+    find: `[![Tests](https://img.shields.io/github/actions/workflow/status/evolvconsulting/evolv-coder-lite/test.yml?branch=main&style=for-the-badge&logo=github&label=Tests)](https://github.com/evolvconsulting/evolv-coder-lite/actions/workflows/test.yml)`,
+    replace: `[![CI](https://img.shields.io/github/actions/workflow/status/evolvconsulting/evolv-coder-lite/ci.yml?branch=main&style=for-the-badge&logo=github&label=CI)](https://github.com/evolvconsulting/evolv-coder-lite/actions/workflows/ci.yml)`,
+  },
 ];
 
 export async function applyTextPatches(srcDir) {
