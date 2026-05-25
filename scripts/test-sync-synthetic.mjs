@@ -230,6 +230,22 @@ async function main() {
   const agentStat = await stat(join(srcDir, 'agents/ecl-new-helper.md'));
   assert(modeFor(agentStat.mode) === 0o644, `agent .md mode should be 0o644, got 0o${agentStat.mode.toString(8)}`);
 
+  // -- Assert REBRAND-MANIFEST.json is generated correctly after sync --
+  await writeManifest(srcDir, {
+    upstreamRepo: 'test/repo',
+    upstreamRef: 'v1.1.0',
+    upstreamSha: 'abc123',
+    counts: { added: 2, modified: 1, deleted: 1 },
+    ruleHits: {},
+  });
+  const manifestPath = join(srcDir, 'REBRAND-MANIFEST.json');
+  const manifest = JSON.parse(await readFile(manifestPath, 'utf8'));
+  assert(manifest.upstream.repo === 'test/repo', 'manifest: repo mismatch');
+  assert(manifest.upstream.ref === 'v1.1.0', 'manifest: ref mismatch');
+  assert(manifest.upstream.tarball_sha256 === 'abc123', 'manifest: sha mismatch');
+  assert(manifest.counts.added === 2, 'manifest: counts mismatch');
+  assert(typeof manifest.bakedAt === 'string', 'manifest: bakedAt missing');
+
   console.log(`OK — synthetic sync produced same tree as fresh bake (${a.size} files)`);
   await rm(work, { recursive: true, force: true });
 }
