@@ -1,8 +1,9 @@
 {
   "repo": "open-gsd/get-shit-done-redux",
-  "ref": "v1.0.0",
-  "name": "v1.0.0 — @opengsd scope",
-  "published_at": "2026-05-22T20:45:13Z",
-  "tarball_sha256": "e1a161d120a68e5bbdfd6269f93fe8c53ad326a86a8225c07f3228552dbc77c3",
-  "fetched_at": "2026-05-23T14:03:25.312Z"
+  "ref": "v1.01.0",
+  "name": "v1.1.0",
+  "published_at": "2026-05-24T05:31:46Z",
+  "tarball_sha256": "19cb5c8e805608e00f28664ea6059fdcf8546ccd34195a926cbfcdc51c6359d5",
+  "fetched_at": "2026-05-25T14:17:47.085Z",
+  "previous_ref": "v1.0.0"
 }

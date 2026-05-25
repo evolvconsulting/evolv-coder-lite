@@ -1,7 +1,7 @@
 {
   "name": "@evolvconsulting/evolv-coder-lite",
-  "version": "1.0.0",
-  "description": "evolv Coder Lite (eCL) — a meta-prompting, context engineering and spec-driven development system for AI coding assistants.",
+  "version": "1.1.0",
+  "description": "A meta-prompting, context engineering and spec-driven development system for Claude Code, OpenCode, Gemini and Codex.",
   "bin": {
     "evolv-coder-lite": "bin/install.js",
     "ecl-sdk": "bin/ecl-sdk.js",
@@ -15,23 +15,12 @@
     "hooks",
     "scripts",
     "sdk/src",
-    "!sdk/src/**/*.test.ts",
-    "!sdk/src/**/*.test.cjs",
-    "!sdk/src/test-fixtures/**",
     "sdk/shared",
     "sdk/prompts",
     "sdk/dist",
     "sdk/package.json",
     "sdk/package-lock.json",
-    "sdk/tsconfig.json",
-    "docs",
-    "assets",
-    "CHANGELOG.md",
-    "SECURITY.md",
-    "README.ja-JP.md",
-    "README.ko-KR.md",
-    "README.pt-BR.md",
-    "README.zh-CN.md"
+    "sdk/tsconfig.json"
   ],
   "keywords": [
     "claude",
@@ -59,7 +48,8 @@
     "access": "public"
   },
   "engines": {
-    "node": ">=22.0.0"
+    "node": ">=22.0.0",
+    "npm": ">=10.0.0"
   },
   "dependencies": {
     "@anthropic-ai/claude-agent-sdk": "^0.2.84",
@@ -72,6 +62,8 @@
     "fallow": "^2.70.0"
   },
   "scripts": {
+    "check:env": "bash scripts/check-env.sh",
+    "check:integrity": "./scripts/check-npm-integrity.sh",
     "build:hooks": "node scripts/build-hooks.js",
     "build:sdk": "cd sdk && npm ci && npm run build",
     "check:alias-drift": "cd sdk && npm run check:alias-drift",
@@ -84,6 +76,7 @@
     "check:schema-detect-fresh": "cd sdk && npm run check:schema-detect-fresh",
     "check:decisions-fresh": "cd sdk && npm run check:decisions-fresh",
     "check:workstream-name-policy-fresh": "cd sdk && npm run check:workstream-name-policy-fresh",
+    "check:validate-fresh": "cd sdk && npm run check:validate-fresh",
     "prepublishOnly": "npm run build:hooks && npm run build:sdk",
     "pretest": "npm run build:sdk && npm run lint:skill-deps",
     "pretest:coverage": "npm run build:sdk",
