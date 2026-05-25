@@ -31,6 +31,7 @@ import { join, relative, dirname } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { pipeline } from 'node:stream/promises';
 import { rebrandPath, rebrandContent, isContentPreserved, looksLikeText, mergeHits } from '../overlay/rebrand-map.mjs';
+import { propagateMode, deepMerge, writeManifest } from '../overlay/post-write.mjs';
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
 const REPO = join(__dirname, '..');
@@ -41,21 +42,6 @@ const REPORT_FILE = join(REPO, 'SYNC-REPORT.md');
 const PACKAGE_PATCH = join(REPO, 'overlay', 'package.patch.json');
 const UPSTREAM_REPO = 'open-gsd/get-shit-done-redux';
 const UA = 'evolv-coder-lite-sync/1.0';
-
-// Mirror of overlay/bake.mjs deepMerge: arrays wholesale-replace; objects merge.
-function deepMerge(target, patch) {
-  if (Array.isArray(patch)) return patch;
-  if (typeof patch !== 'object' || patch === null) return patch;
-  const out = { ...(target ?? {}) };
-  for (const [k, v] of Object.entries(patch)) {
-    if (v && typeof v === 'object' && !Array.isArray(v) && out[k] && typeof out[k] === 'object' && !Array.isArray(out[k])) {
-      out[k] = deepMerge(out[k], v);
-    } else {
-      out[k] = v;
-    }
-  }
-  return out;
-}
 
 function ghHeaders() {
   const h = { 'User-Agent': UA, Accept: 'application/vnd.github+json' };
@@ -120,7 +106,8 @@ async function indexTree(root) {
   const out = new Map();
   for await (const { abs, rel } of walk(root)) {
     const buf = await readFile(abs);
-    out.set(rel, { abs, rel, buf, hash: sha256(buf) });
+    const s = await stat(abs);
+    out.set(rel, { abs, rel, buf, hash: sha256(buf), mode: s.mode });
   }
   return out;
 }
@@ -242,6 +229,7 @@ async function main() {
       totalHits = mergeHits(totalHits, hits);
       await writeFile(target, text);
     }
+    await propagateMode(target, n.mode);
     outcomes.added.push(newRel);
   }
 
@@ -261,6 +249,7 @@ async function main() {
     if (!isTextOld || !isTextNew) {
       await mkdir(dirname(target), { recursive: true });
       await writeFile(target, m.new.buf);
+      await propagateMode(target, m.new.mode);
       outcomes.modified_fallback.push({ rel: newRel, reason: 'binary' });
       continue;
     }
@@ -282,6 +271,7 @@ async function main() {
     if (!(await exists(target))) {
       await mkdir(dirname(target), { recursive: true });
       await writeFile(target, newRebranded.text);
+      await propagateMode(target, m.new.mode);
       outcomes.added.push(newRel);
       continue;
     }
@@ -305,16 +295,19 @@ async function main() {
 
     if (!patch) {
       await writeFile(target, newRebranded.text);
+      await propagateMode(target, m.new.mode);
       outcomes.modified_fallback.push({ rel: newRel, reason: 'no-patch' });
       continue;
     }
 
     const result = await tryGitApply(patch, REPO);
     if (result.applied) {
+      await propagateMode(target, m.new.mode);
       outcomes.modified_clean.push(newRel);
     } else {
       // Per-file fallback: wholesale replace, tag for review.
       await writeFile(target, newRebranded.text);
+      await propagateMode(target, m.new.mode);
       outcomes.modified_fallback.push({ rel: newRel, reason: result.reason });
     }
   }
@@ -351,6 +344,22 @@ async function main() {
     previous_ref: lock.ref,
   };
   await writeFile(LOCK_FILE, JSON.stringify(newLock, null, 2) + '\n');
+
+  // -- Regenerate REBRAND-MANIFEST.json to match the new upstream state.
+  await writeManifest(SRC, {
+    upstreamRepo: UPSTREAM_REPO,
+    upstreamRef: newTag,
+    upstreamSha,
+    counts: {
+      added: outcomes.added.length,
+      modifiedClean: outcomes.modified_clean.length,
+      modifiedFallback: outcomes.modified_fallback.length,
+      deleted: outcomes.deleted.length,
+      skipped: outcomes.skipped.length,
+      packagePatched,
+    },
+    ruleHits: totalHits,
+  });
 
   // -- Write the sync report (used as the PR body).
   const lines = [];
