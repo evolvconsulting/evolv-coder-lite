@@ -103,10 +103,18 @@ jobs:
             git checkout -B "$BRANCH"
           fi
           git add -A
-          git commit -m "chore(sync): bump upstream to ${NEW_TAG}"
-          git push -u origin "$BRANCH" --force-with-lease
+          if git diff --cached --quiet; then
+            echo "No staged changes after sync — branch is already up to date with this tag. Skipping commit/push."
+          else
+            git commit -m "chore(sync): bump upstream to ${NEW_TAG}"
+            git push -u origin "$BRANCH" --force-with-lease
+          fi
 
-          if ! gh pr view "$BRANCH" --json number >/dev/null 2>&1; then
+          # Match PRs by head branch AND open state. `gh pr view <branch>` would
+          # match closed/merged PRs too, causing `gh pr create` to be skipped on
+          # re-runs after a stale PR was closed (see #25 → #28).
+          EXISTING_PR=$(gh pr list --head "$BRANCH" --state open --json number -q '.[0].number')
+          if [ -z "$EXISTING_PR" ]; then
             gh pr create \
               --base dev \
               --head "$BRANCH" \
@@ -115,5 +123,5 @@ jobs:
               --label upstream-sync \
               --label needs-review
           else
-            echo "PR for $BRANCH already exists; updated branch in place."
+            echo "Open PR #${EXISTING_PR} already tracks $BRANCH; updated branch in place."
           fi
