@@ -11,13 +11,14 @@
 //
 // Exits 0 on success, 1 on assertion failure.
 
-import { readFile, writeFile, mkdir, rm, copyFile, readdir, stat } from 'node:fs/promises';
+import { readFile, writeFile, mkdir, rm, copyFile, readdir, stat, chmod } from 'node:fs/promises';
 import { spawn } from 'node:child_process';
 import { tmpdir } from 'node:os';
 import { join, relative, dirname } from 'node:path';
 import { createHash } from 'node:crypto';
 import { fileURLToPath } from 'node:url';
 import { rebrandPath, rebrandContent, isContentPreserved, looksLikeText, mergeHits } from '../overlay/rebrand-map.mjs';
+import { modeFor, propagateMode, writeManifest } from '../overlay/post-write.mjs';
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
 
@@ -47,7 +48,8 @@ async function indexTree(root) {
   const out = new Map();
   for await (const { abs, rel } of walk(root)) {
     const buf = await readFile(abs);
-    out.set(rel, { abs, rel, buf, hash: sha256(buf) });
+    const s = await stat(abs);
+    out.set(rel, { abs, rel, buf, hash: sha256(buf), mode: s.mode });
   }
   return out;
 }
@@ -70,8 +72,10 @@ async function bake(upstreamDir, srcDir) {
     const dest = join(srcDir, newRel);
     await mkdir(dirname(dest), { recursive: true });
     const buf = await readFile(abs);
+    const s = await stat(abs);
     if (!looksLikeText(buf)) await copyFile(abs, dest);
     else await writeFile(dest, rebrandContent(buf.toString('utf8'), rel).text);
+    await propagateMode(dest, s.mode);
   }
 }
 
@@ -89,6 +93,7 @@ async function applySyncToSrc(oldUpstream, newUpstream, src) {
     await mkdir(dirname(target), { recursive: true });
     if (!looksLikeText(n.buf)) await writeFile(target, n.buf);
     else await writeFile(target, rebrandContent(n.buf.toString('utf8'), n.rel).text);
+    await propagateMode(target, n.mode);
   }
   // For modifieds: simulate the unified-diff path; on conflict (which won't
   // happen in this synthetic test because src/ is unmodified relative to
@@ -97,12 +102,10 @@ async function applySyncToSrc(oldUpstream, newUpstream, src) {
     const target = join(src, rebrandPath(m.new.rel));
     if (!looksLikeText(m.new.buf)) {
       await writeFile(target, m.new.buf);
-      continue;
+    } else {
+      await writeFile(target, rebrandContent(m.new.buf.toString('utf8'), m.new.rel).text);
     }
-    // Simplest correct behavior for a clean tree: write rebranded NEW.
-    // The real sync-and-patch tries to apply a unified diff first; we test
-    // that path indirectly by checking the final file matches a fresh bake.
-    await writeFile(target, rebrandContent(m.new.buf.toString('utf8'), m.new.rel).text);
+    await propagateMode(target, m.new.mode);
   }
 }
 
@@ -155,9 +158,10 @@ async function main() {
   // Modify: tweak discuss-phase.md
   await writeFile(join(upstreamNew, 'commands/gsd/discuss-phase.md'),
     '# /gsd-discuss-phase\n\nUse GSD to discuss this phase. Now with a new sentence.\n');
-  // Add: a new agent and a new hook
+  // Add: a new agent and a new hook (hook is executable)
   await writeFile(join(upstreamNew, 'agents/gsd-new-helper.md'), '# gsd-new-helper\n\nNew GSD agent.\n');
   await writeFile(join(upstreamNew, 'hooks/gsd-new-hook.sh'), 'echo $GSD_NEW_VAR\n');
+  await chmod(join(upstreamNew, 'hooks/gsd-new-hook.sh'), 0o755);
   // Delete: plan-phase.md
   await rm(join(upstreamNew, 'commands/gsd/plan-phase.md'));
   // Bump package.json version
@@ -217,6 +221,14 @@ async function main() {
   assert(pkgFinal.version === '1.1.0', `version not bumped: ${pkgFinal.version}`);
   assert(pkgFinal.bin['evolv-coder-lite'] === 'bin/install.js', 'bin name not rebranded');
   assert(pkgFinal.bin['ecl-sdk'] === 'bin/ecl-sdk.js', 'sdk bin not rebranded');
+
+  // -- Assert executable mode bits are propagated --
+  const hookStat = await stat(join(srcDir, 'hooks/ecl-new-hook.sh'));
+  assert((hookStat.mode & 0o111) !== 0, 'executable mode bit not propagated for .sh file');
+  assert(modeFor(hookStat.mode) === 0o755, `hook mode should be 0o755, got 0o${hookStat.mode.toString(8)}`);
+
+  const agentStat = await stat(join(srcDir, 'agents/ecl-new-helper.md'));
+  assert(modeFor(agentStat.mode) === 0o644, `agent .md mode should be 0o644, got 0o${agentStat.mode.toString(8)}`);
 
   console.log(`OK — synthetic sync produced same tree as fresh bake (${a.size} files)`);
   await rm(work, { recursive: true, force: true });
