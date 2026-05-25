@@ -74,6 +74,28 @@ RUN git clone "${FMC_REPO}" /opt/fmc \
     && uv sync --all-extras \
     && uv tool install .
 
+# --- eCL installation -------------------------------------------------------
+# The base image (e2e/Dockerfile) drops the eCL tarball into /home/tester/.
+# Install it globally as `evolv-coder-lite` on PATH (npm prefix in $HOME so
+# we don't need root), then run the wizard non-interactively to deploy the
+# Claude-flavored skills/agents/hooks/commands into ~/.claude. Without this
+# step the worker has `claude` but no `/ecl:*` skills, and every lifecycle
+# turn falls through to freeform LLM behavior instead of invoking the skill.
+#
+# `--claude --global` matches the kit's cheap-suite install pattern
+# (e2e/tests/06-wizard-scaffold.sh, 09-profile-coverage.sh). `--global`
+# targets ~/.claude (user-level skills), leaving the workspace .claude/
+# untouched so `/ecl:new-project` can bootstrap it cleanly.
+ENV NPM_PREFIX=/home/tester/.npm-global
+ENV PATH="${NPM_PREFIX}/bin:${PATH}"
+RUN mkdir -p "${NPM_PREFIX}" \
+    && npm config set prefix "${NPM_PREFIX}" \
+    && TARBALL=$(ls /home/tester/evolvconsulting-evolv-coder-lite-*.tgz | head -1) \
+    && npm install -g "${TARBALL}" \
+    && evolv-coder-lite --claude --global \
+    && test -d /home/tester/.claude/skills \
+    && echo "eCL installed: $(ls /home/tester/.claude/skills | wc -l) skills"
+
 # --- Bedrock + worker defaults ---------------------------------------------
 # Overridable at runtime via docker-compose env passthrough.
 ENV CLAUDE_CODE_USE_BEDROCK=1 \

@@ -135,7 +135,7 @@ function parseCallsAgents(content) {
   // Match word-boundary ecl-<stem> patterns; stems are lowercase letters and hyphens.
   // We use a regex that matches `ecl-` followed by one or more lowercase-alpha-or-hyphen chars.
   // This catches `ecl-planner`, `ecl-plan-checker`, etc. in prose and code.
-  const matches = content.match(/\bgsd-[a-z][a-z-]*/g);
+  const matches = content.match(/\becl-[a-z][a-z-]*/g);
   if (!matches) return [];
   // Deduplicate
   return [...new Set(matches)];

@@ -15,6 +15,32 @@
     "ecl-sdk": "bin/ecl-sdk.js",
     "ecl-tools": "bin/ecl-sdk.js"
   },
+  "files": [
+    "bin",
+    "commands",
+    "evolv-coder-lite",
+    "agents",
+    "hooks",
+    "scripts",
+    "sdk/src",
+    "!sdk/src/**/*.test.ts",
+    "!sdk/src/**/*.test.cjs",
+    "!sdk/src/test-fixtures/**",
+    "sdk/shared",
+    "sdk/prompts",
+    "sdk/dist",
+    "sdk/package.json",
+    "sdk/package-lock.json",
+    "sdk/tsconfig.json",
+    "docs",
+    "assets",
+    "CHANGELOG.md",
+    "SECURITY.md",
+    "README.ja-JP.md",
+    "README.ko-KR.md",
+    "README.pt-BR.md",
+    "README.zh-CN.md"
+  ],
   "publishConfig": {
     "access": "public"
   }

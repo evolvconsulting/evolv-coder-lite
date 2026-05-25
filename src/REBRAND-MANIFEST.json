@@ -1,5 +1,5 @@
 {
-  "bakedAt": "2026-05-23T16:05:13.426Z",
+  "bakedAt": "2026-05-25T04:01:51.767Z",
   "upstream": {
     "repo": "open-gsd/get-shit-done-redux",
     "ref": "v1.0.0",
@@ -10,7 +10,8 @@
     "binaryFiles": 4,
     "contentPreserved": 312,
     "overlayOverrides": 2,
-    "packagePatched": true
+    "packagePatched": true,
+    "textPatchesApplied": 19
   },
   "ruleHits": {
     "name:gsd:c": 14,
@@ -27,6 +28,7 @@
     "id:gsd-dash": 5260,
     "pkg:gsd-sdk": 81,
     "bin:tools": 1234,
+    "pkg:scope-encoded": 12,
     "auth:dash-taches": 6,
     "name:gsd:upper": 6,
     "auth:bare-taches": 5,
