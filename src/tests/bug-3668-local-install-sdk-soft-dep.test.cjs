@@ -194,7 +194,7 @@ function isBareGsdSdkInvocation(line) {
   // echo/print lines containing ecl-sdk as a string in an error message
   if (/^\s*(echo|printf)\s/.test(trimmed)) return false;
   // Match bare ecl-sdk as an executable token (not preceded by $)
-  return /(?<!\$)\bgsd-sdk\b/.test(line);
+  return /(?<!\$)\becl-sdk\b/.test(line);
 }
 
 /**
@@ -208,7 +208,7 @@ function fileHasExecutableGsdSdkInvocation(content) {
   return segments.some(
     (seg) =>
       seg.type === 'bash-fence' &&
-      seg.content.split('\n').some((line) => /(?<!\$)\bgsd-sdk\b/.test(line)),
+      seg.content.split('\n').some((line) => /(?<!\$)\becl-sdk\b/.test(line)),
   );
 }
 

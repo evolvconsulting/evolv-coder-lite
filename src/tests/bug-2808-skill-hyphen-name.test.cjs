@@ -109,7 +109,7 @@ describe('bug-2808: SKILL.md name: uses hyphen form', () => {
       // (no commands/ecl/sdk.md or tools.md exist), so the transformer correctly leaves
       // them alone. They are benign and should not trigger this assertion.
       const bodyContent = skillContent.replace(/^---\n[\s\S]*?\n---\n?/, '');
-      const colonRefs = (bodyContent.match(/\bgsd:[a-z][a-z0-9-]*\b/g) || [])
+      const colonRefs = (bodyContent.match(/\becl:[a-z][a-z0-9-]*\b/g) || [])
         .filter(r => !/ecl:(sdk|tools)/.test(r));
       assert.strictEqual(
         colonRefs.length, 0,
@@ -226,7 +226,7 @@ describe('bug-2808: SKILL.md name: uses hyphen form', () => {
     assert.ok(out.includes('ecl-execute-phase'), 'bare colon form must become hyphen');
     assert.ok(out.includes('/ecl-review'), 'another command reference must be rewritten');
     assert.ok(out.includes('ecl-sdk'), 'non-command ecl-sdk must be left untouched');
-    assert.ok(!out.match(/\bgsd:[a-z]/), 'no colon-form command reference may survive');
+    assert.ok(!out.match(/\becl:[a-z]/), 'no colon-form command reference may survive');
   });
 
   test('respects word boundary — does not rewrite ecl:plan-phase-extra (partial match guard)', () => {

@@ -6,8 +6,8 @@
 
 **解决上下文衰减 —— 即 Claude 填充上下文窗口时发生的质量退化问题。**
 
-[![npm version](https://img.shields.io/npm/v/%40opengsd%2Fevolv-coder-lite?style=for-the-badge&logo=npm&logoColor=white&color=CB3837)](https://www.npmjs.com/package/@evolvconsulting/evolv-coder-lite)
-[![npm downloads](https://img.shields.io/npm/dm/%40opengsd%2Fevolv-coder-lite?style=for-the-badge&logo=npm&logoColor=white&color=CB3837)](https://www.npmjs.com/package/@evolvconsulting/evolv-coder-lite)
+[![npm version](https://img.shields.io/npm/v/%40evolvconsulting%2Fevolv-coder-lite?style=for-the-badge&logo=npm&logoColor=white&color=CB3837)](https://www.npmjs.com/package/@evolvconsulting/evolv-coder-lite)
+[![npm downloads](https://img.shields.io/npm/dm/%40evolvconsulting%2Fevolv-coder-lite?style=for-the-badge&logo=npm&logoColor=white&color=CB3837)](https://www.npmjs.com/package/@evolvconsulting/evolv-coder-lite)
 [![Tests](https://img.shields.io/github/actions/workflow/status/eCL-redux/evolv-coder-lite/test.yml?branch=main&style=for-the-badge&logo=github&label=Tests)](https://github.com/eCL-redux/evolv-coder-lite/actions/workflows/test.yml)
 [![Discord](https://img.shields.io/badge/Discord-Join-5865F2?style=for-the-badge&logo=discord&logoColor=white)](https://discord.gg/mYgfVNfA2r)
 [![X (Twitter)](https://img.shields.io/badge/X-@ecl__foundation-000000?style=for-the-badge&logo=x&logoColor=white)](https://x.com/ecl_foundation)

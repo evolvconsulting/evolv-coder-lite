@@ -226,7 +226,7 @@ function scanWorkflowMissingSdkFallback(filePath) {
 
   const FENCE_OPEN = /^```(?:bash|sh)?\s*$/;
   const FENCE_CLOSE = /^```\s*$/;
-  const SDK_QUERY = /\bgsd-sdk\s+query\b/;
+  const SDK_QUERY = /\becl-sdk\s+query\b/;
   const COMMAND_V = /\bcommand\s+-v\s+ecl-sdk\b/;
 
   let inFence = false;

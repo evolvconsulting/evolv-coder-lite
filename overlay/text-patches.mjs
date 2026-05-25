@@ -41,6 +41,306 @@ const PATCHES = [
     replace: `  const matches = content.match(/\\becl-[a-z][a-z-]*/g);`,
   },
   {
+    id: 'feat-3594-parser-test-require-path',
+    file: 'tests/feat-3594-parser-property-style.test.cjs',
+    issue: 'evolvconsulting/evolv-coder-lite#pre-release-remediation',
+    note: [
+      'This upstream test file embeds a single \\x00 byte in a string literal',
+      '(line 58 fixture: "null_byte: before\\x00after"). The bake\'s',
+      'looksLikeText() rejects any file with a null byte in the first 8KB',
+      'as binary, so the file is copied verbatim from upstream and the',
+      'name:gsd:k rebrand-rule never sees it. The require path on line 24',
+      'stays "../get-shit-done/bin/lib/frontmatter.cjs", which does not',
+      'exist in src/. Patch: rewrite the require path to the eCL location.',
+      'Drop this patch when the bake handles single-null source-code files',
+      'directly or upstream removes the embedded null byte.',
+    ].join(' '),
+    find: `const { extractFrontmatter } = require('../get-shit-done/bin/lib/frontmatter.cjs');`,
+    replace: `const { extractFrontmatter } = require('../evolv-coder-lite/bin/lib/frontmatter.cjs');`,
+  },
+  {
+    id: 'enh-2792-namespace-skills-test-routing-regex-1',
+    file: 'tests/enh-2792-namespace-skills.test.cjs',
+    issue: 'evolvconsulting/evolv-coder-lite#pre-release-remediation',
+    note: [
+      'Upstream test asserts namespace-skill bodies route to gsd-* targets',
+      'using a regex literal /\\bgsd-[a-z-]+/i. The id:gsd-dash rebrand-rule',
+      '(/\\bgsd-/) does not transform this literal because the preceding `\\b`',
+      'puts a word character (b) directly before `gsd`, breaking the word',
+      'boundary. Patch: rewrite the regex literal to ecl-. Drop this patch',
+      'when upstream renames or rebrand-map handles \\bgsd- inside literals.',
+    ].join(' '),
+    find: `      const hasInvoke = /\\bgsd-[a-z-]+/i.test(fm._body);`,
+    replace: `      const hasInvoke = /\\becl-[a-z-]+/i.test(fm._body);`,
+  },
+  {
+    id: 'enh-2792-namespace-skills-test-routing-regex-2',
+    file: 'tests/enh-2792-namespace-skills.test.cjs',
+    issue: 'evolvconsulting/evolv-coder-lite#pre-release-remediation',
+    note: [
+      'Same regex-literal blind spot as the routing regex above, applied',
+      'to the cross-reference test that asserts every routed sub-skill exists.',
+      'Pattern is /\\bgsd-[a-z][a-z0-9-]*/g, also untouched by id:gsd-dash.',
+    ].join(' '),
+    find: `        for (const m of cells[cells.length - 1].matchAll(/\\bgsd-[a-z][a-z0-9-]*/g)) {`,
+    replace: `        for (const m of cells[cells.length - 1].matchAll(/\\becl-[a-z][a-z0-9-]*/g)) {`,
+  },
+  {
+    id: 'bug-3668-test-bare-sdk-detector-regex-1',
+    file: 'tests/bug-3668-local-install-sdk-soft-dep.test.cjs',
+    issue: 'evolvconsulting/evolv-coder-lite#pre-release-remediation',
+    note: [
+      'The Defect 3 CI guard scans workflow shell fences for bare gsd-sdk',
+      'invocations. Detector regex /(?<!\\$)\\bgsd-sdk\\b/ is a regex literal',
+      'in the test, so the bin:sdk rebrand-rule (/\\bgsd-sdk\\b/) does not',
+      'rewrite it. After the bake all workflows say ecl-sdk, so the detector',
+      'never matches and 3 of the test\'s assertions fail. Patch the detector',
+      'regex to look for ecl-sdk; behavior parity with upstream is preserved.',
+    ].join(' '),
+    find: `  return /(?<!\\$)\\bgsd-sdk\\b/.test(line);`,
+    replace: `  return /(?<!\\$)\\becl-sdk\\b/.test(line);`,
+  },
+  {
+    id: 'bug-3668-test-bare-sdk-detector-regex-2',
+    file: 'tests/bug-3668-local-install-sdk-soft-dep.test.cjs',
+    issue: 'evolvconsulting/evolv-coder-lite#pre-release-remediation',
+    note: [
+      'Companion to bug-3668-test-bare-sdk-detector-regex-1: the file-level',
+      'short-circuit `fileHasExecutableGsdSdkInvocation` uses the same regex',
+      'literal. Without rewriting both, the file scan exits early and the',
+      'per-line guard never runs.',
+    ].join(' '),
+    find: `      seg.content.split('\\n').some((line) => /(?<!\\$)\\bgsd-sdk\\b/.test(line)),`,
+    replace: `      seg.content.split('\\n').some((line) => /(?<!\\$)\\becl-sdk\\b/.test(line)),`,
+  },
+  {
+    id: 'planner-decomposition-test-extracted-limit',
+    file: 'tests/planner-decomposition.test.cjs',
+    issue: 'evolvconsulting/evolv-coder-lite#pre-release-remediation',
+    note: [
+      'The PLANNER_EXTRACTED_LIMIT threshold proves the three planner mode',
+      'sections were extracted to reference files. Upstream sets it at 48*1024',
+      'when the file averages ~44K. eCL\'s rebranded ecl-planner.md is ~49K',
+      'because Get Shit Done→evolv Coder Lite, get-shit-done→evolv-coder-lite,',
+      'and gsd→ecl all add bytes per occurrence. Raise the threshold to 50K',
+      'to absorb the rebrand expansion without changing the test\'s intent',
+      '(catch a planner that has lost its mode-extraction discipline).',
+    ].join(' '),
+    find: `const PLANNER_EXTRACTED_LIMIT = 48 * 1024;  // 48K — proves extraction happened`,
+    replace: `const PLANNER_EXTRACTED_LIMIT = 50 * 1024;  // 50K — proves extraction happened (eCL: +2K vs upstream 48K to absorb rebrand-expansion of the product name)`,
+  },
+  {
+    id: 'skill-manifest-test-expected-order',
+    file: 'tests/skill-manifest.test.cjs',
+    issue: 'evolvconsulting/evolv-coder-lite#pre-release-remediation',
+    note: [
+      'Upstream test pins expected skill ordering as ["global-claude",',
+      '"global-codex","gsd-help","legacy-import",...]. The list is sorted',
+      'alphabetically by skillNames.sort(). After the bake, gsd-help becomes',
+      'ecl-help, which sorts BEFORE global-* (lowercase e < g). The test\'s',
+      'expected list still has the legacy position. Patch the expected list',
+      'to match the post-rebrand alphabetical order.',
+    ].join(' '),
+    find: `    assert.deepStrictEqual(skillNames, [
+      'global-claude',
+      'global-codex',
+      'ecl-help',
+      'legacy-import',
+      'project-agents',
+      'project-claude',
+      'project-codex',
+    ]);`,
+    replace: `    assert.deepStrictEqual(skillNames, [
+      'ecl-help',
+      'global-claude',
+      'global-codex',
+      'legacy-import',
+      'project-agents',
+      'project-claude',
+      'project-codex',
+    ]);`,
+  },
+  {
+    id: 'release-tarball-smoke-sdk-query-regex',
+    file: 'scripts/release-tarball-smoke.cjs',
+    issue: 'evolvconsulting/evolv-coder-lite#pre-release-remediation',
+    note: [
+      'The release-tarball-smoke scans installed workflow .md files for bare',
+      'gsd-sdk query invocations that lack a `command -v gsd-sdk` guard. The',
+      'detector regex literal /\\bgsd-sdk\\s+query\\b/ is preceded by another',
+      'regex word-boundary literal `\\b` whose closing character is `b` (a word',
+      'character). The bin:sdk rebrand-rule /\\bgsd-sdk\\b/ therefore cannot',
+      'match because there is no word boundary between `b` and `g`. As a result',
+      'the smoke\'s missingFallbackCount reports 0 against any rebranded eCL',
+      'workflow, which is a false-negative — fallback drift will not surface.',
+      'Patch: rewrite the literal to ecl-sdk so the smoke matches eCL workflows.',
+      'Drop this patch when rebrand-map handles `\\bgsd-` after a regex `\\b`',
+      'literal, or when upstream renames the binary.',
+    ].join(' '),
+    find: `  const SDK_QUERY = /\\bgsd-sdk\\s+query\\b/;`,
+    replace: `  const SDK_QUERY = /\\becl-sdk\\s+query\\b/;`,
+  },
+  {
+    id: 'bug-2801-ingest-docs-handler-regex-literal',
+    file: 'tests/bug-2801-ingest-docs-handler.test.cjs',
+    issue: 'evolvconsulting/evolv-coder-lite#pre-release-remediation',
+    note: [
+      'Test scans candidate workflow lines for bare gsd-sdk invocations using',
+      '/\\bgsd-sdk\\b/. The bin:sdk rebrand-rule cannot rewrite this literal',
+      'because the preceding `\\b` (the regex assertion) ends in a word char',
+      '(`b`) and `gsd` starts with a word char (`g`), so there is no word',
+      'boundary between them. After rebrand, eCL workflows say ecl-sdk, so',
+      'the test\'s filter returns an empty match-set and the assertion passes',
+      'vacuously. Patch the literal to ecl-sdk so the test scans for the right',
+      'token. Drop this patch when rebrand-map handles `\\bgsd-` after a regex',
+      '`\\b` literal.',
+    ].join(' '),
+    find: `      .filter((line) => /\\bgsd-sdk\\b/.test(line));`,
+    replace: `      .filter((line) => /\\becl-sdk\\b/.test(line));`,
+  },
+  {
+    id: 'bug-2808-skill-hyphen-name-colon-regex-literal-1',
+    file: 'tests/bug-2808-skill-hyphen-name.test.cjs',
+    issue: 'evolvconsulting/evolv-coder-lite#pre-release-remediation',
+    note: [
+      'Test scans skill bodies for legacy colon-form command references using',
+      '/\\bgsd:[a-z][a-z0-9-]*\\b/. The cmd:colon rebrand-rule (/\\/gsd:/) only',
+      'matches when preceded by `/` so the standalone literal `\\bgsd:` slips',
+      'through. After rebrand, eCL emits ecl: forms, so the test\'s scan',
+      'returns 0 matches and the assertion passes vacuously. Patch to ecl:.',
+    ].join(' '),
+    find: `      const colonRefs = (bodyContent.match(/\\bgsd:[a-z][a-z0-9-]*\\b/g) || [])`,
+    replace: `      const colonRefs = (bodyContent.match(/\\becl:[a-z][a-z0-9-]*\\b/g) || [])`,
+  },
+  {
+    id: 'bug-2808-skill-hyphen-name-colon-regex-literal-2',
+    file: 'tests/bug-2808-skill-hyphen-name.test.cjs',
+    issue: 'evolvconsulting/evolv-coder-lite#pre-release-remediation',
+    note: [
+      'Companion to bug-2808-skill-hyphen-name-colon-regex-literal-1 — second',
+      'colon-regex literal in the same test file. Same blind spot, same fix.',
+    ].join(' '),
+    find: `    assert.ok(!out.match(/\\bgsd:[a-z]/), 'no colon-form command reference may survive');`,
+    replace: `    assert.ok(!out.match(/\\becl:[a-z]/), 'no colon-form command reference may survive');`,
+  },
+  {
+    id: 'workflow-agent-skills-consistency-regex-literal',
+    file: 'sdk/src/workflow-agent-skills-consistency.test.ts',
+    issue: 'evolvconsulting/evolv-coder-lite#pre-release-remediation',
+    note: [
+      'SDK consistency test extracts agent-skills query keys from workflow',
+      'shell fences using /\\bgsd-sdk\\s+query\\s+agent-skills\\s+([a-z]...)/g.',
+      'Same `\\bgsd-` blind spot as the other regex literals — the bin:sdk',
+      'rule cannot match because the preceding `\\b` literal puts a word',
+      'character before `gsd`. After rebrand, eCL workflows say ecl-sdk, so',
+      'the extractor finds zero keys and parity assertions pass vacuously.',
+      'Patch to ecl-sdk.',
+    ].join(' '),
+    find: `const QUERY_KEY_PATTERN = /\\bgsd-sdk\\s+query\\s+agent-skills\\s+([a-z][a-z0-9-]*)\\b/g;`,
+    replace: `const QUERY_KEY_PATTERN = /\\becl-sdk\\s+query\\s+agent-skills\\s+([a-z][a-z0-9-]*)\\b/g;`,
+  },
+  {
+    id: 'readme-en-rebrand-preamble',
+    file: 'README.md',
+    issue: 'evolvconsulting/evolv-coder-lite#pre-release-remediation',
+    note: [
+      'Upstream README opens with a 29-line "trek-e, fork maintainer" notice',
+      'announcing trek-e\'s GSD-Redux fork from gsd-build/get-shit-done. That',
+      'announcement is upstream-specific and does not apply to eCL — eCL IS',
+      'the Evolv Consulting rebrand of @opengsd/get-shit-done-redux, not a',
+      'separate fork. Replace the preamble with a brief, factual eCL notice',
+      'so the npm README accurately presents the package. Drop this patch',
+      'when upstream removes its preamble or eCL switches to a whole-file',
+      'overlay for README.md.',
+    ].join(' '),
+    find: `> # ⚠️ This is the active fork
+>
+> 📢 **Read the announcement: [why the fork, what changed, what's next →](https://github.com/ecl-redux/evolv-coder-lite/discussions/109)**
+>
+> The original repo at [evolvconsulting/evolv-coder-lite](https://github.com/evolvconsulting/evolv-coder-lite) appears compromised or abandoned. The maintainer (evolv Consulting) has not been reachable since **2026-04-01**. evolv Consulting social accounts appear deleted, and a **\`$eCL\` token associated with the project has been linked publicly to a rug-pull**.
+>
+> I have **no inside information** beyond what is publicly visible. I am stating absence-of-information deliberately — absence of news is not the same as evidence.
+>
+> ### What I can confirm
+>
+> - No contact with the original maintainer since 2026-04-01.
+> - evolv Consulting social accounts appear deleted or unreachable.
+> - The \`$eCL\` token has been linked publicly to a rug-pull.
+> - The repo at \`evolvconsulting/evolv-coder-lite\` continues to exist but I cannot vouch for any changes pushed there from this point forward.
+>
+> ### What changed
+>
+> | | Before | After |
+> |---|---|---|
+> | GitHub | \`evolvconsulting/evolv-coder-lite\` | \`evolvconsulting/evolv-coder-lite\` |
+> | npm (main) | \`evolv-coder-lite-cc\` → \`evolv-coder-lite\` | \`@evolvconsulting/evolv-coder-lite\` |
+> | npm (sdk) | \`@evolvconsulting/sdk\` → \`@ecl-redux/sdk\` | \`@evolvconsulting/ecl-sdk\` |
+> | Issue numbers | per source | renumbered; original is in body as \`[from evolvconsulting/evolv-coder-lite#N]\` |
+>
+> If you can reach the original maintainer, please open an issue here and CC them. If you have technical evidence that materially changes the picture above, please share it in an issue.
+>
+> — trek-e, fork maintainer
+>
+> ---
+
+<div align="center">`,
+    replace: `> # evolv Coder Lite (eCL)
+>
+> eCL is the [evolv Consulting](https://evolvconsulting.com) rebrand of the upstream [\`@opengsd/get-shit-done-redux\`](https://github.com/open-gsd/get-shit-done-redux) project. Functionality, contracts, and command surface track upstream releases; identifiers, package names, and command prefixes are renamed to the \`ecl-*\` / \`@evolvconsulting/*\` namespace.
+>
+> Issues, support, and roadmap for the eCL distribution: [evolvconsulting/evolv-coder-lite](https://github.com/evolvconsulting/evolv-coder-lite/issues).
+
+<div align="center">`,
+  },
+  {
+    id: 'readme-translation-preamble-ja',
+    file: 'README.ja-JP.md',
+    issue: 'evolvconsulting/evolv-coder-lite#pre-release-remediation',
+    note: 'Drop the upstream "active fork" pointer from translations; eCL is a rebrand, not a fork.',
+    find: `> ⚠️ This is an active fork. See the [English README](README.md) for the full notice about the original repo.
+
+<div align="center">`,
+    replace: `> evolv Coder Lite (eCL) is the evolv Consulting rebrand of the upstream \`@opengsd/get-shit-done-redux\` project. See the [English README](README.md) for details.
+
+<div align="center">`,
+  },
+  {
+    id: 'readme-translation-preamble-ko',
+    file: 'README.ko-KR.md',
+    issue: 'evolvconsulting/evolv-coder-lite#pre-release-remediation',
+    note: 'Drop the upstream "active fork" pointer from translations; eCL is a rebrand, not a fork.',
+    find: `> ⚠️ This is an active fork. See the [English README](README.md) for the full notice about the original repo.
+
+<div align="center">`,
+    replace: `> evolv Coder Lite (eCL) is the evolv Consulting rebrand of the upstream \`@opengsd/get-shit-done-redux\` project. See the [English README](README.md) for details.
+
+<div align="center">`,
+  },
+  {
+    id: 'readme-translation-preamble-pt',
+    file: 'README.pt-BR.md',
+    issue: 'evolvconsulting/evolv-coder-lite#pre-release-remediation',
+    note: 'Drop the upstream "active fork" pointer from translations; eCL is a rebrand, not a fork.',
+    find: `> ⚠️ This is an active fork. See the [English README](README.md) for the full notice about the original repo.
+
+<div align="center">`,
+    replace: `> evolv Coder Lite (eCL) is the evolv Consulting rebrand of the upstream \`@opengsd/get-shit-done-redux\` project. See the [English README](README.md) for details.
+
+<div align="center">`,
+  },
+  {
+    id: 'readme-translation-preamble-zh',
+    file: 'README.zh-CN.md',
+    issue: 'evolvconsulting/evolv-coder-lite#pre-release-remediation',
+    note: 'Drop the upstream "active fork" pointer from translations; eCL is a rebrand, not a fork.',
+    find: `> ⚠️ This is an active fork. See the [English README](README.md) for the full notice about the original repo.
+
+<div align="center">`,
+    replace: `> evolv Coder Lite (eCL) is the evolv Consulting rebrand of the upstream \`@opengsd/get-shit-done-redux\` project. See the [English README](README.md) for details.
+
+<div align="center">`,
+  },
+  {
     id: 'install-uninstall-removes-install-state',
     file: 'bin/install.js',
     issue: 'evolvconsulting/evolv-coder-lite#12',
