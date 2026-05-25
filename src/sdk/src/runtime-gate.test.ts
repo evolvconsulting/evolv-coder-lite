@@ -40,6 +40,13 @@ describe('assertRuntimeSupportsAutoMode', () => {
     expect(() => assertRuntimeSupportsAutoMode({ runtime: 'claude' })).toThrow(/codex/);
   });
 
+  it('throws for ECL_RUNTIME codex alias values', () => {
+    process.env.ECL_RUNTIME = 'codex-app';
+    expect(() => assertRuntimeSupportsAutoMode({ runtime: 'claude' })).toThrow(/codex/);
+    process.env.ECL_RUNTIME = 'codex_cli';
+    expect(() => assertRuntimeSupportsAutoMode({ runtime: 'claude' })).toThrow(/codex/);
+  });
+
   it('error message references issue #2832 and slash-command workaround', () => {
     let caught: Error | undefined;
     try {
@@ -80,5 +87,17 @@ describe('assertRuntimeSupportsAutoMode', () => {
     expect(caught).toBeDefined();
     expect(caught!.message).toMatch(/config\.runtime="codex"/);
     expect(caught!.message).not.toMatch(/ECL_RUNTIME=unsupported-env/);
+  });
+
+  it('attributes source to ECL_RUNTIME when env uses a supported codex alias', () => {
+    process.env.ECL_RUNTIME = 'codex-cli';
+    let caught: Error | undefined;
+    try {
+      assertRuntimeSupportsAutoMode({ runtime: 'claude' });
+    } catch (err) {
+      caught = err as Error;
+    }
+    expect(caught).toBeDefined();
+    expect(caught!.message).toMatch(/ECL_RUNTIME=codex-cli/);
   });
 });

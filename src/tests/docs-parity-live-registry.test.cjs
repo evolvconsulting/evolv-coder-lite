@@ -153,6 +153,13 @@ const INTERNAL_COMPONENT_SLUGS = new Set([
   // docs/discussions/grok-build-support-2026-05.md. The regex captures
   // "/ecl-sync-skills" from the path. Invoked via Skill(skill="ecl-sync-skills").
   'sync-skills',
+
+  // ecl-test-runner — GitHub repository name: "github.com/evolvconsulting/ecl-test-runner".
+  // docs/contributing/bootstrap.md references it as a hyperlink target:
+  //   [ecl-test-runner](https://github.com/evolvconsulting/ecl-test-runner)
+  // The regex captures "/ecl-test-runner" from the URL path component. This is
+  // an external tool repo, not a user-typable slash command in this product.
+  'test-runner',
 ]);
 
 /**
