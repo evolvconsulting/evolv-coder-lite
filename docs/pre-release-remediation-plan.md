@@ -70,6 +70,23 @@ metadata, release workflow, npm-facing docs, or validation around the eCL packag
 - Decide that namespace or fallback drift diagnostics should fail the release
   when they indicate user-visible eCL packaging drift.
 
+> **2026-05-25 update — diagnostics retired.** The colon-namespace
+> (`WORKFLOW_BODY_COLON_LEAK`) and missing-SDK-fallback
+> (`WORKFLOW_MISSING_SDK_FALLBACK`) scanners were removed from
+> `scripts/release-tarball-smoke.cjs`. Re-investigation showed:
+>
+> - `/ecl:cmd` is a valid Claude Code skill invocation form (plugin
+>   `plugin-name:skill-name` namespace per the official skills docs), not
+>   eCL-owned drift. The 78 "leak" hits were valid invocations.
+> - All 5 missing-fallback hits were false positives — bash `#` comments or
+>   prose narration inside `bash` code fences, not executable shell that
+>   would ever invoke a bare `ecl-sdk` at install time.
+>
+> The "Workflow Namespace Behavior" item below is resolved by deletion: there
+> is no namespace drift to classify. If a future regression of the #3668 class
+> appears (a real bare `ecl-sdk` call in user-runnable shell with no fallback),
+> add a targeted check then rather than reviving the broad scanner.
+
 ### SDK Publishing Policy
 
 - Choose one SDK release policy before publishing eCL:
