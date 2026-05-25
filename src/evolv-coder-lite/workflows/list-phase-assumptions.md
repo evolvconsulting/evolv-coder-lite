@@ -14,8 +14,8 @@ Phase number: $ARGUMENTS (required)
 ```
 Error: Phase number required.
 
-Usage: /ecl-list-phase-assumptions [phase-number]
-Example: /ecl-list-phase-assumptions 3
+Usage: /ecl:discuss-phase <phase-number> --assumptions
+Example: /ecl:discuss-phase 3 --assumptions
 ```
 
 Exit workflow.
