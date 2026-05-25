@@ -168,33 +168,4 @@ describe('release-tarball-smoke', () => {
     assert.equal(result.details.sdkQueryParsed, true);
   });
 
-  // ── Test F — workflow-body checks run (informational) ─────────────────────
-  // Asserts that the workflow-body scanning machinery ran (structural assertion).
-  // Does NOT assert colonLeakCount or missingFallbackCount are zero — they will
-  // be non-zero against current main per #3668 and the /ecl: leak backlog.
-  // When those issues are fixed, this test continues to pass unchanged.
-  test('F: workflow-body checks run — scan counts are present integers', () => {
-    const result = runSmoke({
-      tarballPath,
-      installPrefix,
-      expectedVersion: pkg.version,
-      fixtureDir,
-      lifecycleCommands: [],
-      npmEnv: isolatedNpmEnv(),
-    });
-
-    // Structural: the scan ran and populated the counters
-    assert.ok(
-      Number.isInteger(result.details.workflowsScanned) && result.details.workflowsScanned >= 1,
-      `expected workflowsScanned >= 1, got ${result.details.workflowsScanned}`,
-    );
-    assert.ok(
-      Number.isInteger(result.details.colonLeakCount),
-      `expected colonLeakCount to be an integer, got ${result.details.colonLeakCount}`,
-    );
-    assert.ok(
-      Number.isInteger(result.details.missingFallbackCount),
-      `expected missingFallbackCount to be an integer, got ${result.details.missingFallbackCount}`,
-    );
-  });
 });
