@@ -160,25 +160,276 @@ const PATCHES = [
       'project-codex',
     ]);`,
   },
+  // Five patches below remove upstream's workflow-body smoke diagnostics
+  // (WORKFLOW_BODY_COLON_LEAK + WORKFLOW_MISSING_SDK_FALLBACK + helpers + test F).
+  // The detectors fire false-positives against rebranded eCL workflow bodies
+  // and the informational counters add maintenance burden without value here.
+  // Drop these five patches if upstream removes the diagnostics, or if eCL
+  // adopts a parallel detector that handles the rebrand correctly.
+  // The previous release-tarball-smoke-sdk-query-regex patch is subsumed by
+  // patch #3 below (the SDK_QUERY definition is deleted along with its function).
   {
-    id: 'release-tarball-smoke-sdk-query-regex',
+    id: 'release-tarball-smoke-strip-workflow-body-jsdoc',
     file: 'scripts/release-tarball-smoke.cjs',
-    issue: 'evolvconsulting/evolv-coder-lite#pre-release-remediation',
-    note: [
-      'The release-tarball-smoke scans installed workflow .md files for bare',
-      'gsd-sdk query invocations that lack a `command -v gsd-sdk` guard. The',
-      'detector regex literal /\\bgsd-sdk\\s+query\\b/ is preceded by another',
-      'regex word-boundary literal `\\b` whose closing character is `b` (a word',
-      'character). The bin:sdk rebrand-rule /\\bgsd-sdk\\b/ therefore cannot',
-      'match because there is no word boundary between `b` and `g`. As a result',
-      'the smoke\'s missingFallbackCount reports 0 against any rebranded eCL',
-      'workflow, which is a false-negative — fallback drift will not surface.',
-      'Patch: rewrite the literal to ecl-sdk so the smoke matches eCL workflows.',
-      'Drop this patch when rebrand-map handles `\\bgsd-` after a regex `\\b`',
-      'literal, or when upstream renames the binary.',
-    ].join(' '),
-    find: `  const SDK_QUERY = /\\bgsd-sdk\\s+query\\b/;`,
-    replace: `  const SDK_QUERY = /\\becl-sdk\\s+query\\b/;`,
+    issue: 'evolvconsulting/evolv-coder-lite#release-tarball-smoke-prune',
+    note: 'Drop the JSDoc paragraph that documents the workflow-body checks (lines 37–45 of upstream). The detectors themselves are removed by sibling patches.',
+    find: ` *
+ * Workflow-body checks (Cycle 3 — informational until #3668 is fixed):
+ *   - Calls \`ecl-sdk "query" state.json --project-dir <fixtureDir>\` to verify
+ *     the SDK binary is callable and produces parseable JSON (SDK_BINARY_NOT_CALLABLE).
+ *   - Scans all installed evolv-coder-lite/workflows/*.md for:
+ *     (a) /ecl:<known-cmd> colon-namespace leaks (WORKFLOW_BODY_COLON_LEAK)
+ *     (b) bare \`ecl-sdk\` query invocations in shell fences without a \`command -v ecl-sdk\`
+ *         guard in the same fence (WORKFLOW_MISSING_SDK_FALLBACK — #3668).
+ *   Both checks populate result.details with counters but do NOT return a failure
+ *   code by default; they are informational until the upstream fixes land.
+ */`,
+    replace: ` *
+ * SDK binary check (Cycle 3):
+ *   - Calls \`ecl-sdk "query" state.json --project-dir <fixtureDir>\` to verify
+ *     the SDK binary is callable and produces parseable JSON (SDK_BINARY_NOT_CALLABLE).
+ */`,
+  },
+  {
+    id: 'release-tarball-smoke-strip-workflow-body-enum',
+    file: 'scripts/release-tarball-smoke.cjs',
+    issue: 'evolvconsulting/evolv-coder-lite#release-tarball-smoke-prune',
+    note: 'Drop the two SMOKE result codes used only by the deleted workflow-body detectors.',
+    find: `  // Cycle 3 codes
+  SDK_BINARY_NOT_CALLABLE: 'sdk_binary_not_callable',
+  WORKFLOW_BODY_COLON_LEAK: 'workflow_body_colon_leak',
+  WORKFLOW_MISSING_SDK_FALLBACK: 'workflow_missing_sdk_fallback',
+});`,
+    replace: `  // Cycle 3 codes
+  SDK_BINARY_NOT_CALLABLE: 'sdk_binary_not_callable',
+});`,
+  },
+  {
+    id: 'release-tarball-smoke-strip-workflow-body-helpers',
+    file: 'scripts/release-tarball-smoke.cjs',
+    issue: 'evolvconsulting/evolv-coder-lite#release-tarball-smoke-prune',
+    note: 'Drop readInstalledCmdNames + scanWorkflowColonLeak + scanWorkflowMissingSdkFallback. The SDK_QUERY regex inside scanWorkflowMissingSdkFallback uses upstream gsd-sdk because the rebrand-map cannot transform gsd- after a regex \\b literal — the deletion takes the whole function and renders the prior release-tarball-smoke-sdk-query-regex patch unnecessary.',
+    find: `/**
+ * Read the list of known eCL command names from the installed package.
+ * Returns an array of strings like \`['init', 'discuss-phase', ...]\`.
+ */
+function readInstalledCmdNames(pkg) {
+  const commandsDir = path.join(pkg, 'commands', 'ecl');
+  if (!fs.existsSync(commandsDir)) return [];
+  return fs.readdirSync(commandsDir)
+    .filter((f) => f.endsWith('.md'))
+    .map((f) => f.slice(0, -3)); // strip .md
+}
+
+/**
+ * Scan a single workflow .md file for /ecl:<cmd> colon-namespace leaks.
+ *
+ * Uses the word-boundary-safe regex shape from scripts/fix-slash-commands.cjs:
+ *   /ecl-(<cmd1>|<cmd2>|...)(?=[^a-zA-Z0-9_-]|$)/g  — forward
+ * We check the colon form: /ecl:<cmd> leaking in installed workflow bodies.
+ *
+ * Returns the first leaking { line, lineNumber } or null.
+ */
+function scanWorkflowColonLeak(filePath, cmdNames) {
+  if (!cmdNames || cmdNames.length === 0) return null;
+  const sorted = [...cmdNames].sort((a, b) => b.length - a.length);
+  const pattern = new RegExp(\`/ecl:(\${sorted.join('|')})(?=[^a-zA-Z0-9_-]|$)\`, 'g');
+
+  const content = fs.readFileSync(filePath, 'utf-8');
+  const lines = content.split(/\\r?\\n/);
+  for (let i = 0; i < lines.length; i++) {
+    pattern.lastIndex = 0;
+    if (pattern.test(lines[i])) {
+      return { line: i + 1, content: lines[i].trim() };
+    }
+  }
+  return null;
+}
+
+/**
+ * Scan a single workflow .md file for bare \`ecl-sdk\` query invocations inside
+ * shell fences that lack a \`command -v ecl-sdk\` guard in the same fence.
+ *
+ * Structured check: walks lines, tracks open/close shell fences (\`\`\`bash /
+ * \`\`\`sh / \`\`\` alone), collects \`ecl-sdk\` query lines and the fence's guard
+ * state, then emits findings per-fence.
+ *
+ * Returns the first unguarded { line, lineNumber } or null.
+ */
+function scanWorkflowMissingSdkFallback(filePath) {
+  const content = fs.readFileSync(filePath, 'utf-8');
+  const lines = content.split(/\\r?\\n/);
+
+  const FENCE_OPEN = /^\`\`\`(?:bash|sh)?\\s*$/;
+  const FENCE_CLOSE = /^\`\`\`\\s*$/;
+  const SDK_QUERY = /\\bgsd-sdk\\s+query\\b/;
+  const COMMAND_V = /\\bcommand\\s+-v\\s+ecl-sdk\\b/;
+
+  let inFence = false;
+  let fenceHasGuard = false;
+  let firstSdkQueryLineInFence = null;
+  let firstSdkQueryLineNumInFence = null;
+
+  for (let i = 0; i < lines.length; i++) {
+    const line = lines[i];
+    const trimmed = line.trim();
+
+    if (!inFence) {
+      if (FENCE_OPEN.test(trimmed)) {
+        inFence = true;
+        fenceHasGuard = false;
+        firstSdkQueryLineInFence = null;
+        firstSdkQueryLineNumInFence = null;
+      }
+    } else {
+      if (FENCE_CLOSE.test(trimmed)) {
+        // Closing the fence — check if there were bare sdk query calls without a guard
+        if (firstSdkQueryLineInFence !== null && !fenceHasGuard) {
+          return { line: firstSdkQueryLineNumInFence, content: firstSdkQueryLineInFence.trim() };
+        }
+        inFence = false;
+        fenceHasGuard = false;
+        firstSdkQueryLineInFence = null;
+        firstSdkQueryLineNumInFence = null;
+      } else {
+        if (COMMAND_V.test(line)) {
+          fenceHasGuard = true;
+        }
+        if (SDK_QUERY.test(line) && firstSdkQueryLineInFence === null) {
+          firstSdkQueryLineInFence = line;
+          firstSdkQueryLineNumInFence = i + 1;
+        }
+      }
+    }
+  }
+
+  return null;
+}
+
+// ---------------------------------------------------------------------------
+// Pure function: runSmoke
+// ---------------------------------------------------------------------------`,
+    replace: `// ---------------------------------------------------------------------------
+// Pure function: runSmoke
+// ---------------------------------------------------------------------------`,
+  },
+  {
+    id: 'release-tarball-smoke-strip-workflow-body-invocation',
+    file: 'scripts/release-tarball-smoke.cjs',
+    issue: 'evolvconsulting/evolv-coder-lite#release-tarball-smoke-prune',
+    note: 'Drop the workflow-body scan block inside runSmoke and update the section header comment.',
+    find: `  // ─────────────────────────────────────────────────────────────────────────
+  // Cycle 3: SDK binary callable + workflow-body validation (informational)
+  // ─────────────────────────────────────────────────────────────────────────
+
+  // --- Verify \`ecl-sdk\` query is callable and returns parseable JSON -------`,
+    replace: `  // ─────────────────────────────────────────────────────────────────────────
+  // Cycle 3: SDK binary callable
+  // ─────────────────────────────────────────────────────────────────────────
+
+  // --- Verify \`ecl-sdk\` query is callable and returns parseable JSON -------`,
+  },
+  {
+    id: 'release-tarball-smoke-strip-workflow-body-runner',
+    file: 'scripts/release-tarball-smoke.cjs',
+    issue: 'evolvconsulting/evolv-coder-lite#release-tarball-smoke-prune',
+    note: 'Drop the workflow-body invocation block at the end of runSmoke (everything between the sdkQueryParsed assignment and the final return).',
+    find: `  details.sdkQueryResult = sdkQueryResult.stdout;
+  details.sdkQueryParsed = true;
+
+  // --- Workflow-body checks (informational — #3668 not yet fixed) ----------
+  const workflowsDir = path.join(pkg, 'evolv-coder-lite', 'workflows');
+  const installedCmdNames = readInstalledCmdNames(pkg);
+
+  let workflowsScanned = 0;
+  let colonLeakCount = 0;
+  let missingFallbackCount = 0;
+  // Store first finding per check type (for future enforcement mode)
+  let firstColonLeak = null;
+  let firstMissingFallback = null;
+
+  if (fs.existsSync(workflowsDir)) {
+    // Collect all .md files (flat only — subdirs contain sub-workflows that
+    // follow the same contract, but the top-level .md files are the primary surface)
+    const entries = fs.readdirSync(workflowsDir, { withFileTypes: true });
+    for (const entry of entries) {
+      if (!entry.isFile() || !entry.name.endsWith('.md')) continue;
+      const filePath = path.join(workflowsDir, entry.name);
+      workflowsScanned++;
+
+      const leak = scanWorkflowColonLeak(filePath, installedCmdNames);
+      if (leak) {
+        colonLeakCount++;
+        if (!firstColonLeak) {
+          firstColonLeak = { file: filePath, line: leak.line };
+        }
+      }
+
+      const missingFallback = scanWorkflowMissingSdkFallback(filePath);
+      if (missingFallback) {
+        missingFallbackCount++;
+        if (!firstMissingFallback) {
+          firstMissingFallback = { file: filePath, line: missingFallback.line };
+        }
+      }
+    }
+  }
+
+  details.workflowsScanned = workflowsScanned;
+  details.colonLeakCount = colonLeakCount;
+  details.missingFallbackCount = missingFallbackCount;
+  if (firstColonLeak) details.firstColonLeak = firstColonLeak;
+  if (firstMissingFallback) details.firstMissingFallback = firstMissingFallback;
+
+  // NOTE: colonLeakCount and missingFallbackCount are informational here.
+  // They will be non-zero against current main per #3668 and the /ecl: leak
+  // backlog. Once those issues are fixed, a future enforcement mode can be
+  // enabled (e.g. SMOKE_ENFORCE_WORKFLOW_BODY=1) to fail here.
+
+  return { code: SMOKE.OK, details };`,
+    replace: `  details.sdkQueryResult = sdkQueryResult.stdout;
+  details.sdkQueryParsed = true;
+
+  return { code: SMOKE.OK, details };`,
+  },
+  {
+    id: 'release-tarball-smoke-strip-workflow-body-test-f',
+    file: 'tests/release-tarball-smoke.install.test.cjs',
+    issue: 'evolvconsulting/evolv-coder-lite#release-tarball-smoke-prune',
+    note: 'Remove Test F which exercises the deleted workflow-body scanning machinery (workflowsScanned / colonLeakCount / missingFallbackCount).',
+    find: `
+  // ── Test F — workflow-body checks run (informational) ─────────────────────
+  // Asserts that the workflow-body scanning machinery ran (structural assertion).
+  // Does NOT assert colonLeakCount or missingFallbackCount are zero — they will
+  // be non-zero against current main per #3668 and the /ecl: leak backlog.
+  // When those issues are fixed, this test continues to pass unchanged.
+  test('F: workflow-body checks run — scan counts are present integers', () => {
+    const result = runSmoke({
+      tarballPath,
+      installPrefix,
+      expectedVersion: pkg.version,
+      fixtureDir,
+      lifecycleCommands: [],
+      npmEnv: isolatedNpmEnv(),
+    });
+
+    // Structural: the scan ran and populated the counters
+    assert.ok(
+      Number.isInteger(result.details.workflowsScanned) && result.details.workflowsScanned >= 1,
+      \`expected workflowsScanned >= 1, got \${result.details.workflowsScanned}\`,
+    );
+    assert.ok(
+      Number.isInteger(result.details.colonLeakCount),
+      \`expected colonLeakCount to be an integer, got \${result.details.colonLeakCount}\`,
+    );
+    assert.ok(
+      Number.isInteger(result.details.missingFallbackCount),
+      \`expected missingFallbackCount to be an integer, got \${result.details.missingFallbackCount}\`,
+    );
+  });
+});`,
+    replace: `
+});`,
   },
   {
     id: 'bug-2801-ingest-docs-handler-regex-literal',

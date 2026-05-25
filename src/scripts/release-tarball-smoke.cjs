@@ -34,15 +34,9 @@
  *   in fixtureDir to verify the installer is callable (INIT_FAILED on crash).
  *   Non-interactive: --local --claude flags skip all prompts.
  *
- * Workflow-body checks (Cycle 3 — informational until #3668 is fixed):
+ * SDK binary check (Cycle 3):
  *   - Calls `ecl-sdk "query" state.json --project-dir <fixtureDir>` to verify
  *     the SDK binary is callable and produces parseable JSON (SDK_BINARY_NOT_CALLABLE).
- *   - Scans all installed evolv-coder-lite/workflows/*.md for:
- *     (a) /ecl:<known-cmd> colon-namespace leaks (WORKFLOW_BODY_COLON_LEAK)
- *     (b) bare `ecl-sdk` query invocations in shell fences without a `command -v ecl-sdk`
- *         guard in the same fence (WORKFLOW_MISSING_SDK_FALLBACK — #3668).
- *   Both checks populate result.details with counters but do NOT return a failure
- *   code by default; they are informational until the upstream fixes land.
  */
 
 'use strict';
@@ -69,8 +63,6 @@ const SMOKE = Object.freeze({
   INIT_FAILED: 'init_failed',
   // Cycle 3 codes
   SDK_BINARY_NOT_CALLABLE: 'sdk_binary_not_callable',
-  WORKFLOW_BODY_COLON_LEAK: 'workflow_body_colon_leak',
-  WORKFLOW_MISSING_SDK_FALLBACK: 'workflow_missing_sdk_fallback',
 });
 
 // ---------------------------------------------------------------------------
@@ -171,103 +163,6 @@ function parseWorkflowRef(mdContent) {
   }
 
   return atImportResult !== null ? atImportResult : lastInlineResult;
-}
-
-/**
- * Read the list of known eCL command names from the installed package.
- * Returns an array of strings like `['init', 'discuss-phase', ...]`.
- */
-function readInstalledCmdNames(pkg) {
-  const commandsDir = path.join(pkg, 'commands', 'ecl');
-  if (!fs.existsSync(commandsDir)) return [];
-  return fs.readdirSync(commandsDir)
-    .filter((f) => f.endsWith('.md'))
-    .map((f) => f.slice(0, -3)); // strip .md
-}
-
-/**
- * Scan a single workflow .md file for /ecl:<cmd> colon-namespace leaks.
- *
- * Uses the word-boundary-safe regex shape from scripts/fix-slash-commands.cjs:
- *   /ecl-(<cmd1>|<cmd2>|...)(?=[^a-zA-Z0-9_-]|$)/g  — forward
- * We check the colon form: /ecl:<cmd> leaking in installed workflow bodies.
- *
- * Returns the first leaking { line, lineNumber } or null.
- */
-function scanWorkflowColonLeak(filePath, cmdNames) {
-  if (!cmdNames || cmdNames.length === 0) return null;
-  const sorted = [...cmdNames].sort((a, b) => b.length - a.length);
-  const pattern = new RegExp(`/ecl:(${sorted.join('|')})(?=[^a-zA-Z0-9_-]|$)`, 'g');
-
-  const content = fs.readFileSync(filePath, 'utf-8');
-  const lines = content.split(/\r?\n/);
-  for (let i = 0; i < lines.length; i++) {
-    pattern.lastIndex = 0;
-    if (pattern.test(lines[i])) {
-      return { line: i + 1, content: lines[i].trim() };
-    }
-  }
-  return null;
-}
-
-/**
- * Scan a single workflow .md file for bare `ecl-sdk` query invocations inside
- * shell fences that lack a `command -v ecl-sdk` guard in the same fence.
- *
- * Structured check: walks lines, tracks open/close shell fences (```bash /
- * ```sh / ``` alone), collects `ecl-sdk` query lines and the fence's guard
- * state, then emits findings per-fence.
- *
- * Returns the first unguarded { line, lineNumber } or null.
- */
-function scanWorkflowMissingSdkFallback(filePath) {
-  const content = fs.readFileSync(filePath, 'utf-8');
-  const lines = content.split(/\r?\n/);
-
-  const FENCE_OPEN = /^```(?:bash|sh)?\s*$/;
-  const FENCE_CLOSE = /^```\s*$/;
-  const SDK_QUERY = /\becl-sdk\s+query\b/;
-  const COMMAND_V = /\bcommand\s+-v\s+ecl-sdk\b/;
-
-  let inFence = false;
-  let fenceHasGuard = false;
-  let firstSdkQueryLineInFence = null;
-  let firstSdkQueryLineNumInFence = null;
-
-  for (let i = 0; i < lines.length; i++) {
-    const line = lines[i];
-    const trimmed = line.trim();
-
-    if (!inFence) {
-      if (FENCE_OPEN.test(trimmed)) {
-        inFence = true;
-        fenceHasGuard = false;
-        firstSdkQueryLineInFence = null;
-        firstSdkQueryLineNumInFence = null;
-      }
-    } else {
-      if (FENCE_CLOSE.test(trimmed)) {
-        // Closing the fence — check if there were bare sdk query calls without a guard
-        if (firstSdkQueryLineInFence !== null && !fenceHasGuard) {
-          return { line: firstSdkQueryLineNumInFence, content: firstSdkQueryLineInFence.trim() };
-        }
-        inFence = false;
-        fenceHasGuard = false;
-        firstSdkQueryLineInFence = null;
-        firstSdkQueryLineNumInFence = null;
-      } else {
-        if (COMMAND_V.test(line)) {
-          fenceHasGuard = true;
-        }
-        if (SDK_QUERY.test(line) && firstSdkQueryLineInFence === null) {
-          firstSdkQueryLineInFence = line;
-          firstSdkQueryLineNumInFence = i + 1;
-        }
-      }
-    }
-  }
-
-  return null;
 }
 
 // ---------------------------------------------------------------------------
@@ -504,7 +399,7 @@ function runSmoke({
   details.lifecycleResolved = lifecycleResolved;
 
   // ─────────────────────────────────────────────────────────────────────────
-  // Cycle 3: SDK binary callable + workflow-body validation (informational)
+  // Cycle 3: SDK binary callable
   // ─────────────────────────────────────────────────────────────────────────
 
   // --- Verify `ecl-sdk` query is callable and returns parseable JSON -------
@@ -551,55 +446,6 @@ function runSmoke({
 
   details.sdkQueryResult = sdkQueryResult.stdout;
   details.sdkQueryParsed = true;
-
-  // --- Workflow-body checks (informational — #3668 not yet fixed) ----------
-  const workflowsDir = path.join(pkg, 'evolv-coder-lite', 'workflows');
-  const installedCmdNames = readInstalledCmdNames(pkg);
-
-  let workflowsScanned = 0;
-  let colonLeakCount = 0;
-  let missingFallbackCount = 0;
-  // Store first finding per check type (for future enforcement mode)
-  let firstColonLeak = null;
-  let firstMissingFallback = null;
-
-  if (fs.existsSync(workflowsDir)) {
-    // Collect all .md files (flat only — subdirs contain sub-workflows that
-    // follow the same contract, but the top-level .md files are the primary surface)
-    const entries = fs.readdirSync(workflowsDir, { withFileTypes: true });
-    for (const entry of entries) {
-      if (!entry.isFile() || !entry.name.endsWith('.md')) continue;
-      const filePath = path.join(workflowsDir, entry.name);
-      workflowsScanned++;
-
-      const leak = scanWorkflowColonLeak(filePath, installedCmdNames);
-      if (leak) {
-        colonLeakCount++;
-        if (!firstColonLeak) {
-          firstColonLeak = { file: filePath, line: leak.line };
-        }
-      }
-
-      const missingFallback = scanWorkflowMissingSdkFallback(filePath);
-      if (missingFallback) {
-        missingFallbackCount++;
-        if (!firstMissingFallback) {
-          firstMissingFallback = { file: filePath, line: missingFallback.line };
-        }
-      }
-    }
-  }
-
-  details.workflowsScanned = workflowsScanned;
-  details.colonLeakCount = colonLeakCount;
-  details.missingFallbackCount = missingFallbackCount;
-  if (firstColonLeak) details.firstColonLeak = firstColonLeak;
-  if (firstMissingFallback) details.firstMissingFallback = firstMissingFallback;
-
-  // NOTE: colonLeakCount and missingFallbackCount are informational here.
-  // They will be non-zero against current main per #3668 and the /ecl: leak
-  // backlog. Once those issues are fixed, a future enforcement mode can be
-  // enabled (e.g. SMOKE_ENFORCE_WORKFLOW_BODY=1) to fail here.
 
   return { code: SMOKE.OK, details };
 }
