@@ -55,11 +55,22 @@ describe('formatGsdSlash — runtime-aware slash command formatter', () => {
       assert.strictEqual(formatGsdSlash('new-milestone', null), '/ecl-new-milestone');
       assert.strictEqual(formatGsdSlash('new-milestone', undefined), '/ecl-new-milestone');
     });
+
+    test('runtime aliases for non-codex runtimes still emit hyphen form', () => {
+      assert.strictEqual(formatGsdSlash('new-project', 'claude-code'), '/ecl-new-project');
+      assert.strictEqual(formatGsdSlash('new-project', 'gemini-cli'), '/ecl-new-project');
+      assert.strictEqual(formatGsdSlash('new-project', 'opencode-cli'), '/ecl-new-project');
+    });
   });
 
   describe('codex shell-var form', () => {
     test('emits $ecl-<cmd> for codex', () => {
       assert.strictEqual(formatGsdSlash('execute-phase', 'codex'), '$ecl-execute-phase');
+    });
+
+    test('emits $ecl-<cmd> for codex aliases (app/cli)', () => {
+      assert.strictEqual(formatGsdSlash('execute-phase', 'codex-app'), '$ecl-execute-phase');
+      assert.strictEqual(formatGsdSlash('execute-phase', 'codex_cli'), '$ecl-execute-phase');
     });
 
     test('codex output is lowercased', () => {
@@ -196,6 +207,19 @@ describe('resolveRuntime — env > config > default', () => {
     }
   });
 
+  test('canonicalizes codex env aliases', () => {
+    const saved = process.env.ECL_RUNTIME;
+    try {
+      process.env.ECL_RUNTIME = 'codex-app';
+      assert.strictEqual(resolveRuntime(null), 'codex');
+      process.env.ECL_RUNTIME = 'codex_cli';
+      assert.strictEqual(resolveRuntime('/nonexistent'), 'codex');
+    } finally {
+      if (saved === undefined) delete process.env.ECL_RUNTIME;
+      else process.env.ECL_RUNTIME = saved;
+    }
+  });
+
   test('defaults to claude when env is unset and projectDir missing', () => {
     const saved = process.env.ECL_RUNTIME;
     try {
@@ -223,6 +247,48 @@ describe('resolveRuntime — env > config > default', () => {
     try {
       delete process.env.ECL_RUNTIME;
       assert.strictEqual(resolveRuntime(tmp), 'codex');
+    } finally {
+      if (saved !== undefined) process.env.ECL_RUNTIME = saved;
+    }
+  });
+
+  test('canonicalizes codex config aliases', (t) => {
+    const fs = require('fs');
+    const os = require('os');
+    const tmp = fs.mkdtempSync(path.join(os.tmpdir(), 'ecl-3584-'));
+    t.after(() => fs.rmSync(tmp, { recursive: true, force: true }));
+
+    fs.mkdirSync(path.join(tmp, '.planning'), { recursive: true });
+    fs.writeFileSync(
+      path.join(tmp, '.planning', 'config.json'),
+      JSON.stringify({ runtime: 'codex-cli' }),
+    );
+
+    const saved = process.env.ECL_RUNTIME;
+    try {
+      delete process.env.ECL_RUNTIME;
+      assert.strictEqual(resolveRuntime(tmp), 'codex');
+    } finally {
+      if (saved !== undefined) process.env.ECL_RUNTIME = saved;
+    }
+  });
+
+  test('canonicalizes non-codex config aliases', (t) => {
+    const fs = require('fs');
+    const os = require('os');
+    const tmp = fs.mkdtempSync(path.join(os.tmpdir(), 'ecl-3584-'));
+    t.after(() => fs.rmSync(tmp, { recursive: true, force: true }));
+
+    fs.mkdirSync(path.join(tmp, '.planning'), { recursive: true });
+    fs.writeFileSync(
+      path.join(tmp, '.planning', 'config.json'),
+      JSON.stringify({ runtime: 'claude-code' }),
+    );
+
+    const saved = process.env.ECL_RUNTIME;
+    try {
+      delete process.env.ECL_RUNTIME;
+      assert.strictEqual(resolveRuntime(tmp), 'claude');
     } finally {
       if (saved !== undefined) process.env.ECL_RUNTIME = saved;
     }

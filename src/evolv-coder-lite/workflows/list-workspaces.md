@@ -55,7 +55,7 @@ eCL Workspaces (~/ecl-workspaces/)
 
 Manage:
   cd ~/ecl-workspaces/<name>     # Enter a workspace
-  /ecl-remove-workspace <name>   # Remove a workspace
+  /ecl:workspace --remove <name>  # Remove a workspace
 ```
 
 For each workspace, show:
