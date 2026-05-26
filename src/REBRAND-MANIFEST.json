@@ -1,5 +1,5 @@
 {
-  "bakedAt": "2026-05-26T12:50:33.277Z",
+  "bakedAt": "2026-05-26T13:12:16.816Z",
   "upstream": {
     "repo": "open-gsd/get-shit-done-redux",
     "ref": "v1.01.0",
@@ -9,7 +9,7 @@
     "textFiles": 1948,
     "binaryFiles": 4,
     "contentPreserved": 326,
-    "overlayOverrides": 4,
+    "overlayOverrides": 5,
     "packagePatched": true,
     "textPatchesApplied": 31
   },
