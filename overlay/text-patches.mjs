@@ -491,59 +491,6 @@ function scanWorkflowMissingSdkFallback(filePath) {
     replace: `const QUERY_KEY_PATTERN = /\\becl-sdk\\s+query\\s+agent-skills\\s+([a-z][a-z0-9-]*)\\b/g;`,
   },
   {
-    id: 'readme-en-rebrand-preamble',
-    file: 'README.md',
-    issue: 'evolvconsulting/evolv-coder-lite#pre-release-remediation',
-    note: [
-      'Upstream README opens with a 29-line "trek-e, fork maintainer" notice',
-      'announcing trek-e\'s GSD-Redux fork from gsd-build/get-shit-done. That',
-      'announcement is upstream-specific and does not apply to eCL — eCL IS',
-      'the Evolv Consulting rebrand of @opengsd/get-shit-done-redux, not a',
-      'separate fork. Replace the preamble with a brief, factual eCL notice',
-      'so the npm README accurately presents the package. Drop this patch',
-      'when upstream removes its preamble or eCL switches to a whole-file',
-      'overlay for README.md.',
-    ].join(' '),
-    find: `> # ⚠️ This is the active fork
->
-> 📢 **Read the announcement: [why the fork, what changed, what's next →](https://github.com/ecl-redux/evolv-coder-lite/discussions/109)**
->
-> The original repo at [evolvconsulting/evolv-coder-lite](https://github.com/evolvconsulting/evolv-coder-lite) appears compromised or abandoned. The maintainer (evolv Consulting) has not been reachable since **2026-04-01**. evolv Consulting social accounts appear deleted, and a **\`$eCL\` token associated with the project has been linked publicly to a rug-pull**.
->
-> I have **no inside information** beyond what is publicly visible. I am stating absence-of-information deliberately — absence of news is not the same as evidence.
->
-> ### What I can confirm
->
-> - No contact with the original maintainer since 2026-04-01.
-> - evolv Consulting social accounts appear deleted or unreachable.
-> - The \`$eCL\` token has been linked publicly to a rug-pull.
-> - The repo at \`evolvconsulting/evolv-coder-lite\` continues to exist but I cannot vouch for any changes pushed there from this point forward.
->
-> ### What changed
->
-> | | Before | After |
-> |---|---|---|
-> | GitHub | \`evolvconsulting/evolv-coder-lite\` | \`evolvconsulting/evolv-coder-lite\` |
-> | npm (main) | \`evolv-coder-lite-cc\` → \`evolv-coder-lite\` | \`@evolvconsulting/evolv-coder-lite\` |
-> | npm (sdk) | \`@evolvconsulting/sdk\` → \`@ecl-redux/sdk\` | \`@evolvconsulting/ecl-sdk\` |
-> | Issue numbers | per source | renumbered; original is in body as \`[from evolvconsulting/evolv-coder-lite#N]\` |
->
-> If you can reach the original maintainer, please open an issue here and CC them. If you have technical evidence that materially changes the picture above, please share it in an issue.
->
-> — trek-e, fork maintainer
->
-> ---
-
-<div align="center">`,
-    replace: `> # evolv Coder Lite (eCL)
->
-> eCL is the [evolv Consulting](https://evolvconsulting.com) rebrand of the upstream [\`@opengsd/get-shit-done-redux\`](https://github.com/open-gsd/get-shit-done-redux) project. Functionality, contracts, and command surface track upstream releases; identifiers, package names, and command prefixes are renamed to the \`ecl-*\` / \`@evolvconsulting/*\` namespace.
->
-> Issues, support, and roadmap for the eCL distribution: [evolvconsulting/evolv-coder-lite](https://github.com/evolvconsulting/evolv-coder-lite/issues).
-
-<div align="center">`,
-  },
-  {
     id: 'readme-translation-preamble-ja',
     file: 'README.ja-JP.md',
     issue: 'evolvconsulting/evolv-coder-lite#pre-release-remediation',
@@ -631,22 +578,6 @@ function scanWorkflowMissingSdkFallback(filePath) {
     console.log(\`  \${green}✓\${reset} Removed ecl-install-state.json\`);
   }
 `,
-  },
-  {
-    id: 'readme-en-ci-badge',
-    file: 'README.md',
-    issue: 'evolvconsulting/evolv-coder-lite#pre-release-remediation',
-    note: [
-      'Upstream README points the workflow-status badge at test.yml / "Tests".',
-      'eCL renamed the workflow file to ci.yml and the badge label to "CI" to',
-      'reflect that the workflow gates more than tests (lint, format, smoke,',
-      'release-tarball checks). The rebrand-map does not rewrite filenames in',
-      'badge URLs, so this swap lives here. Drop this patch when upstream',
-      'renames their workflow to ci.yml or eCL switches to a whole-file overlay',
-      'for README.md.',
-    ].join(' '),
-    find: `[![Tests](https://img.shields.io/github/actions/workflow/status/evolvconsulting/evolv-coder-lite/test.yml?branch=main&style=for-the-badge&logo=github&label=Tests)](https://github.com/evolvconsulting/evolv-coder-lite/actions/workflows/test.yml)`,
-    replace: `[![CI](https://img.shields.io/github/actions/workflow/status/evolvconsulting/evolv-coder-lite/ci.yml?branch=main&style=for-the-badge&logo=github&label=CI)](https://github.com/evolvconsulting/evolv-coder-lite/actions/workflows/ci.yml)`,
   },
   {
     id: 'readme-ja-ci-badge',
