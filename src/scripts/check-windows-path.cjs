@@ -62,14 +62,22 @@ if (pathEntries.includes(normalizedPrefix)) process.exit(0);
 
 const message = `
 Heads up: npm's global bin directory is not on your PATH, so the
-evolv-coder-lite command will not resolve from a new terminal.
+evolv-coder-lite command will not resolve.
 
   Missing from PATH: ${prefix}
 
-  Fix (run once, then open a new terminal):
-    setx PATH "%PATH%;${prefix}"
+  Fix (3 steps — setx does NOT affect the current terminal):
 
-  Or use npx (no PATH change needed):
+    1. Add it to your user PATH:
+         setx PATH "%PATH%;${prefix}"
+
+    2. Close this terminal and open a NEW one. (setx writes the
+       registry; only fresh shells inherit the change.)
+
+    3. Run:
+         evolv-coder-lite
+
+  Don't want to change PATH? Use npx instead (no setup needed):
     npx @evolvconsulting/evolv-coder-lite
 
 `;
