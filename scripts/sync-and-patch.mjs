@@ -32,6 +32,7 @@ import { fileURLToPath } from 'node:url';
 import { pipeline } from 'node:stream/promises';
 import { rebrandPath, rebrandContent, isContentPreserved, looksLikeText, mergeHits } from '../overlay/rebrand-map.mjs';
 import { propagateMode, deepMerge, writeManifest } from '../overlay/post-write.mjs';
+import { applyTextPatches } from '../overlay/text-patches.mjs';
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
 const REPO = join(__dirname, '..');
@@ -328,6 +329,35 @@ async function main() {
     packagePatched = true;
   }
 
+  // -- Re-apply text-patches to files the upstream diff fully rewrote.
+  //
+  // applyTextPatches() is NOT idempotent: anchors target pre-patch (upstream)
+  // text. Re-running against an already-patched file errors with "anchor
+  // not found".
+  //
+  // Three cases for a file in src/:
+  //   - untouched by this sync → already in post-patch state → skip
+  //   - clean translated diff applied → patches remain in place because the
+  //     diff didn't rewrite the patched lines (if it had, git apply would
+  //     have rejected) → skip
+  //   - WHOLESALE FALLBACK (full overwrite with rebranded NEW) → file is
+  //     back in pre-patch state → reapply
+  //   - ADDED → new file, in pre-patch state → reapply
+  //
+  // Without this step, an upstream change that triggers a wholesale fallback
+  // on bin/install.js (or any other text-patched file) would silently revert
+  // our patch and the daily PR would ship branding regression. With it, the
+  // sync errors loudly when an anchor can't be found, surfacing upstream
+  // drift as soon as it lands.
+  let textPatchesApplied = [];
+  const reapplyFiles = new Set([
+    ...outcomes.added,
+    ...outcomes.modified_fallback.map((f) => f.rel),
+  ]);
+  if (reapplyFiles.size > 0) {
+    textPatchesApplied = await applyTextPatches(SRC, { onlyFiles: reapplyFiles });
+  }
+
   // -- Swap upstream/ to the new tree.
   // We do this AFTER all src/ writes succeeded, so a partial run is recoverable.
   await rm(UPSTREAM, { recursive: true, force: true });
@@ -382,6 +412,10 @@ async function main() {
   lines.push('');
   if (packagePatched) {
     lines.push('_`overlay/package.patch.json` was re-applied to `src/package.json` after the sync; eCL-specific fields (description, files[], etc.) are reasserted regardless of whether `package.json` appears in the fallback list above._');
+    lines.push('');
+  }
+  if (textPatchesApplied.length > 0) {
+    lines.push(`_${textPatchesApplied.length} \`overlay/text-patches.mjs\` entr${textPatchesApplied.length === 1 ? 'y was' : 'ies were'} re-applied during sync (files that hit the wholesale-fallback path or were freshly added): \`${textPatchesApplied.join('`, `')}\`._`);
     lines.push('');
   }
   if (outcomes.modified_fallback.length > 0) {
