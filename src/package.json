@@ -73,7 +73,6 @@
     "fallow": "^2.70.0"
   },
   "scripts": {
-    "postinstall": "node scripts/check-windows-path.cjs",
     "check:env": "bash scripts/check-env.sh",
     "check:integrity": "./scripts/check-npm-integrity.sh",
     "build:hooks": "node scripts/build-hooks.js",
@@ -109,6 +108,7 @@
     "test:slow": "node scripts/run-tests.cjs --suite slow",
     "test:coverage": "c8 --check-coverage --lines 70 --reporter text --include 'evolv-coder-lite/bin/lib/*.cjs' --exclude 'tests/**' --all node scripts/run-tests.cjs",
     "test:coverage:unit": "c8 --check-coverage --lines 70 --reporter text --include 'evolv-coder-lite/bin/lib/*.cjs' --exclude 'tests/**' --all node scripts/run-tests.cjs --suite unit",
-    "test:coverage:all": "npm run test:coverage"
+    "test:coverage:all": "npm run test:coverage",
+    "postinstall": "node scripts/check-windows-path.cjs"
   }
 }
