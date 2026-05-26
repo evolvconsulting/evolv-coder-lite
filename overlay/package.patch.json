@@ -15,6 +15,9 @@
     "ecl-sdk": "bin/ecl-sdk.js",
     "ecl-tools": "bin/ecl-sdk.js"
   },
+  "scripts": {
+    "postinstall": "node scripts/check-windows-path.cjs"
+  },
   "files": [
     "bin",
     "commands",
