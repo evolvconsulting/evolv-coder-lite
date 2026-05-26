@@ -63,7 +63,12 @@ function normalizeAgentBodyForRuntime(content, runtime, cmdNames) {
 }
 
 // Colors
-const cyan = '\x1b[36m';
+const cyan = (() => {
+  const useColor = !process.env.NO_COLOR && process.env.TERM !== 'dumb';
+  if (!useColor) return '';
+  const truecolor = process.env.COLORTERM === 'truecolor' || process.env.COLORTERM === '24bit';
+  return truecolor ? '\x1b[38;2;255;140;0m' : '\x1b[38;5;208m';
+})();
 const green = '\x1b[32m';
 const yellow = '\x1b[33m';
 const red = '\x1b[31m';
@@ -553,12 +558,13 @@ function getGlobalDir(runtime, explicitDir = null) {
 }
 
 const banner = '\n' +
-  cyan + '   ██████╗ ███████╗██████╗\n' +
-  '  ██╔════╝ ██╔════╝██╔══██╗\n' +
-  '  ██║  ███╗███████╗██║  ██║\n' +
-  '  ██║   ██║╚════██║██║  ██║\n' +
-  '  ╚██████╔╝███████║██████╔╝\n' +
-  '   ╚═════╝ ╚══════╝╚═════╝' + reset + '\n' +
+  cyan + '                                ██\n' +
+  '                                ██\n' +
+  '   ▄████▄   ██    ██   ▄████▄   ██  ██    ██\n' +
+  '  ██    ██  ██    ██  ██    ██  ██  ██    ██\n' +
+  '  ███████▀  ▐██  ██▌  ██    ██  ██  ▐██  ██▌\n' +
+  '  ██         ▐█▄▄█▌   ██    ██  ██   ▐█▄▄█▌\n' +
+  '   ▀████▀     ▀██▀     ▀████▀   ██    ▀██▀' + reset + '\n' +
   '\n' +
   '  evolv Coder Lite ' + dim + 'v' + pkg.version + reset + '\n' +
   '  A meta-prompting, context engineering and spec-driven\n' +
@@ -9850,16 +9856,12 @@ function finishInstall(settingsPath, settings, statuslineCommand, shouldInstallS
   if (runtime === 'claude' && isGlobal) {
     console.log(`
   ${green}Done!${reset} Restart ${program}, then in any directory either type ${cyan}${command}${reset} or ask Claude to run the ${cyan}ecl-new-project${reset} skill.
-
-  ${cyan}Join the community:${reset} https://discord.gg/mYgfVNfA2r
 `);
     return;
   }
 
   console.log(`
   ${green}Done!${reset} Open a blank directory in ${program} and run ${cyan}${command}${reset}.
-
-  ${cyan}Join the community:${reset} https://discord.gg/mYgfVNfA2r
 `);
 }
 

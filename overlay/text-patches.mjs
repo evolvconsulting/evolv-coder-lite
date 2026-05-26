@@ -680,11 +680,78 @@ function scanWorkflowMissingSdkFallback(filePath) {
     find: `[![Tests](https://img.shields.io/github/actions/workflow/status/evolvconsulting/evolv-coder-lite/test.yml?branch=main&style=for-the-badge&logo=github&label=Tests)](https://github.com/evolvconsulting/evolv-coder-lite/actions/workflows/test.yml)`,
     replace: `[![CI](https://img.shields.io/github/actions/workflow/status/evolvconsulting/evolv-coder-lite/ci.yml?branch=main&style=for-the-badge&logo=github&label=CI)](https://github.com/evolvconsulting/evolv-coder-lite/actions/workflows/ci.yml)`,
   },
+  {
+    id: 'install-cyan-recolor-brand-orange',
+    file: 'bin/install.js',
+    issue: 'evolvconsulting/evolv-coder-lite#brand-banner',
+    note: [
+      'Upstream uses cyan (\\x1b[36m) as the accent color for flag names,',
+      'menu numbers, file callouts, and the community link in install.js.',
+      'After bake the prose is rebranded but the accent color is still',
+      'upstream cyan, which clashes with the evolv brand orange used in',
+      'the banner and statusline. Patch: keep the variable name `cyan`',
+      '(every callsite stays untouched, so upstream syncs do not drift)',
+      'but rebind it to brand orange via the same truecolor / 256-color',
+      'fallback used by [[install-banner-evolv-wordmark]] and the eck',
+      'statusline. Drop this patch when the variable rename happens',
+      'upstream or rebrand-map handles ANSI-color recoloring directly.',
+    ].join(' '),
+    find: `const cyan = '\\x1b[36m';`,
+    replace: `const cyan = (() => {\n  const useColor = !process.env.NO_COLOR && process.env.TERM !== 'dumb';\n  if (!useColor) return '';\n  const truecolor = process.env.COLORTERM === 'truecolor' || process.env.COLORTERM === '24bit';\n  return truecolor ? '\\x1b[38;2;255;140;0m' : '\\x1b[38;5;208m';\n})();`,
+  },
+  {
+    id: 'install-banner-evolv-wordmark',
+    file: 'bin/install.js',
+    issue: 'evolvconsulting/evolv-coder-lite#brand-banner',
+    note: [
+      'Upstream installer banner uses the GSD ANSI Shadow wordmark.',
+      'After bake, only the prose line "Get Shit Done" is rebranded — the',
+      'ASCII art still spells "GSD", so a clean install greets users with',
+      'upstream branding. Patch: replace the wordmark with the canonical',
+      'evolv heavy-block lockup (matches eck session banner). Color comes',
+      'from the existing `cyan` constant, which sibling patch',
+      '[[install-cyan-recolor-brand-orange]] rebinds to brand orange with',
+      'the same truecolor / 256-color fallback the eck statusline uses.',
+      'Drop this patch when upstream removes the banner or rebrand-map',
+      'gains support for ASCII-art replacement.',
+    ].join(' '),
+    find: `const banner = '\\n' +\n  cyan + '   ██████╗ ███████╗██████╗\\n' +\n  '  ██╔════╝ ██╔════╝██╔══██╗\\n' +\n  '  ██║  ███╗███████╗██║  ██║\\n' +\n  '  ██║   ██║╚════██║██║  ██║\\n' +\n  '  ╚██████╔╝███████║██████╔╝\\n' +\n  '   ╚═════╝ ╚══════╝╚═════╝' + reset + '\\n' +`,
+    replace: `const banner = '\\n' +\n  cyan + '                                ██\\n' +\n  '                                ██\\n' +\n  '   ▄████▄   ██    ██   ▄████▄   ██  ██    ██\\n' +\n  '  ██    ██  ██    ██  ██    ██  ██  ██    ██\\n' +\n  '  ███████▀  ▐██  ██▌  ██    ██  ██  ▐██  ██▌\\n' +\n  '  ██         ▐█▄▄█▌   ██    ██  ██   ▐█▄▄█▌\\n' +\n  '   ▀████▀     ▀██▀     ▀████▀   ██    ▀██▀' + reset + '\\n' +`,
+  },
+  {
+    id: 'install-postinstall-discord-link-claude-global',
+    file: 'bin/install.js',
+    issue: 'evolvconsulting/evolv-coder-lite#brand-banner',
+    note: [
+      'Upstream prints "Join the community: https://discord.gg/mYgfVNfA2r"',
+      'in the post-install success block for the claude+global path. The',
+      'link points at the upstream community Discord which is not the',
+      'evolv community. Patch: drop the link line (and the blank line that',
+      'precedes it) so the success message ends after the "Done!" line.',
+      'Drop this patch when upstream removes the link or rebrand-map gains',
+      'a rule that strips Discord URLs by domain.',
+    ].join(' '),
+    find: `  \${green}Done!\${reset} Restart \${program}, then in any directory either type \${cyan}\${command}\${reset} or ask Claude to run the \${cyan}ecl-new-project\${reset} skill.\n\n  \${cyan}Join the community:\${reset} https://discord.gg/mYgfVNfA2r\n`,
+    replace: `  \${green}Done!\${reset} Restart \${program}, then in any directory either type \${cyan}\${command}\${reset} or ask Claude to run the \${cyan}ecl-new-project\${reset} skill.\n`,
+  },
+  {
+    id: 'install-postinstall-discord-link-default',
+    file: 'bin/install.js',
+    issue: 'evolvconsulting/evolv-coder-lite#brand-banner',
+    note: [
+      'Companion to install-postinstall-discord-link-claude-global: same',
+      'Discord link printed in the default post-install branch (non-claude',
+      'or non-global paths). Strip identically.',
+    ].join(' '),
+    find: `  \${green}Done!\${reset} Open a blank directory in \${program} and run \${cyan}\${command}\${reset}.\n\n  \${cyan}Join the community:\${reset} https://discord.gg/mYgfVNfA2r\n`,
+    replace: `  \${green}Done!\${reset} Open a blank directory in \${program} and run \${cyan}\${command}\${reset}.\n`,
+  },
 ];
 
-export async function applyTextPatches(srcDir) {
+export async function applyTextPatches(srcDir, { onlyFiles } = {}) {
   const applied = [];
   for (const patch of PATCHES) {
+    if (onlyFiles && !onlyFiles.has(patch.file)) continue;
     const filePath = join(srcDir, patch.file);
     const original = await readFile(filePath, 'utf8');
     const occurrences = original.split(patch.find).length - 1;
