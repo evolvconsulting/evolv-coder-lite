@@ -8,19 +8,28 @@
 //
 // Behavior:
 //   - No-op on non-Windows platforms.
+//   - No-op in CI (CI=true) — automated installs don't benefit from the
+//     warning and the noise pollutes build logs.
 //   - No-op when the npm prefix is already on %PATH% (case-insensitive,
 //     trailing-slash insensitive — Windows PATH semantics).
-//   - On miss, prints one yellow warning block with the exact `setx` command
-//     to fix it, plus the `npx` workaround.
+//   - On miss, writes one yellow warning block to stderr with the exact
+//     `setx` command to fix it, plus the `npx` workaround.
 //   - Always exits 0. A postinstall script must NEVER fail the install.
-//   - Skips silently in CI (CI=true) and when stdout is not a TTY (build
-//     pipelines, Docker layers — noise there is harmful, not helpful).
+//
+// Implementation notes:
+//   - We do NOT check process.stdout.isTTY. Under `npm install`, npm pipes
+//     postinstall stdout into its logger, so isTTY is false and a TTY gate
+//     would suppress the warning in exactly the case it is most needed
+//     (interactive terminal install). v1.1.1 shipped with that bug; v1.1.2
+//     removes the gate.
+//   - We write to stderr because npm buffers stdout from postinstall scripts
+//     by default (loglevel=notice) but lets stderr through. With stderr the
+//     warning appears in the install output stream the user actually sees.
 
 'use strict';
 
 if (process.platform !== 'win32') process.exit(0);
 if (process.env.CI) process.exit(0);
-if (!process.stdout.isTTY) process.exit(0);
 
 function normalize(p) {
   if (typeof p !== 'string') return '';
@@ -54,7 +63,7 @@ const cyan = (() => {
 const reset = '\x1b[0m';
 const bold = '\x1b[1m';
 
-process.stdout.write(`
+process.stderr.write(`
 ${yellow}${bold}Heads up:${reset} npm's global bin directory is not on your PATH, so the
 ${cyan}evolv-coder-lite${reset} command will not resolve from a new terminal.
 
