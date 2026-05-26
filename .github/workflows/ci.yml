@@ -40,6 +40,20 @@ jobs:
       - name: Verify no branding leaks in src/
         run: node scripts/verify-rebrand.mjs
 
+      - name: Assert parent and SDK package versions match
+        # Issue #44: when these two drift, the postinstall version-mismatch
+        # detector fires on every clean install and prints a misleading
+        # "stale SDK" warning. Both must move in lockstep at release time.
+        run: |
+          PARENT=$(node -p "require('./src/package.json').version")
+          SDK=$(node -p "require('./src/sdk/package.json').version")
+          if [ "$PARENT" != "$SDK" ]; then
+            echo "::error::version skew: src/package.json=$PARENT but src/sdk/package.json=$SDK"
+            echo "Bump both via overlay/package.patch.json and overlay/sdk-package.patch.json."
+            exit 1
+          fi
+          echo "version parity OK ($PARENT)"
+
       - name: Assert committed src/ matches a fresh bake
         # Catches drift: if someone hand-edits src/ without re-baking, the
         # working tree won't be clean after `bake.mjs` runs, and CI fails.
