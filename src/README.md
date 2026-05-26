@@ -1,9 +1,3 @@
-> # evolv Coder Lite (eCL)
->
-> eCL is the [evolv Consulting](https://evolvconsulting.com) rebrand of the upstream [`@opengsd/get-shit-done-redux`](https://github.com/open-gsd/get-shit-done-redux) project. Functionality, contracts, and command surface track upstream releases; identifiers, package names, and command prefixes are renamed to the `ecl-*` / `@evolvconsulting/*` namespace.
->
-> Issues, support, and roadmap for the eCL distribution: [evolvconsulting/evolv-coder-lite](https://github.com/evolvconsulting/evolv-coder-lite/issues).
-
 <div align="center">
 
 # EVOLV CODER LITE
@@ -17,7 +11,6 @@
 [![npm version](https://img.shields.io/npm/v/%40evolvconsulting%2Fevolv-coder-lite?style=for-the-badge&logo=npm&logoColor=white&color=CB3837)](https://www.npmjs.com/package/@evolvconsulting/evolv-coder-lite)
 [![npm downloads](https://img.shields.io/npm/dm/%40evolvconsulting%2Fevolv-coder-lite?style=for-the-badge&logo=npm&logoColor=white&color=CB3837)](https://www.npmjs.com/package/@evolvconsulting/evolv-coder-lite)
 [![CI](https://img.shields.io/github/actions/workflow/status/evolvconsulting/evolv-coder-lite/ci.yml?branch=main&style=for-the-badge&logo=github&label=CI)](https://github.com/evolvconsulting/evolv-coder-lite/actions/workflows/ci.yml)
-[![Discord](https://img.shields.io/badge/Discord-Join-5865F2?style=for-the-badge&logo=discord&logoColor=white)](https://discord.gg/mYgfVNfA2r)
 [![GitHub stars](https://img.shields.io/github/stars/evolvconsulting/evolv-coder-lite?style=for-the-badge&logo=github&color=181717)](https://github.com/evolvconsulting/evolv-coder-lite)
 [![License](https://img.shields.io/badge/license-MIT-blue?style=for-the-badge)](LICENSE)
 
@@ -148,7 +141,7 @@ eCL is built for frictionless automation. Skip-permissions is how it's intended 
 
 Install only the skills you need with `--profile=core` (six core-loop skills), `--profile=standard` (core + phase management), or the default full install. Profiles compose: `--profile=core,audit`. `--minimal` is an alias for `--profile=core`. See **[docs/USER-GUIDE.md](docs/USER-GUIDE.md)** for the full walkthrough, non-interactive install flags for all 15 runtimes, and permissions configuration. See [ADR-0011](docs/adr/0011-skill-surface-budget-module.md) for the profile model and runtime surface control.
 
-Current release highlights are in [docs/RELEASE-v1.42.1.md](docs/RELEASE-v1.42.1.md): package legitimacy checks, safer installer migrations, runtime surface control, custom ship PR sections, reviewer defaults, fallow structural review, and quota-aware execution recovery.
+See **[CHANGELOG.md](CHANGELOG.md)** for current release highlights.
 
 ### Cross-runtime compatibility: installer required
 
@@ -254,8 +247,8 @@ Full troubleshooting and uninstall instructions in **[docs/USER-GUIDE.md](docs/U
 
 | Project | Platform |
 |---------|----------|
-| [ecl-opencode](https://github.com/rokicool/ecl-opencode) | Original OpenCode port |
-| [Discord](https://discord.gg/mYgfVNfA2r) | Community support |
+| [GitHub Issues](https://github.com/evolvconsulting/evolv-coder-lite/issues) | Bug reports and feature requests |
+| [GitHub Discussions](https://github.com/evolvconsulting/evolv-coder-lite/discussions) | Questions and conversation |
 
 ---
 
