@@ -90,10 +90,33 @@ specific tag" yet — add one if it becomes a recurring need.
 
 ## Bumping eCL itself
 
-`src/package.json`'s `version` is whatever upstream's was at the last
-sync (the rebrand map doesn't touch versions). When you cut an eCL
-release, set the version in `overlay/package.patch.json` and re-bake;
-the patch overrides upstream's version field on every bake going forward.
+eCL ships two versioned package.json files and they MUST move in lockstep:
+
+- `src/package.json` — the parent `@evolvconsulting/evolv-coder-lite` package
+- `src/sdk/package.json` — the SDK subpackage `@evolvconsulting/ecl-sdk`,
+  invoked at runtime as the `ecl-sdk` shim
+
+Upstream keeps both at the same version. The postinstall version-mismatch
+detector compares parent `pkg.version` against `ecl-sdk --version` (which
+reads `sdk/package.json`); if they drift, it prints a misleading "stale
+SDK" warning on every clean install (issue #44 — present silently from
+v1.1.1 through v1.1.5).
+
+To cut a release:
+
+1. Bump `version` in `overlay/package.patch.json` (parent).
+2. Bump `version` in `overlay/sdk-package.patch.json` (SDK) to the SAME value.
+3. Run `node overlay/bake.mjs` and verify `git status` shows only the
+   expected files (the two `overlay/*.patch.json` you edited, plus the
+   regenerated `src/package.json`, `src/sdk/package.json`, and
+   `src/REBRAND-MANIFEST.json`, plus any source files you actually changed).
+4. Commit, push to `dev`, wait for the `ci` workflow's `build-and-verify`
+   job to go green. That job includes an "Assert parent and SDK package
+   versions match" step that fails the build if you forgot step 2.
+5. Publish from `src/` once `promote-dev-to-main` has merged to main.
+
+The CI parity guard is a safety net, not a substitute for step 2 — a
+red CI is faster than a red CI plus a panicked diagnosis.
 
 ## Files you can safely delete
 
