@@ -12,19 +12,26 @@
 //     warning and the noise pollutes build logs.
 //   - No-op when the npm prefix is already on %PATH% (case-insensitive,
 //     trailing-slash insensitive — Windows PATH semantics).
-//   - On miss, writes one yellow warning block to stderr with the exact
-//     `setx` command to fix it, plus the `npx` workaround.
+//   - On miss, writes one warning block directly to the Windows console
+//     (\\.\CONOUT$) so it survives npm's stdio capture; falls back to
+//     stderr if CONOUT$ isn't writable.
 //   - Always exits 0. A postinstall script must NEVER fail the install.
 //
-// Implementation notes:
-//   - We do NOT check process.stdout.isTTY. Under `npm install`, npm pipes
-//     postinstall stdout into its logger, so isTTY is false and a TTY gate
-//     would suppress the warning in exactly the case it is most needed
-//     (interactive terminal install). v1.1.1 shipped with that bug; v1.1.2
-//     removes the gate.
-//   - We write to stderr because npm buffers stdout from postinstall scripts
-//     by default (loglevel=notice) but lets stderr through. With stderr the
-//     warning appears in the install output stream the user actually sees.
+// Why \\.\CONOUT$:
+//   npm 7+ runs postinstall with stdio captured into its own logger and
+//   only flushes the captured output when --foreground-scripts is set
+//   (default false). Both stdout AND stderr from postinstall hooks are
+//   buffered for `npm install -g` and silently discarded on success. The
+//   v1.1.1 implementation tried `process.stdout.write` and got swallowed.
+//   v1.1.2 switched to stderr and got swallowed too. v1.1.3 writes to the
+//   Windows console pseudo-device \\.\CONOUT$ which bypasses npm's stdio
+//   redirection entirely. Verified working on Windows 10 26200 + npm 11.12
+//   with both `npm install` and `npm install -g`.
+//
+//   ANSI escapes are intentionally omitted — the cmd.exe console may be
+//   the OG console host without VT processing, and unrendered escapes are
+//   uglier than plain text. Modern Windows Terminal users get a slightly
+//   plainer message than terminal-aware CLIs would render.
 
 'use strict';
 
@@ -35,11 +42,9 @@ function normalize(p) {
   if (typeof p !== 'string') return '';
   let s = p.trim();
   if (!s) return '';
-  // Strip surrounding quotes Windows users sometimes add.
   if ((s.startsWith('"') && s.endsWith('"')) || (s.startsWith("'") && s.endsWith("'"))) {
     s = s.slice(1, -1);
   }
-  // Collapse trailing separators so "C:\\foo\\" matches "C:\\foo".
   s = s.replace(/[\\/]+$/, '');
   return s.toLowerCase();
 }
@@ -55,26 +60,38 @@ const pathEntries = (process.env.PATH || process.env.Path || '')
 
 if (pathEntries.includes(normalizedPrefix)) process.exit(0);
 
-const yellow = '\x1b[33m';
-const cyan = (() => {
-  const truecolor = process.env.COLORTERM === 'truecolor' || process.env.COLORTERM === '24bit';
-  return truecolor ? '\x1b[38;2;255;140;0m' : '\x1b[38;5;208m';
-})();
-const reset = '\x1b[0m';
-const bold = '\x1b[1m';
+const message = `
+Heads up: npm's global bin directory is not on your PATH, so the
+evolv-coder-lite command will not resolve from a new terminal.
 
-process.stderr.write(`
-${yellow}${bold}Heads up:${reset} npm's global bin directory is not on your PATH, so the
-${cyan}evolv-coder-lite${reset} command will not resolve from a new terminal.
+  Missing from PATH: ${prefix}
 
-  Missing from PATH: ${cyan}${prefix}${reset}
+  Fix (run once, then open a new terminal):
+    setx PATH "%PATH%;${prefix}"
 
-  ${bold}Fix (run once, then open a new terminal):${reset}
-    ${cyan}setx PATH "%PATH%;${prefix}"${reset}
+  Or use npx (no PATH change needed):
+    npx @evolvconsulting/evolv-coder-lite
 
-  ${bold}Or use npx (no PATH change needed):${reset}
-    ${cyan}npx @evolvconsulting/evolv-coder-lite${reset}
+`;
 
-`);
+let surfaced = false;
+try {
+  // \\.\CONOUT$ writes directly to the Windows console, bypassing npm's
+  // stdio capture. require('fs').writeFileSync handles the device path.
+  require('fs').writeFileSync('\\\\.\\CONOUT$', message);
+  surfaced = true;
+} catch (_) {
+  // Falls through — no controlling console, headless CI runner, or other
+  // environment where CONOUT$ isn't writable. stderr is still likely
+  // captured by npm but at least it lands somewhere.
+}
+
+if (!surfaced) {
+  try {
+    process.stderr.write(message);
+  } catch (_) {
+    // Give up — never fail postinstall.
+  }
+}
 
 process.exit(0);
