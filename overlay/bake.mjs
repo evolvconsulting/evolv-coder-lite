@@ -24,6 +24,7 @@ const UPSTREAM = join(REPO, 'upstream');
 const SRC = join(REPO, 'src');
 const OVERLAY_FILES = join(__dirname, 'files');
 const PACKAGE_PATCH = join(__dirname, 'package.patch.json');
+const SDK_PACKAGE_PATCH = join(__dirname, 'sdk-package.patch.json');
 const LOCK_FILE = join(REPO, 'UPSTREAM.lock');
 
 const args = new Set(process.argv.slice(2));
@@ -118,6 +119,17 @@ async function main() {
     patched = true;
   }
 
+  let sdkPatched = false;
+  if ((await exists(SDK_PACKAGE_PATCH)) && (await exists(join(SRC, 'sdk', 'package.json')))) {
+    const base = JSON.parse(await readFile(join(SRC, 'sdk', 'package.json'), 'utf8'));
+    const patch = JSON.parse(await readFile(SDK_PACKAGE_PATCH, 'utf8'));
+    const merged = deepMerge(base, patch);
+    if (!CHECK_ONLY) {
+      await writeFile(join(SRC, 'sdk', 'package.json'), JSON.stringify(merged, null, 2) + '\n');
+    }
+    sdkPatched = true;
+  }
+
   let upstreamRef = 'unknown';
   let upstreamSha = 'unknown';
   if (await exists(LOCK_FILE)) {
@@ -131,7 +143,7 @@ async function main() {
       upstreamRepo: 'open-gsd/get-shit-done-redux',
       upstreamRef,
       upstreamSha,
-      counts: { textFiles: textCount, binaryFiles: binaryCount, contentPreserved: preservedCount, overlayOverrides: overrideCount, packagePatched: patched, textPatchesApplied: textPatchesApplied.length },
+      counts: { textFiles: textCount, binaryFiles: binaryCount, contentPreserved: preservedCount, overlayOverrides: overrideCount, packagePatched: patched, sdkPackagePatched: sdkPatched, textPatchesApplied: textPatchesApplied.length },
       ruleHits: totalHits,
     });
   }
@@ -142,6 +154,7 @@ async function main() {
   console.log(`  overlay overrides:      ${overrideCount}`);
   console.log(`  text patches applied:   ${textPatchesApplied.length}${textPatchesApplied.length ? ' (' + textPatchesApplied.join(', ') + ')' : ''}`);
   console.log(`  package.json patched:   ${patched}`);
+  console.log(`  sdk/package.json patched: ${sdkPatched}`);
   console.log(`  total rule hits:        ${Object.values(totalHits).reduce((a, b) => a + b, 0)}`);
   if (CHECK_ONLY) {
     console.log('(check-only mode; no files written)');
