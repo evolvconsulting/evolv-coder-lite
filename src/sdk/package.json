@@ -1,6 +1,6 @@
 {
   "name": "@evolvconsulting/ecl-sdk",
-  "version": "1.1.6",
+  "version": "1.1.7",
   "description": "eCL SDK — programmatic interface for running eCL plans via the Agent SDK",
   "type": "module",
   "main": "dist/index.js",
