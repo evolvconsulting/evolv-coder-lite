@@ -60,6 +60,11 @@ const pathEntries = (process.env.PATH || process.env.Path || '')
 
 if (pathEntries.includes(normalizedPrefix)) process.exit(0);
 
+// PowerShell single-quoted strings escape ' as ''. Defend against the
+// (rare but real) case where the npm prefix contains an apostrophe,
+// e.g. C:\Users\O'Brien\AppData\Roaming\npm.
+const psQuoted = prefix.replace(/'/g, "''");
+
 const message = `
 Heads up: npm's global bin directory is not on your PATH, so the
 evolv-coder-lite command will not resolve.
@@ -69,7 +74,7 @@ evolv-coder-lite command will not resolve.
   Fix (3 steps -- changes user PATH; only fresh shells see it):
 
     1. Add it to your user PATH (run in cmd.exe or PowerShell):
-         powershell -NoProfile -Command "$u = [Environment]::GetEnvironmentVariable('PATH','User'); [Environment]::SetEnvironmentVariable('PATH', $u + ';${prefix}', 'User')"
+         powershell -NoProfile -Command "$d='${psQuoted}';$u=[Environment]::GetEnvironmentVariable('PATH','User');$e=@(($u -split ';')|Where-Object{$_ -ne ''});$k=$d.TrimEnd('\\').ToLowerInvariant();if(-not($e|Where-Object{$_.TrimEnd('\\').ToLowerInvariant() -eq $k})){[Environment]::SetEnvironmentVariable('PATH',(($e+$d) -join ';'),'User');Write-Host 'appended'}else{Write-Host 'already present, no change'}"
 
     2. Close this terminal and open a NEW one.
 
@@ -79,7 +84,9 @@ evolv-coder-lite command will not resolve.
   Why not setx? setx truncates user PATH at 1024 characters and
   the conventional 'setx PATH "%PATH%;..."' recipe pollutes user
   PATH with system entries. The PowerShell command above edits
-  user PATH directly with no truncation and no system-PATH leak.
+  user PATH directly: no truncation, no system-PATH leak, and
+  it's idempotent (re-running it is a no-op once the entry is
+  present).
 
   Don't want to change PATH? Use npx instead (no setup needed):
     npx @evolvconsulting/evolv-coder-lite
