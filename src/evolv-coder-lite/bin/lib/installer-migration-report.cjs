@@ -124,6 +124,23 @@ const BUNDLED_GSD_HOOK_FILES = Object.freeze(new Set([
   'hooks/ecl-workflow-guard.js',
 ]));
 
+// eCL #50: bundled eCL CLI files shipped under evolv-coder-lite/bin/.
+// Same rationale as BUNDLED_GSD_HOOK_FILES (#3628): explicit whitelist,
+// not shape regex, to avoid silent data loss on user-authored files.
+// Patched in by overlay/text-patches.mjs (eCL #50). Drop when upstream
+// lands an equivalent classifier extension.
+const BUNDLED_ECL_BIN_FILES = Object.freeze(new Set([
+  'evolv-coder-lite/bin/ecl-tools.cjs',
+]));
+
+// eCL #50: bundled eCL hook-helper files shipped under hooks/lib/.
+// Mirrors the canonical ECL_HOOK_LIB_FILES list in bin/install.js,
+// restricted to its ecl-prefixed members. (git-cmd.js is bundled too
+// but is already manifest-managed via the saveLocalPatches() seam.)
+const BUNDLED_ECL_HOOK_LIB_FILES = Object.freeze(new Set([
+  'hooks/lib/ecl-graphify-rebuild.sh',
+]));
+
 // Classify a blocked prompt-user action into one of the safe-default
 // categories. Returns null when no safe default applies — caller must
 // fall back to the hard assertion / interactive prompt for those.
@@ -150,6 +167,14 @@ function classifyPromptUserAction(action) {
   // write the fresh bundled versions in their place.
   if (BUNDLED_GSD_HOOK_FILES.has(relPath)) {
     return { category: 'bundled-ecl-hook', choice: 'remove' };
+  }
+  // eCL #50: bundled eCL CLI files (extension of #3610 / #3628 pattern).
+  if (BUNDLED_ECL_BIN_FILES.has(relPath)) {
+    return { category: 'bundled-ecl-bin', choice: 'remove' };
+  }
+  // eCL #50: bundled eCL hook-helper files (extension of #3610 / #3628).
+  if (BUNDLED_ECL_HOOK_LIB_FILES.has(relPath)) {
+    return { category: 'bundled-ecl-hook-lib', choice: 'remove' };
   }
   return null;
 }

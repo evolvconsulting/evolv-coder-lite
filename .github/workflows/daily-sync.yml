@@ -89,6 +89,12 @@ jobs:
         if: steps.changes.outputs.changed == 'true'
         run: node scripts/verify-rebrand.mjs
 
+      - name: Append patch-status report
+        if: steps.changes.outputs.changed == 'true'
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: node scripts/patch-status.mjs >> SYNC-REPORT.md
+
       - name: Open / update PR against dev
         if: steps.changes.outputs.changed == 'true'
         env:
