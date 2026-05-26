@@ -118,6 +118,82 @@ To cut a release:
 The CI parity guard is a safety net, not a substitute for step 2 — a
 red CI is faster than a red CI plus a panicked diagnosis.
 
+## Patches (`overlay/text-patches.mjs`)
+
+Text patches are surgical post-bake string replacements against files in
+`src/`. Each patch has a brittle single-match anchor (`find`); if the
+anchor doesn't match exactly once, the bake fails loudly. That
+brittleness is intentional — it surfaces upstream drift the next time
+we sync.
+
+### Upstream-tracking schema
+
+Every patch carries an `upstream: { status, detail }` object describing
+how it relates to upstream:
+
+| Status | Meaning | `detail` required? |
+|---|---|---|
+| `pending` | No upstream issue filed yet. | Optional |
+| `submitted` | Upstream PR/issue open. | **Yes** — GitHub URL |
+| `backport` | Fix landed upstream but not yet in our UPSTREAM.lock pin. | **Yes** — PR URL or commit ref |
+| `denied` | Upstream rejected the change; we keep the patch. | **Yes** — URL or denial reason |
+| `inappropriate` | eCL-specific; will never be submitted upstream. | **Yes** — classification tag |
+
+Bake-time validation enforces the schema — if you forget the
+`upstream` field or leave `detail` empty on a status that requires it,
+`node overlay/bake.mjs` throws before writing anything.
+
+### Classification rules for `inappropriate`
+
+Use one of these `detail` tags:
+
+- **`rebrand-artifact: <pattern>`** — upstream regex literal that the
+  rebrand-map can't transform (e.g. `\bgsd-` preceded by `\b` literal).
+- **`test-fixture-rebrand-adjustment`** — test threshold, sort order, or
+  require-path adjustment caused by name-length expansion.
+- **`brand: <what>`** — cosmetic rebrand (banner, color, link, README
+  preamble, CI badge).
+- **`release-tarball-smoke-prune: <what>`** — upstream feature pruned
+  from eCL because it fires false positives on rebranded text.
+
+### Retirement procedure
+
+When you believe upstream has fixed an issue and the patch is no longer
+needed:
+
+1. **Delete the patch entry** from `overlay/text-patches.mjs`.
+2. Run `node overlay/bake.mjs`.
+3. **If the bake fails** with anchor-mismatch: upstream DID change the
+   surrounding code (good). The patch is retired. Commit the deletion.
+4. **If the bake succeeds** after deletion: upstream has NOT actually
+   fixed it — the anchor still matches, meaning the old code is still
+   there. Restore the patch entry (git checkout) and investigate.
+
+This inversion makes deletions safe: you can only successfully retire a
+patch when the underlying code it patches has actually changed.
+
+### The daily-sync patch-status report
+
+On every upstream-sync PR, the `daily-sync.yml` workflow appends a
+patch-status table to `SYNC-REPORT.md` (which becomes the PR body).
+The table:
+
+- Summarizes all patches by status bucket (pending / submitted /
+  backport / denied / inappropriate).
+- For `submitted` / `backport` / `denied` patches with a parseable
+  GitHub URL in `detail`: queries the GitHub API and reports current
+  remote state (PR open / PR merged / issue closed / etc.).
+- Gracefully degrades on API errors — never fails the workflow.
+
+To run it locally:
+
+```
+node scripts/patch-status.mjs
+```
+
+Output is Markdown suitable for appending to a report or piping to a
+pager.
+
 ## Files you can safely delete
 
 None of these matter to the build:
