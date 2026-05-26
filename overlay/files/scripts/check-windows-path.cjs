@@ -66,16 +66,20 @@ evolv-coder-lite command will not resolve.
 
   Missing from PATH: ${prefix}
 
-  Fix (3 steps -- setx does NOT affect the current terminal):
+  Fix (3 steps -- changes user PATH; only fresh shells see it):
 
-    1. Add it to your user PATH:
-         setx PATH "%PATH%;${prefix}"
+    1. Add it to your user PATH (run in cmd.exe or PowerShell):
+         powershell -NoProfile -Command "$u = [Environment]::GetEnvironmentVariable('PATH','User'); [Environment]::SetEnvironmentVariable('PATH', $u + ';${prefix}', 'User')"
 
-    2. Close this terminal and open a NEW one. (setx writes the
-       registry; only fresh shells inherit the change.)
+    2. Close this terminal and open a NEW one.
 
     3. Run:
          evolv-coder-lite
+
+  Why not setx? setx truncates user PATH at 1024 characters and
+  the conventional 'setx PATH "%PATH%;..."' recipe pollutes user
+  PATH with system entries. The PowerShell command above edits
+  user PATH directly with no truncation and no system-PATH leak.
 
   Don't want to change PATH? Use npx instead (no setup needed):
     npx @evolvconsulting/evolv-coder-lite
