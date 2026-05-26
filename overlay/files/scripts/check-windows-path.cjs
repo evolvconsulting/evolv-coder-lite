@@ -66,7 +66,7 @@ evolv-coder-lite command will not resolve.
 
   Missing from PATH: ${prefix}
 
-  Fix (3 steps — setx does NOT affect the current terminal):
+  Fix (3 steps -- setx does NOT affect the current terminal):
 
     1. Add it to your user PATH:
          setx PATH "%PATH%;${prefix}"
