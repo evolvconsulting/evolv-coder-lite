@@ -82,6 +82,14 @@ function projectShellCommandText({
 function projectManagedHookCommand({ absoluteRunner, scriptPath, runtime = 'generic', platform = process.platform }) {
   if (!absoluteRunner || !scriptPath) return null;
   const normalizedScriptPath = platform === 'win32' ? scriptPath.replace(/\\/g, '/') : scriptPath;
+  if (platform === 'win32' && scriptPath.endsWith('.sh')) {
+    return projectShellCommandText({
+      runnerToken: absoluteRunner,
+      argTokens: ['-lc', "'" + normalizedScriptPath + "'"],
+      runtime,
+      platform,
+    });
+  }
   return projectShellCommandText({
     runnerToken: absoluteRunner,
     argTokens: [JSON.stringify(normalizedScriptPath)],

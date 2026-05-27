@@ -9345,12 +9345,19 @@ function install(isGlobal, runtime = 'claude', options = {}) {
     });
   const localShellCmd = (hookFile) => localBashRunner === null
     ? null
-    : projectShellCommandText({
-      runnerToken: localBashRunner,
-      argTokens: [`${localPrefix}/hooks/${hookFile}`],
-      runtime,
-      platform: process.platform,
-    });
+    : process.platform === 'win32'
+      ? projectShellCommandText({
+        runnerToken: localBashRunner,
+        argTokens: ['-lc', `'${localPrefix}/hooks/${hookFile}'`],
+        runtime,
+        platform: process.platform,
+      })
+      : projectShellCommandText({
+        runnerToken: localBashRunner,
+        argTokens: [`${localPrefix}/hooks/${hookFile}`],
+        runtime,
+        platform: process.platform,
+      });
   const statuslineCommand = isGlobal
     ? buildHookCommand(targetDir, 'ecl-statusline.js', hookOpts)
     : localCmd('ecl-statusline.js');
