@@ -1074,7 +1074,7 @@ function classifyPromptUserAction(action) {
       `    : process.platform === 'win32'`,
       `      ? projectShellCommandText({`,
       `        runnerToken: localBashRunner,`,
-      '        argTokens: [\'-lc\', `\'${localPrefix}/hooks/${hookFile}\'`],',
+      '        argTokens: [\'-lc\', `\'${localPrefix.replace(/"/g, \'\')}/hooks/${hookFile}\'`],',
       `        runtime,`,
       `        platform: process.platform,`,
       `      })`,
