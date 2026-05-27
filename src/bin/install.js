@@ -9348,7 +9348,7 @@ function install(isGlobal, runtime = 'claude', options = {}) {
     : process.platform === 'win32'
       ? projectShellCommandText({
         runnerToken: localBashRunner,
-        argTokens: ['-lc', `'${localPrefix}/hooks/${hookFile}'`],
+        argTokens: ['-lc', `'${localPrefix.replace(/"/g, '')}/hooks/${hookFile}'`],
         runtime,
         platform: process.platform,
       })
