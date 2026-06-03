@@ -39,8 +39,8 @@ jobs:
       latest_ref: ${{ steps.poll.outputs.latest_ref }}
       release_name: ${{ steps.poll.outputs.release_name }}
     steps:
-      - uses: actions/checkout@v4
-      - uses: actions/setup-node@v4
+      - uses: actions/checkout@v6
+      - uses: actions/setup-node@v6
         with:
           node-version: '20'
       - name: Check for new upstream release
@@ -55,12 +55,12 @@ jobs:
     if: needs.poll-release.outputs.new_release == 'true' || inputs.force_sync == 'true'
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v6
         with:
           fetch-depth: 0
           ref: dev
 
-      - uses: actions/setup-node@v4
+      - uses: actions/setup-node@v6
         with:
           node-version: '20'
 
