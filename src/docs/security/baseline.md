@@ -232,7 +232,7 @@ Post-Incident Activity.
 
 | Phase | Action |
 |---|---|
-| Detection | Alert from secret scanner CI step, or external reporter via `security@ecl.build` |
+| Detection | Alert from secret scanner CI step, or external reporter via a private GitHub security advisory |
 | Containment | Immediately revoke the exposed credential in the issuing service (GitHub, npm, cloud, etc.) |
 | Containment | Force-push or rewrite history to remove the secret from Git history (if public) |
 | Containment | Rotate all credentials that shared the same scope as the exposed one |
@@ -284,8 +284,7 @@ Report security vulnerabilities via **private security advisory** on GitHub:
 
 Do not open public issues for security vulnerabilities.
 
-Fallback: email `security@ecl.build` (or DM `@glittercowboy` on Discord/Twitter
-if email bounces).
+If private advisory filing is unavailable, contact the evolvconsulting maintainers and include a link to this policy.
 
 **Source:** [GitHub Security Advisories](https://docs.github.com/en/code-security/security-advisories)
 

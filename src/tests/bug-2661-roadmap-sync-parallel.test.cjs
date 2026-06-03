@@ -90,18 +90,18 @@ describe('bug #2661: execute-plan.md update_roadmap gating', () => {
 
   test('update_roadmap step exists and invokes roadmap.update-plan-progress', () => {
     assert.ok(stepMatch, 'update_roadmap step must exist');
-    // After #3797 architectural fix, callsites use $ECL_SDK — accept either form
+    // After #3797 architectural fix, callsites use ecl_run
     assert.ok(
-      /(?:\$ECL_SDK|ecl-sdk) query roadmap\.update-plan-progress/.test(step),
+      /ecl_run query roadmap\.update-plan-progress/.test(step),
       'update_roadmap must still invoke roadmap.update-plan-progress'
     );
   });
 
   test('use_worktrees: false mode — sync call is gated to fire (the #2661 reproducer)', () => {
     // The non-worktree branch must contain the sync call.
-    // After #3797 architectural fix, callsites use $ECL_SDK — accept either form
+    // After #3797 architectural fix, callsites use ecl_run
     assert.ok(
-      /IS_WORKTREE.*!=.*"true"[\s\S]*?(?:\$ECL_SDK|ecl-sdk) query roadmap\.update-plan-progress/.test(step),
+      /IS_WORKTREE.*!=.*"true"[\s\S]*?ecl_run query roadmap\.update-plan-progress/.test(step),
       'sync call must execute on the IS_WORKTREE != "true" branch (use_worktrees: false)'
     );
   });
@@ -119,9 +119,9 @@ describe('bug #2661: execute-plan.md update_roadmap gating', () => {
       'bash block must include the IS_WORKTREE worktree-detection check'
     );
     // Sync call must appear after the guard check, not before.
-    // After #3797 architectural fix, callsites use $ECL_SDK — accept either form
+    // After #3797 architectural fix, callsites use ecl_run
     const guardIdx = bash.search(/if \[ "\$IS_WORKTREE" != "true" \]/);
-    const callIdx = bash.search(/(?:\$ECL_SDK|ecl-sdk) query roadmap\.update-plan-progress/);
+    const callIdx = bash.search(/ecl_run query roadmap\.update-plan-progress/);
     assert.ok(guardIdx >= 0, 'guard must be present');
     assert.ok(callIdx > guardIdx,
       'sync call must appear inside the use_worktrees: false guard, not before/outside it');

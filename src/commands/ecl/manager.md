@@ -33,7 +33,7 @@ Designed for power users who want to parallelize work across phases from one ter
 <context>
 No arguments required. Requires an active milestone with ROADMAP.md and STATE.md.
 
-Project context, phase list, dependencies, and recommendations are resolved inside the workflow using `ecl-sdk query init.manager`. No upfront context loading needed.
+Project context, phase list, dependencies, and recommendations are resolved inside the workflow using `ecl-tools query init.manager`. No upfront context loading needed.
 </context>
 
 <process>

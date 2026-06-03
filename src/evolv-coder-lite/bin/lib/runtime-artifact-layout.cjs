@@ -32,7 +32,7 @@ function loadInstallExports() {
   const savedTestMode = process.env.ECL_TEST_MODE;
   if (savedTestMode === undefined) process.env.ECL_TEST_MODE = '1';
   try {
-    // eslint-disable-next-line global-require -- lazy import to avoid running installer at module load
+     
     return require('../../../bin/install.js');
   } finally {
     if (savedTestMode === undefined) delete process.env.ECL_TEST_MODE;

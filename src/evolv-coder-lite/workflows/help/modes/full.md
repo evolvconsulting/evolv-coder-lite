@@ -560,7 +560,7 @@ Update eCL to latest version with changelog preview.
 - Displays changelog entries for versions you've missed
 - Highlights breaking changes
 - Confirms before running install
-- Better than raw `npx evolv-coder-lite`
+- Better than raw `npx @evolvconsulting/evolv-coder-lite`
 
 Usage: `/ecl:update`
 

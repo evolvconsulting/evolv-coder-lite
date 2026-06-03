@@ -105,10 +105,9 @@ const INTERNAL_COMPONENT_SLUGS = new Set([
   // a real command token.
   'init-',
 
-  // gsd-build — GitHub organization name: "github.com/open-gsd/get-shit-done-redux".
-  // Every occurrence of "/gsd-build" in docs is the path component of a GitHub URL
-  // (e.g., "[#2792](https://github.com/open-gsd/get-shit-done-redux/issues/2792)").
-  // The regex captures "/gsd-build" from the URL path. Not a slash command.
+  // Compatibility guard for legacy doc links that may include
+  // legacy org path segments in migrated historical URLs.
+  // This is not a user-typable slash command.
   'build',
 
   // ~/gsd-workspaces/ — filesystem directory path used by /gsd-workspace.
@@ -160,6 +159,13 @@ const INTERNAL_COMPONENT_SLUGS = new Set([
   // The regex captures "/gsd-test-runner" from the URL path component. This is
   // an external tool repo, not a user-typable slash command in this product.
   'test-runner',
+
+  // gsd-core — GitHub repository name: "open-gsd/gsd-core".
+  // docs/adr/22-plan-drift-guard.md references it as an issue tracker link:
+  //   open-gsd/gsd-core#22
+  // The regex captures "/gsd-core" from the org/repo path separator. This is
+  // the canonical repo name, not a user-typable slash command in this product.
+  'core',
 ]);
 
 /**
@@ -198,9 +204,14 @@ function extractCommandTokens(content) {
     return false;
   }
 
-  const allSlash = (stripped.match(/\/gsd-[a-z0-9][a-z0-9-]*/g) || []);
-  const allColon = (stripped.match(/\/gsd:[a-z0-9][a-z0-9-]*/g) || []);
-  const allDollar = (stripped.match(/\$gsd-[a-z0-9][a-z0-9-]*/g) || []);
+  // Negative lookbehind: only match tokens NOT preceded by a letter, digit,
+  // `/`, `_`, or `-`. This prevents matching the `/gsd-core` substring inside
+  // the org/repo path `open-gsd/gsd-core` (and similar path-embedded segments)
+  // while still matching real invocations preceded by BOL, space, backtick, or
+  // `(`. Fixes false-positive class identified in #489.
+  const allSlash = (stripped.match(/(?<![A-Za-z0-9/_-])\/gsd-[a-z0-9][a-z0-9-]*/g) || []);
+  const allColon = (stripped.match(/(?<![A-Za-z0-9/_-])\/gsd:[a-z0-9][a-z0-9-]*/g) || []);
+  const allDollar = (stripped.match(/(?<![A-Za-z0-9/_-])\$gsd-[a-z0-9][a-z0-9-]*/g) || []);
 
   const slash = new Set(allSlash.filter(t => !isInternal(t)));
   const colon = new Set(allColon.filter(t => !isInternal(t)));
@@ -482,5 +493,46 @@ describe('adversarial: polarity inversion catches drift deny-list misses', () =>
   test('freshly-deleted command /gsd-research-phase is absent from registry', () => {
     const registry = getLiveCommandTokens();
     assert.ok(!registry.has('/gsd-research-phase'), '/gsd-research-phase must not be in the live registry');
+  });
+});
+
+// ─── Tokenizer regression tests (#489) ───────────────────────────────────────
+
+describe('extractCommandTokens() — repo-path false-positive regression (#489)', () => {
+  test('open-gsd/gsd-core#22 repo path does NOT produce a /gsd-core token', () => {
+    // Before the lookbehind fix, /gsd-core inside `open-gsd/gsd-core#22`
+    // would be matched by the slash regex — a false positive.
+    const { slash, colon, dollar } = extractCommandTokens(
+      'see open-gsd/gsd-core#22 for details'
+    );
+    const all = [...slash, ...colon, ...dollar];
+    assert.ok(
+      !all.includes('/gsd-core'),
+      'repo path open-gsd/gsd-core#22 must not produce a /gsd-core token; got: ' + all.join(', ')
+    );
+    assert.strictEqual(all.length, 0, 'expected zero tokens from a bare repo-path string; got: ' + all.join(', '));
+  });
+
+  test('space-preceded /gsd-totally-not-a-real-command is still extracted (real invocation)', () => {
+    // A genuine (but unregistered) command reference after whitespace must be
+    // captured so the live-registry check can flag it as unknown.
+    const { slash } = extractCommandTokens(
+      'run /gsd-totally-not-a-real-command here'
+    );
+    assert.ok(
+      slash.has('/gsd-totally-not-a-real-command'),
+      'invocation after whitespace must be extracted; slash set: ' + [...slash].join(', ')
+    );
+  });
+
+  test('backtick-wrapped `/gsd-plan` is still extracted (real invocation)', () => {
+    // Backtick-wrapped commands (common in markdown) must still be captured.
+    const { slash } = extractCommandTokens(
+      'use `/gsd-plan` to plan'
+    );
+    assert.ok(
+      slash.has('/gsd-plan'),
+      'backtick-wrapped invocation must be extracted; slash set: ' + [...slash].join(', ')
+    );
   });
 });

@@ -1,4 +1,4 @@
-> evolv Coder Lite (eCL) is the evolv Consulting rebrand of the upstream `@opengsd/get-shit-done-redux` project. See the [English README](README.md) for details.
+> evolv Coder Lite (eCL) is the evolv Consulting rebrand of an upstream open-source project. See the [English README](README.md) for details.
 
 <div align="center">
 

@@ -3,9 +3,20 @@ name: Security Scan
 on:
   pull_request:
     branches:
+      - next
       - main
       - 'release/**'
       - 'hotfix/**'
+    paths:
+      - 'evolv-coder-lite/**'
+      - 'agents/**'
+      - 'commands/**'
+      - 'hooks/**'
+      - 'scripts/**'
+      - 'package.json'
+      - 'package-lock.json'
+      - '.github/workflows/security-scan.yml'
+      - '.secretscanignore'
 
 concurrency:
   group: ${{ github.workflow }}-${{ github.head_ref || github.run_id }}
@@ -32,9 +43,7 @@ jobs:
         run: npm ci
 
       - name: Dependency integrity gate
-        run: |
-          chmod +x scripts/check-npm-integrity.sh
-          scripts/check-npm-integrity.sh
+        run: node scripts/check-npm-integrity.cjs
 
       - name: Prompt injection scan
         env:

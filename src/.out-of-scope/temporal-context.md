@@ -22,7 +22,7 @@ the pattern as core.
 - **Subagent gap unsolved.** Passive injection lands in the orchestrator's context
   only. Subagents (the workers that actually do eCL's planning, execution, verification)
   spawn fresh and never see the temporal signal. The proposal does not solve this, and
-  any eCL-core integration would inherit the gap. Until the subagent boundary is
+  any evolv-coder-lite integration would inherit the gap. Until the subagent boundary is
   addressed, "first-class temporal context" is at best a partial feature.
 - **`HANDOFF.json` duplicates existing artifacts.** eCL already persists session
   continuity through `.planning/state/*` and per-phase artifacts (PLAN.md, RESEARCH.md,

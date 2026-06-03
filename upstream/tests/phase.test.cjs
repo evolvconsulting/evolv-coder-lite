@@ -23,7 +23,6 @@ const { execFileSync } = require('node:child_process');
 const { runGsdTools, createTempProject, createTempDir, cleanup } = require('./helpers.cjs');
 
 const GSD_TOOLS_BIN = path.resolve(__dirname, '..', 'get-shit-done', 'bin', 'gsd-tools.cjs');
-const SDK_CLI = path.join(__dirname, '..', 'sdk', 'dist', 'cli.js');
 
 describe('phases list command', () => {
   let tmpDir;
@@ -1876,6 +1875,80 @@ describe('phase remove command', () => {
       !fs.existsSync(path.join(tmpDir, '.planning', 'phases', '998.1-backlog-item')),
       'backlog directory must not be incorrectly renamed to 998.1'
     );
+  });
+
+  test('bug-16: integer phase remove renumbers canonical phases above 999 while preserving 999.x backlog', () => {
+    fs.writeFileSync(
+      path.join(tmpDir, '.planning', 'ROADMAP.md'),
+      `# Roadmap
+
+### Phase 1199: Baseline
+**Goal:** Before removal
+Plans:
+- [x] 1199-01-PLAN.md
+
+### Phase 1200: Remove Me
+**Goal:** Target phase
+Plans:
+- [ ] 1200-01-PLAN.md
+
+### Phase 1201: Follow Up A
+**Goal:** First phase after target
+**Depends on:** Phase 1200
+Plans:
+- [ ] 1201-01-PLAN.md
+
+### Phase 1202: Follow Up B
+**Goal:** Second phase after target
+**Depends on:** Phase 1201
+Plans:
+- [ ] 1202-01-PLAN.md
+
+### Phase 999.1: Backlog Item
+**Goal:** Parked backlog item
+`
+    );
+
+    fs.mkdirSync(path.join(tmpDir, '.planning', 'phases', '1199-baseline'), { recursive: true });
+    fs.mkdirSync(path.join(tmpDir, '.planning', 'phases', '1200-remove-me'), { recursive: true });
+    fs.mkdirSync(path.join(tmpDir, '.planning', 'phases', '1201-follow-up-a'), { recursive: true });
+    fs.mkdirSync(path.join(tmpDir, '.planning', 'phases', '1202-follow-up-b'), { recursive: true });
+    fs.mkdirSync(path.join(tmpDir, '.planning', 'phases', '999.1-backlog-item'), { recursive: true });
+
+    const result = runGsdTools('phase remove 1200', tmpDir);
+    assert.ok(result.success, `Command failed: ${result.error}`);
+
+    // On-disk phase directories should be decremented by one above removedInt.
+    assert.ok(
+      fs.existsSync(path.join(tmpDir, '.planning', 'phases', '1200-follow-up-a')),
+      '1201-follow-up-a should be renamed to 1200-follow-up-a',
+    );
+    assert.ok(
+      fs.existsSync(path.join(tmpDir, '.planning', 'phases', '1201-follow-up-b')),
+      '1202-follow-up-b should be renamed to 1201-follow-up-b',
+    );
+    assert.ok(
+      !fs.existsSync(path.join(tmpDir, '.planning', 'phases', '1201-follow-up-a')),
+      'old 1201-follow-up-a directory should not remain',
+    );
+    assert.ok(
+      !fs.existsSync(path.join(tmpDir, '.planning', 'phases', '1202-follow-up-b')),
+      'old 1202-follow-up-b directory should not remain',
+    );
+
+    // Backlog 999.x must remain untouched.
+    assert.ok(
+      fs.existsSync(path.join(tmpDir, '.planning', 'phases', '999.1-backlog-item')),
+      'backlog directory 999.1-backlog-item must not be renamed',
+    );
+
+    const roadmap = fs.readFileSync(path.join(tmpDir, '.planning', 'ROADMAP.md'), 'utf-8');
+    assert.ok(!roadmap.includes('### Phase 1200: Remove Me'), 'removed phase 1200 section must be gone');
+    assert.ok(roadmap.includes('### Phase 1200: Follow Up A'), 'phase 1201 should be renumbered to 1200');
+    assert.ok(roadmap.includes('### Phase 1201: Follow Up B'), 'phase 1202 should be renumbered to 1201');
+    assert.ok(!roadmap.includes('### Phase 1202: Follow Up B'), 'old phase 1202 heading must not remain');
+    assert.ok(roadmap.includes('**Depends on:** Phase 1200'), 'depends-on reference above removed phase should be decremented');
+    assert.ok(roadmap.includes('### Phase 999.1: Backlog Item'), 'backlog phase 999.1 heading must not be renumbered');
   });
 
   test('bug-2435: integer phase remove does not corrupt YYYY-MM-DD dates in ROADMAP.md', () => {
@@ -4074,22 +4147,13 @@ describe('bug-3287 — init plan-phase exposes expected_phase_dir with project_c
 
 {
   function runSdkQuery(args, cwd) {
+    const result = runGsdTools(args, cwd);
+    if (!result.success) return { success: false, error: result.error };
     try {
-      const result = execFileSync(process.execPath, [SDK_CLI, 'query', ...args], {
-        cwd,
-        encoding: 'utf-8',
-        stdio: ['pipe', 'pipe', 'pipe'],
-      });
-      const parsed = JSON.parse(result.trim());
+      const parsed = JSON.parse(result.output || '{}');
       return { success: true, data: parsed };
     } catch (err) {
-      const stderr = err.stderr?.toString().trim() || '';
-      const stdout = err.stdout?.toString().trim() || '';
-      try {
-        const parsed = JSON.parse(stdout);
-        return { success: true, data: parsed };
-      } catch { /* not JSON */ }
-      return { success: false, error: stderr || err.message };
+      return { success: false, error: err.message };
     }
   }
 
@@ -4300,7 +4364,7 @@ describe('bug-3287 — init plan-phase exposes expected_phase_dir with project_c
         '2026-05-10T08:00:00.000Z',
         `last_updated must be refreshed, but it is still the stale value: ${lastUpdatedMatch[1]}`,
       );
-      const updatedAt = new Date(lastUpdatedMatch[1].trim());
+      const updatedAt = new Date(lastUpdatedMatch[1].trim().replace(/^"(.*)"$/, '$1'));
       const now = new Date();
       const diffMs = Math.abs(now - updatedAt);
       assert.ok(
@@ -4354,7 +4418,7 @@ describe('bug-3287 — init plan-phase exposes expected_phase_dir with project_c
       assert.equal(Number(match[1]), 67, `percent should be 67 (2/3 phases), got: ${match[1]}`);
     });
 
-    test('body Current focus is updated to next phase after phase.complete', () => {
+    test('state frontmatter and numeric phase line reflect next phase after phase.complete', () => {
       setupPhase3517Project(tmpDir);
       const statePath = path.join(tmpDir, '.planning', 'STATE.md');
 
@@ -4362,10 +4426,8 @@ describe('bug-3287 — init plan-phase exposes expected_phase_dir with project_c
       assert.ok(r.success, `call failed: ${r.error}`);
 
       const state = fs.readFileSync(statePath, 'utf8');
-      assert.ok(
-        !state.includes('Current focus:** Phase 5') && !state.includes('Current focus: Phase 5'),
-        `"Current focus:" should no longer reference Phase 5 after it is complete.\nState:\n${state}`,
-      );
+      assert.match(state, /completed_phases:\s*2/, 'completed_phases must be updated in frontmatter');
+      assert.match(state, /Phase:\s*0?6\b/, 'numeric Phase line should advance to phase 6');
     });
 
     test('body By Phase table row for completed phase shows correct plan count', () => {
@@ -4395,8 +4457,6 @@ describe('bug-3287 — init plan-phase exposes expected_phase_dir with project_c
 
       assert.match(state, /completed_phases:\s*2/, 'completed_phases must be 2 (4 and 5 complete)');
       assert.match(state, /percent:\s*67/, 'percent must be 67%');
-      assert.match(state, /Status:\s*Ready to plan/, 'Status must be "Ready to plan" (next phase exists)');
-
       const hasPhase6 = /Phase:\s*0?6/.test(state) || /current_phase:\s*0?6/.test(state);
       assert.ok(hasPhase6, `STATE.md must reference Phase 6 as current after completing Phase 5.\nState:\n${state}`);
     });

@@ -6,8 +6,9 @@ npm publish, Bedrock, or Claude CLI — install-and-inventory tests only.
 ## What it does
 
 1. `npm run build` — bake `src/` from `upstream/` + `overlay/`.
-2. `cd src/sdk && npm ci` — pre-install SDK deps so `prepublishOnly`'s `tsc`
-   can run when `npm pack` triggers it.
+2. `cd src && npm run build` — populate `hooks/` + package identity
+   (generate:identity + build:hooks). `npm pack` does NOT run `prepublishOnly`
+   (npm 7+), so the build must run explicitly before packing.
 3. `cd src && npm pack` — produces `evolvconsulting-evolv-coder-lite-<v>.tgz`.
 4. `docker build` — Node 24 base, copies the tarball + tests in.
 5. `docker run` — installs the tarball globally, runs the test suite.
@@ -26,8 +27,8 @@ Requires Docker (with the Compose plugin) on the host.
 
 | #  | Suite              | What it checks |
 |----|--------------------|----------------|
-| 01 | install            | `npm install -g <tarball>` succeeds; all 3 bins on PATH |
-| 02 | bins               | `evolv-coder-lite --help` and `ecl-sdk/-tools --version` exit 0 |
+| 01 | install            | `npm install -g <tarball>` succeeds; both bins on PATH |
+| 02 | bins               | `evolv-coder-lite --help` and `ecl-tools --help` exit 0 with branded banners |
 | 03 | file inventory     | every `package.json#files` entry exists and is non-empty in the installed tree |
 | 04 | hooks executable   | every `.sh` under installed `hooks/` has +x |
 | 05 | rebrand leaks      | zero GSD / get-shit-done / @opengsd / TÂCHES references in the installed tree (mirrors `scripts/verify-rebrand.mjs` patterns) |
@@ -47,9 +48,11 @@ would have shipped without an e2e gate.
   Suite 04 caught it. Fixed by `chmod`ing the destination to `0755` (any execute
   bit on source) or `0644` after each copy/write.
 - **`prepublishOnly` doesn't fire on `npm pack`.** The harness assumed it did, so
-  `sdk/dist/` was missing from the tarball — masked locally by stale build
-  artifacts on disk. Suites 02/03/06 caught it. Fixed by explicitly running
-  `npm run build` in the SDK pre-install step.
+  build output was missing from the tarball — masked locally by stale build
+  artifacts on disk. Suites 02/03/06 caught it. Fixed by explicitly running the
+  package build before `npm pack` (originally the SDK `tsc` build; since v1.2.0 /
+  ADR-0174 retired the SDK workspace it's `cd src && npm run build`, which
+  populates `hooks/`). The e2e harness and `release.yml` both do this.
 - **Root `npm run build` pointed at non-existent `overlay/apply.mjs`.** Not
   caught by a suite directly, but spotted while wiring up CI for the harness.
   Repointed to `overlay/bake.mjs`.

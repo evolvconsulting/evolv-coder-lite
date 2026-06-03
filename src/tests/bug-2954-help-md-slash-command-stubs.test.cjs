@@ -1,9 +1,9 @@
+// allow-test-rule: source-text-is-the-product
+// Workflow .md / agent .md / command .md / reference .md files — their text
+// IS what the runtime loads. Testing text content tests the deployed contract.
+// Per CONTRIBUTING.md exception matrix.
 'use strict';
 
-// allow-test-rule: pending-migration-to-typed-ir [#2974]
-// Tracked in #2974 for migration to typed-IR assertions per CONTRIBUTING.md
-// "Prohibited: Raw Text Matching on Test Outputs". Per-file review may
-// reclassify some entries as source-text-is-the-product during migration.
 
 process.env.ECL_TEST_MODE = '1';
 
@@ -77,7 +77,9 @@ function listShippedSlashBaseNames() {
 
 function extractSlashReferences(contents) {
   const names = new Set();
-  const tokenRe = /\/ecl[:-]([a-z][a-z0-9-]*)/g;
+  // Negative lookbehind: must not be preceded by a letter (avoids matching npm scope
+  // paths like @evolvconsulting/evolv-coder-lite where `/ecl-` appears inside a package URL).
+  const tokenRe = /(?<![a-z])\/ecl[:-]([a-z][a-z0-9-]*)/g;
   let match;
   while ((match = tokenRe.exec(contents)) !== null) {
     names.add(match[1]);

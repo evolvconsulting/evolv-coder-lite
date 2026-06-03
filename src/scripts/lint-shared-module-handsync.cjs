@@ -12,6 +12,10 @@
  * `bin/lib/foo.cjs` and ts `sdk/src/foo.ts` only allow-throughs that exact
  * pair — a sibling at `sdk/src/query/foo.ts` is still flagged.
  *
+ * Cross-name pairs are also supported when declared in the allowlist
+ * (for example `verify.cjs` <-> `validate.ts`), so cooperating siblings are
+ * observable even when basenames differ.
+ *
  * If a pair is found:
  *   - cooperatingSiblings (matching cjs + ts): accepted silently (exit 0).
  *   - migrateMeBacklog (matching cjs + ts): emits a WARNING only when
@@ -36,6 +40,7 @@ const args = process.argv.slice(2);
 let ROOT = path.resolve(__dirname, '..');
 let CJS_DIR = null;          // resolved below
 let SDK_SRC = null;          // resolved below
+let SDK_SRC_EXPLICIT = false;
 let ALLOWLIST_OVERRIDE = null; // resolved below
 let WARN_ALL = false;
 let JSON_OUTPUT = false;
@@ -47,6 +52,7 @@ for (let i = 0; i < args.length; i++) {
     CJS_DIR = path.resolve(args[++i]);
   } else if (args[i] === '--sdk-src' && args[i + 1]) {
     SDK_SRC = path.resolve(args[++i]);
+    SDK_SRC_EXPLICIT = true;
   } else if (args[i] === '--allowlist' && args[i + 1]) {
     ALLOWLIST_OVERRIDE = path.resolve(args[++i]);
   } else if (args[i] === '--warn-all') {
@@ -95,6 +101,17 @@ const cooperatingPairs = new Set(
 const migrateMap = new Map(
   (allowlist.migrateMeBacklog || []).map((e) => [`${e.cjs}::${e.ts}`, e])
 );
+
+/** @type {Map<string, Set<string>>} cjs rel path -> explicit declared ts rel paths */
+const explicitTsByCjs = new Map();
+for (const entry of [
+  ...(allowlist.cooperatingSiblings || []),
+  ...(allowlist.migrateMeBacklog || []),
+]) {
+  if (!entry || typeof entry.cjs !== 'string' || typeof entry.ts !== 'string') continue;
+  if (!explicitTsByCjs.has(entry.cjs)) explicitTsByCjs.set(entry.cjs, new Set());
+  explicitTsByCjs.get(entry.cjs).add(entry.ts);
+}
 
 // ---------------------------------------------------------------------------
 // Build SDK name index: name -> array of absolute TS paths
@@ -195,15 +212,34 @@ function main() {
     process.exit(1);
   }
   if (!fs.existsSync(SDK_SRC)) {
+    // SDK tree was retired in ADR-0174 Phase 5.2. In default repo mode this
+    // lint becomes a no-op success; explicit --sdk-src remains fail-loud.
+    if (SDK_SRC_EXPLICIT) {
+      if (JSON_OUTPUT) {
+        emitJson({ ok: false, reason: 'sdk_src_missing', path: SDK_SRC });
+      } else {
+        process.stderr.write(
+          `lint-shared-module-handsync: SDK src dir not found: ${SDK_SRC}\n` +
+            `  Pass --root <repo-root> or --sdk-src <path> to override.\n`
+        );
+      }
+      process.exit(1);
+    }
+
     if (JSON_OUTPUT) {
-      emitJson({ ok: false, reason: 'sdk_src_missing', path: SDK_SRC });
+      emitJson({
+        ok: true,
+        reason: 'sdk_retired',
+        cooperatingCount: 0,
+        backlogCount: 0,
+        warnings: [],
+      });
     } else {
-      process.stderr.write(
-        `lint-shared-module-handsync: SDK src dir not found: ${SDK_SRC}\n` +
-          `  Pass --root <repo-root> or --sdk-src <path> to override.\n`
+      process.stdout.write(
+        'ok lint-shared-module-handsync: SDK source tree retired; no hand-sync pairs to lint.\n'
       );
     }
-    process.exit(1);
+    process.exit(0);
   }
 
   const sdkIndex = buildSdkIndex(SDK_SRC);
@@ -212,13 +248,36 @@ function main() {
   const errors = [];
   const warnings = [];
 
-  for (const { name, absPath } of cjsFiles) {
-    // Is there a matching TS file?
-    if (!sdkIndex.has(name)) continue;
+  function candidateTsPathsFor(relCjs, name) {
+    const byName = sdkIndex.has(name)
+      ? sdkIndex
+          .get(name)
+          .map((p) => path.relative(ROOT, p).replace(/\\/g, '/'))
+      : [];
 
-    // Compute the relative paths the allowlist uses
+    const declared = explicitTsByCjs.has(relCjs)
+      ? Array.from(explicitTsByCjs.get(relCjs))
+      : [];
+
+    const declaredExisting = declared.filter((relTs) => {
+      const abs = path.join(ROOT, relTs);
+      return (
+        relTs.endsWith('.ts') &&
+        !relTs.endsWith('.generated.ts') &&
+        !relTs.endsWith('.test.ts') &&
+        fs.existsSync(abs) &&
+        fs.statSync(abs).isFile()
+      );
+    });
+
+    return Array.from(new Set([...byName, ...declaredExisting]));
+  }
+
+  for (const { name, absPath } of cjsFiles) {
+    // Compute relative CJS path and all declared/discovered TS candidates.
     const relCjs = path.relative(ROOT, absPath).replace(/\\/g, '/');
-    const tsPaths = sdkIndex.get(name).map((p) => path.relative(ROOT, p).replace(/\\/g, '/'));
+    const tsPaths = candidateTsPathsFor(relCjs, name);
+    if (tsPaths.length === 0) continue;
 
     // Pair-aware matching, per ts sibling. Each ts candidate is classified
     // independently against the allowlist so a partially-allowlisted set of
@@ -247,12 +306,10 @@ function main() {
   // Count cjs files whose pair identity (cjs+ts) is on cooperatingSiblings.
   // A file with multiple ts candidates is counted once if any pair matches.
   const cooperatingCount = cjsFiles.filter((f) => {
-    if (!sdkIndex.has(f.name)) return false;
     const relCjs = path.relative(ROOT, f.absPath).replace(/\\/g, '/');
-    return sdkIndex.get(f.name).some((tsAbs) => {
-      const relTs = path.relative(ROOT, tsAbs).replace(/\\/g, '/');
-      return cooperatingPairs.has(`${relCjs}::${relTs}`);
-    });
+    return candidateTsPathsFor(relCjs, f.name).some((relTs) =>
+      cooperatingPairs.has(`${relCjs}::${relTs}`)
+    );
   }).length;
 
   // -------------------------------------------------------------------------

@@ -93,7 +93,7 @@ Agent(
 
 Resolve the debugger model before spawning:
 ```bash
-debugger_model=$(ecl-sdk query resolve-model ecl-debugger 2>/dev/null | jq -r '.model' 2>/dev/null || true)
+debugger_model=$(ecl-tools query resolve-model ecl-debugger 2>/dev/null | jq -r '.model' 2>/dev/null || true)
 ```
 
 ## Step 3: Handle Agent Return
