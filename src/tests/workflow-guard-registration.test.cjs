@@ -82,7 +82,7 @@ describe('hook registration completeness anti-pattern guard', () => {
     const { ECL_UNINSTALL_HOOKS } = require('../bin/install.js');
     assert.ok(Array.isArray(ECL_UNINSTALL_HOOKS), 'ECL_UNINSTALL_HOOKS must be exported from install.js');
 
-    const jsHooks = ECL_UNINSTALL_HOOKS.filter(h => h.endsWith('.js'));
+    const jsHooks = ECL_UNINSTALL_HOOKS.filter(h => h.endsWith('.js') && !h.endsWith('-worker.js'));
 
     const missing = [];
     for (const hook of jsHooks) {

@@ -776,6 +776,44 @@ function classifyPromptUserAction(action) {
       `      });`,
     ].join('\n'),
   },
+  {
+    id: 'bug-2979-test-sh-hook-bash-lc-win32',
+    file: 'tests/bug-2979-hook-absolute-node.test.cjs',
+    issue: 'evolvconsulting/evolv-coder-lite#51',
+    upstream: {
+      status: 'pending',
+      detail: 'companion to shell-projection-bash-lc-win32; upstream #3393 asserts the pre-#51 bare-path form',
+    },
+    note: [
+      'eCL routes win32 .sh hooks through `bash -lc` (issue #51, patch',
+      'shell-projection-bash-lc-win32) so bash interprets the .sh path as a',
+      'command string instead of trying to exec it as a binary. The upstream',
+      '#3393 assertion still expects the pre-#51 `"<bash>" "<path>"` form;',
+      'update the expected command to the -lc form so the test tracks eCL',
+      'behavior. Drop when upstream adopts the -lc form.',
+    ].join(' '),
+    find: `      '"C:/Program Files/Git/bin/bash.exe" "C:/Users/me/.codex/hooks/ecl-validate-commit.sh"',`,
+    replace: '      `"C:/Program Files/Git/bin/bash.exe" -lc \'C:/Users/me/.codex/hooks/ecl-validate-commit.sh\'`,',
+  },
+  {
+    id: 'workflow-guard-test-exclude-worker-scripts',
+    file: 'tests/workflow-guard-registration.test.cjs',
+    issue: 'evolvconsulting/evolv-coder-lite#upstream-sync-v1.2.0',
+    upstream: {
+      status: 'pending',
+      detail: 'companion to install-uninstall-removes-check-update-worker',
+    },
+    note: [
+      'install-uninstall-removes-check-update-worker adds',
+      'ecl-check-update-worker.js to ECL_UNINSTALL_HOOKS so uninstall removes',
+      'it. That worker is spawned by ecl-check-update.js, not registered as a',
+      'settings.json hook, so it has no command construction and trips this',
+      'completeness guard. Exclude *-worker.js scripts (spawned, not',
+      'registered) from the check. Drop alongside the uninstall patch.',
+    ].join(' '),
+    find: `    const jsHooks = ECL_UNINSTALL_HOOKS.filter(h => h.endsWith('.js'));`,
+    replace: `    const jsHooks = ECL_UNINSTALL_HOOKS.filter(h => h.endsWith('.js') && !h.endsWith('-worker.js'));`,
+  },
 ];
 
 export async function applyTextPatches(srcDir, { onlyFiles } = {}) {
