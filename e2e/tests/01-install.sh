@@ -1,6 +1,6 @@
 #!/bin/bash
 # Test 01: Tarball install
-# Asserts: npm install -g <tarball> succeeds; the three declared bins are
+# Asserts: npm install -g <tarball> succeeds; the two declared bins are
 # resolvable on PATH and point at files inside the installed package.
 set -uo pipefail
 
@@ -46,7 +46,8 @@ fi
 rm -f "$INSTALL_LOG"
 
 # Both bins declared in package.json#bin must resolve on PATH.
-# (ecl-sdk was dropped when upstream v1.2.0 retired gsd-sdk in favour of gsd-tools.)
+# (The standalone SDK bin was dropped when v1.2.0 retired the separate SDK
+# package; the tools now ship in-package as ecl-tools — see ADR-0174.)
 for bin in evolv-coder-lite ecl-tools; do
   test_start "bin on PATH: $bin"
   if command -v "$bin" >/dev/null 2>&1; then

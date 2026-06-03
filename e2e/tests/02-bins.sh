@@ -1,9 +1,9 @@
 #!/bin/bash
 # Test 02: Bin invocation
-# Asserts: evolv-coder-lite --help exits 0 with branding, and ecl-tools --help
-# exits 0. (v1.2.0 retired gsd-sdk/ecl-sdk; the new ecl-tools CLI rejects
-# --version by design, so --help is the callability probe — matching the
-# upstream release-tarball-smoke.)
+# Asserts: evolv-coder-lite --help and ecl-tools --help both exit 0 and emit
+# their own branded usage banner. (v1.2.0 retired the standalone SDK bin; the
+# new ecl-tools CLI rejects --version by design, so --help is the callability
+# probe — matching the upstream release-tarball-smoke.)
 set -uo pipefail
 
 SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
@@ -25,18 +25,19 @@ else
   test_fail "exit=$HELP_EXIT, branding match=$(echo "$HELP_OUT" | grep -c "evolv-coder-lite")"
 fi
 
-# ecl-tools --help: the installed tools binary must be callable and exit 0.
-# (The new gsd-tools-derived CLI has no --version; --help is the contract the
-# upstream release-tarball-smoke uses to assert callability.)
-test_start "ecl-tools --help exits 0"
+# ecl-tools --help: the installed tools binary must be callable, exit 0, and
+# print its own name in the usage banner. (The new tools CLI has no --version;
+# --help is the contract the upstream release-tarball-smoke uses to assert
+# callability.) Symmetric with the evolv-coder-lite branding check above.
+test_start "ecl-tools --help exits 0 with branded banner"
 TOOLS_OUT=$(ecl-tools --help 2>&1)
 TOOLS_EXIT=$?
-if [ "$TOOLS_EXIT" -eq 0 ]; then
+if [ "$TOOLS_EXIT" -eq 0 ] && echo "$TOOLS_OUT" | grep -q "ecl-tools"; then
   echo -e "    ${YELLOW}$(echo "$TOOLS_OUT" | head -1)${NC}"
   test_pass
 else
   echo "$TOOLS_OUT" | head -5
-  test_fail "ecl-tools --help exited $TOOLS_EXIT"
+  test_fail "exit=$TOOLS_EXIT, branding match=$(echo "$TOOLS_OUT" | grep -c "ecl-tools")"
 fi
 
 test_summary

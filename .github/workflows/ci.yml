@@ -28,6 +28,13 @@ jobs:
         with:
           node-version: '20'
 
+      - name: Guard against retired SDK references
+        # v1.2.0 (ADR-0174) retired the standalone SDK workspace. Fail fast if a
+        # stale reference to that retired workspace (its old paths or bin) creeps
+        # back into CI/scripts/overlay/e2e on a future sync — the v1.2.0 sync
+        # missed several, which is the regression this guard exists to prevent.
+        run: node scripts/check-no-sdk-refs.mjs
+
       - name: Smoke-test rebrand map
         run: node scripts/smoke-rebrand-map.mjs
 
@@ -41,10 +48,10 @@ jobs:
         run: node scripts/verify-rebrand.mjs
 
       # NOTE: the former "Assert parent and SDK package versions match" step
-      # (issue #44) was removed when upstream v1.2.0 retired the @opengsd/gsd-sdk
-      # package boundary (ADR-0174). There is no longer a src/sdk/package.json to
-      # keep in lockstep — the tools ship inside the main package at
-      # evolv-coder-lite/bin/ecl-tools.cjs.
+      # (issue #44) was removed when upstream v1.2.0 retired the standalone SDK
+      # package boundary (ADR-0174). There is no longer a separate SDK
+      # package.json to keep in lockstep — the tools ship inside the main package
+      # at evolv-coder-lite/bin/ecl-tools.cjs.
 
       - name: Assert committed src/ matches a fresh bake
         # Catches drift: if someone hand-edits src/ without re-baking, the

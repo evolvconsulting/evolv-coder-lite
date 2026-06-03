@@ -1,7 +1,7 @@
 #!/bin/bash
 # Test 03: File inventory
 # Asserts: every entry in package.json#files exists in the installed package
-# and is non-empty. Spot-checks high-value assets (sdk/dist build output, hook
+# and is non-empty. Spot-checks high-value assets (in-package tools binary, hook
 # scripts, install bin).
 set -uo pipefail
 
