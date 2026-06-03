@@ -14,6 +14,7 @@ A plan that survives review from 2-3 independent AI systems is more robust.
 Check which AI CLIs are available on the system:
 
 ```bash
+_GSD_SHIM_NAME="ecl-tools.cjs"; _GSD_RUNTIME_ROOT="${RUNTIME_DIR:-$(git rev-parse --show-toplevel 2>/dev/null || pwd)}"; ECL_TOOLS="${_GSD_RUNTIME_ROOT}/evolv-coder-lite/bin/${_GSD_SHIM_NAME}"; if [ -f "$ECL_TOOLS" ]; then ecl_run() { node "$ECL_TOOLS" "$@"; }; elif [ -f "${_GSD_RUNTIME_ROOT}/.claude/evolv-coder-lite/bin/${_GSD_SHIM_NAME}" ]; then ECL_TOOLS="${_GSD_RUNTIME_ROOT}/.claude/evolv-coder-lite/bin/${_GSD_SHIM_NAME}"; ecl_run() { node "$ECL_TOOLS" "$@"; }; elif command -v ecl-tools >/dev/null 2>&1; then ECL_TOOLS="$(command -v ecl-tools)"; ecl_run() { "$ECL_TOOLS" "$@"; }; elif [ -f "$HOME/.claude/evolv-coder-lite/bin/${_GSD_SHIM_NAME}" ]; then ECL_TOOLS="$HOME/.claude/evolv-coder-lite/bin/${_GSD_SHIM_NAME}"; ecl_run() { node "$ECL_TOOLS" "$@"; }; else echo "ERROR: ecl-tools.cjs not found at $ECL_TOOLS and ecl-tools is not on PATH. Run: npx -y @evolvconsulting/evolv-coder-lite@latest --claude --local" >&2; exit 1; fi
 # Check each CLI
 command -v gemini >/dev/null 2>&1 && echo "gemini:available" || echo "gemini:missing"
 command -v claude >/dev/null 2>&1 && echo "claude:available" || echo "claude:missing"
@@ -24,26 +25,15 @@ command -v qwen >/dev/null 2>&1 && echo "qwen:available" || echo "qwen:missing"
 command -v cursor >/dev/null 2>&1 && echo "cursor:available" || echo "cursor:missing"
 
 # Check local model servers (OpenAI-compatible HTTP API — no CLI binary required)
-# SDK resolution: prefer local ecl-tools.cjs, fall back to global ecl-sdk (#3668)
-ECL_TOOLS="${RUNTIME_DIR:-$(git rev-parse --show-toplevel 2>/dev/null || pwd)}/evolv-coder-lite/bin/ecl-tools.cjs"
-if [ -f "$ECL_TOOLS" ]; then
-  ECL_SDK="node $ECL_TOOLS"
-elif command -v ecl-sdk >/dev/null 2>&1; then
-  ECL_SDK="ecl-sdk"
-else
-  echo "ERROR: ecl-sdk not found on PATH and $ECL_TOOLS does not exist." >&2
-  echo "Run: npx evolv-coder-lite-cc@latest --claude --local" >&2
-  exit 1
-fi
-OLLAMA_HOST=$($ECL_SDK query config-get review.ollama_host 2>/dev/null | jq -r '.' 2>/dev/null || echo "")
+OLLAMA_HOST=$(ecl_run query config-get review.ollama_host 2>/dev/null | jq -r '.' 2>/dev/null || echo "")
 if [ -z "$OLLAMA_HOST" ] || [ "$OLLAMA_HOST" = "null" ]; then OLLAMA_HOST="http://localhost:11434"; fi
 curl -s --max-time 2 "${OLLAMA_HOST}/v1/models" >/dev/null 2>&1 && echo "ollama:available" || echo "ollama:missing"
 
-LM_STUDIO_HOST=$($ECL_SDK query config-get review.lm_studio_host 2>/dev/null | jq -r '.' 2>/dev/null || echo "")
+LM_STUDIO_HOST=$(ecl_run query config-get review.lm_studio_host 2>/dev/null | jq -r '.' 2>/dev/null || echo "")
 if [ -z "$LM_STUDIO_HOST" ] || [ "$LM_STUDIO_HOST" = "null" ]; then LM_STUDIO_HOST="http://localhost:1234"; fi
 curl -s --max-time 2 "${LM_STUDIO_HOST}/v1/models" >/dev/null 2>&1 && echo "lm_studio:available" || echo "lm_studio:missing"
 
-LLAMA_CPP_HOST=$($ECL_SDK query config-get review.llama_cpp_host 2>/dev/null | jq -r '.' 2>/dev/null || echo "")
+LLAMA_CPP_HOST=$(ecl_run query config-get review.llama_cpp_host 2>/dev/null | jq -r '.' 2>/dev/null || echo "")
 if [ -z "$LLAMA_CPP_HOST" ] || [ "$LLAMA_CPP_HOST" = "null" ]; then LLAMA_CPP_HOST="http://localhost:8080"; fi
 curl -s --max-time 2 "${LLAMA_CPP_HOST}/v1/models" >/dev/null 2>&1 && echo "llama_cpp:available" || echo "llama_cpp:missing"
 ```
@@ -119,7 +109,7 @@ Rules:
 Collect phase artifacts for the review prompt:
 
 ```bash
-INIT=$($ECL_SDK query init.phase-op "${PHASE_ARG}")
+INIT=$(ecl_run query init.phase-op "${PHASE_ARG}")
 if [[ "$INIT" == @file:* ]]; then INIT=$(cat "${INIT#@file:}"); fi
 ```
 
@@ -223,11 +213,11 @@ Note: The variable names above (`INSTRUCTIONS_BLOCK_FILE`, `ROADMAP_SECTION_FILE
 Read model preferences from planning config. Null/missing values fall back to CLI defaults.
 
 ```bash
-# JSON scalars from ecl-sdk query; use jq -r to strip JSON string quotes (install jq if missing)
-GEMINI_MODEL=$($ECL_SDK query config-get review.models.gemini 2>/dev/null | jq -r '.' 2>/dev/null || true)
-CLAUDE_MODEL=$($ECL_SDK query config-get review.models.claude 2>/dev/null | jq -r '.' 2>/dev/null || true)
-CODEX_MODEL=$($ECL_SDK query config-get review.models.codex 2>/dev/null | jq -r '.' 2>/dev/null || true)
-OPENCODE_MODEL=$($ECL_SDK query config-get review.models.opencode 2>/dev/null | jq -r '.' 2>/dev/null || true)
+# JSON scalars from ecl-tools.cjs query; use jq -r to strip JSON string quotes (install jq if missing)
+GEMINI_MODEL=$(ecl_run query config-get review.models.gemini 2>/dev/null | jq -r '.' 2>/dev/null || true)
+CLAUDE_MODEL=$(ecl_run query config-get review.models.claude 2>/dev/null | jq -r '.' 2>/dev/null || true)
+CODEX_MODEL=$(ecl_run query config-get review.models.codex 2>/dev/null | jq -r '.' 2>/dev/null || true)
+OPENCODE_MODEL=$(ecl_run query config-get review.models.opencode 2>/dev/null | jq -r '.' 2>/dev/null || true)
 ```
 
 For each selected CLI, invoke in sequence (not parallel — avoid rate limits):
@@ -324,7 +314,7 @@ prepare_trimmed_prompt_for_reviewer() {
   REQUIREMENTS_ARG=""
   [ -f "/tmp/ecl-review-{phase}-requirements.md" ] && REQUIREMENTS_ARG="--requirements-file /tmp/ecl-review-{phase}-requirements.md"
 
-  $ECL_SDK query prompt-budget \
+  ecl_run query prompt-budget \
     --budget "$REVIEWER_BUDGET" \
     --instructions-file "/tmp/ecl-review-{phase}-instructions.md" \
     --roadmap-file "/tmp/ecl-review-{phase}-roadmap.md" \
@@ -335,9 +325,9 @@ prepare_trimmed_prompt_for_reviewer() {
 }
 
 # Resolve prompt budget for Ollama: per-reviewer override > global default > null
-OLLAMA_REVIEWER_BUDGET=$($ECL_SDK query config-get review.max_prompt_tokens_per_reviewer.ollama 2>/dev/null | jq -r '.' 2>/dev/null || echo "null")
+OLLAMA_REVIEWER_BUDGET=$(ecl_run query config-get review.max_prompt_tokens_per_reviewer.ollama 2>/dev/null | jq -r '.' 2>/dev/null || echo "null")
 if [ -z "$OLLAMA_REVIEWER_BUDGET" ] || [ "$OLLAMA_REVIEWER_BUDGET" = "null" ]; then
-  OLLAMA_REVIEWER_BUDGET=$($ECL_SDK query config-get review.max_prompt_tokens 2>/dev/null | jq -r '.' 2>/dev/null || echo "null")
+  OLLAMA_REVIEWER_BUDGET=$(ecl_run query config-get review.max_prompt_tokens 2>/dev/null | jq -r '.' 2>/dev/null || echo "null")
 fi
 
 # Apply budget trim for Ollama if a budget is configured
@@ -361,9 +351,9 @@ if [ -n "$OLLAMA_REVIEWER_BUDGET" ] && [ "$OLLAMA_REVIEWER_BUDGET" != "null" ] &
 fi
 
 if [ "$OLLAMA_SKIP" != "1" ]; then
-OLLAMA_HOST=$($ECL_SDK query config-get review.ollama_host 2>/dev/null | jq -r '.' 2>/dev/null || echo "")
+OLLAMA_HOST=$(ecl_run query config-get review.ollama_host 2>/dev/null | jq -r '.' 2>/dev/null || echo "")
 if [ -z "$OLLAMA_HOST" ] || [ "$OLLAMA_HOST" = "null" ]; then OLLAMA_HOST="http://localhost:11434"; fi
-OLLAMA_MODEL=$($ECL_SDK query config-get review.models.ollama 2>/dev/null | jq -r '.' 2>/dev/null || echo "")
+OLLAMA_MODEL=$(ecl_run query config-get review.models.ollama 2>/dev/null | jq -r '.' 2>/dev/null || echo "")
 if [ -z "$OLLAMA_MODEL" ] || [ "$OLLAMA_MODEL" = "null" ]; then
   OLLAMA_MODEL=$(curl -s --max-time 2 "${OLLAMA_HOST}/v1/models" 2>/dev/null | jq -r '.data[0].id // "llama3"' 2>/dev/null || echo "llama3")
 fi
@@ -383,9 +373,9 @@ fi
 **LM Studio (local, OpenAI-compatible):**
 ```bash
 # Resolve prompt budget for LM Studio: per-reviewer override > global default > null
-LM_STUDIO_REVIEWER_BUDGET=$($ECL_SDK query config-get review.max_prompt_tokens_per_reviewer.lm_studio 2>/dev/null | jq -r '.' 2>/dev/null || echo "null")
+LM_STUDIO_REVIEWER_BUDGET=$(ecl_run query config-get review.max_prompt_tokens_per_reviewer.lm_studio 2>/dev/null | jq -r '.' 2>/dev/null || echo "null")
 if [ -z "$LM_STUDIO_REVIEWER_BUDGET" ] || [ "$LM_STUDIO_REVIEWER_BUDGET" = "null" ]; then
-  LM_STUDIO_REVIEWER_BUDGET=$($ECL_SDK query config-get review.max_prompt_tokens 2>/dev/null | jq -r '.' 2>/dev/null || echo "null")
+  LM_STUDIO_REVIEWER_BUDGET=$(ecl_run query config-get review.max_prompt_tokens 2>/dev/null | jq -r '.' 2>/dev/null || echo "null")
 fi
 
 # Apply budget trim for LM Studio if a budget is configured
@@ -409,9 +399,9 @@ if [ -n "$LM_STUDIO_REVIEWER_BUDGET" ] && [ "$LM_STUDIO_REVIEWER_BUDGET" != "nul
 fi
 
 if [ "$LM_STUDIO_SKIP" != "1" ]; then
-LM_STUDIO_HOST=$($ECL_SDK query config-get review.lm_studio_host 2>/dev/null | jq -r '.' 2>/dev/null || echo "")
+LM_STUDIO_HOST=$(ecl_run query config-get review.lm_studio_host 2>/dev/null | jq -r '.' 2>/dev/null || echo "")
 if [ -z "$LM_STUDIO_HOST" ] || [ "$LM_STUDIO_HOST" = "null" ]; then LM_STUDIO_HOST="http://localhost:1234"; fi
-LM_STUDIO_MODEL=$($ECL_SDK query config-get review.models.lm_studio 2>/dev/null | jq -r '.' 2>/dev/null || echo "")
+LM_STUDIO_MODEL=$(ecl_run query config-get review.models.lm_studio 2>/dev/null | jq -r '.' 2>/dev/null || echo "")
 if [ -z "$LM_STUDIO_MODEL" ] || [ "$LM_STUDIO_MODEL" = "null" ]; then
   LM_STUDIO_MODEL=$(curl -s --max-time 2 "${LM_STUDIO_HOST}/v1/models" 2>/dev/null | jq -r '.data[0].id // "local-model"' 2>/dev/null || echo "local-model")
 fi
@@ -436,9 +426,9 @@ fi
 **llama.cpp (local, OpenAI-compatible):**
 ```bash
 # Resolve prompt budget for llama.cpp: per-reviewer override > global default > null
-LLAMA_CPP_REVIEWER_BUDGET=$($ECL_SDK query config-get review.max_prompt_tokens_per_reviewer.llama_cpp 2>/dev/null | jq -r '.' 2>/dev/null || echo "null")
+LLAMA_CPP_REVIEWER_BUDGET=$(ecl_run query config-get review.max_prompt_tokens_per_reviewer.llama_cpp 2>/dev/null | jq -r '.' 2>/dev/null || echo "null")
 if [ -z "$LLAMA_CPP_REVIEWER_BUDGET" ] || [ "$LLAMA_CPP_REVIEWER_BUDGET" = "null" ]; then
-  LLAMA_CPP_REVIEWER_BUDGET=$($ECL_SDK query config-get review.max_prompt_tokens 2>/dev/null | jq -r '.' 2>/dev/null || echo "null")
+  LLAMA_CPP_REVIEWER_BUDGET=$(ecl_run query config-get review.max_prompt_tokens 2>/dev/null | jq -r '.' 2>/dev/null || echo "null")
 fi
 
 # Apply budget trim for llama.cpp if a budget is configured
@@ -462,9 +452,9 @@ if [ -n "$LLAMA_CPP_REVIEWER_BUDGET" ] && [ "$LLAMA_CPP_REVIEWER_BUDGET" != "nul
 fi
 
 if [ "$LLAMA_CPP_SKIP" != "1" ]; then
-LLAMA_CPP_HOST=$($ECL_SDK query config-get review.llama_cpp_host 2>/dev/null | jq -r '.' 2>/dev/null || echo "")
+LLAMA_CPP_HOST=$(ecl_run query config-get review.llama_cpp_host 2>/dev/null | jq -r '.' 2>/dev/null || echo "")
 if [ -z "$LLAMA_CPP_HOST" ] || [ "$LLAMA_CPP_HOST" = "null" ]; then LLAMA_CPP_HOST="http://localhost:8080"; fi
-LLAMA_CPP_MODEL=$($ECL_SDK query config-get review.models.llama_cpp 2>/dev/null | jq -r '.' 2>/dev/null || echo "")
+LLAMA_CPP_MODEL=$(ecl_run query config-get review.models.llama_cpp 2>/dev/null | jq -r '.' 2>/dev/null || echo "")
 if [ -z "$LLAMA_CPP_MODEL" ] || [ "$LLAMA_CPP_MODEL" = "null" ]; then
   LLAMA_CPP_MODEL=$(curl -s --max-time 2 "${LLAMA_CPP_HOST}/v1/models" 2>/dev/null | jq -r '.data[0].id // "local-model"' 2>/dev/null || echo "local-model")
 fi
@@ -596,7 +586,7 @@ trimmed_reviewers:        # only present if at least one reviewer was trimmed
 
 Commit:
 ```bash
-$ECL_SDK query commit "docs: cross-AI review for phase {N}" --files {phase_dir}/{padded_phase}-REVIEWS.md
+ecl_run query commit "docs: cross-AI review for phase {N}" --files {phase_dir}/{padded_phase}-REVIEWS.md
 ```
 </step>
 

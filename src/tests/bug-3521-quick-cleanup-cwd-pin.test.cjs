@@ -31,12 +31,12 @@ describe('bug #3521 — quick.md post-merge cleanup CWD safety (via SDK delegati
 
   test('quick.md cleanup delegates CWD-safe worktree cleanup to SDK (worktree.cleanup-wave)', () => {
     const content = readQuickMd();
-    // After #3797: quick.md delegates to $ECL_SDK query worktree.cleanup-wave
+    // After #3797: quick.md delegates to ecl_run query worktree.cleanup-wave
     // which handles CWD pinning, STATE.md backup, deletion guards, and branch
     // cleanup internally. The manual shell loop has been removed.
     assert.ok(
       content.includes('worktree.cleanup-wave'),
-      'quick.md must delegate cleanup to $ECL_SDK query worktree.cleanup-wave (#3797)',
+      'quick.md must delegate cleanup to ecl_run query worktree.cleanup-wave (#3797)',
     );
   });
 
@@ -44,11 +44,11 @@ describe('bug #3521 — quick.md post-merge cleanup CWD safety (via SDK delegati
     const content = readQuickMd();
     // The || exit 1 enforces fail-closed: SDK safety refusals (e.g. branch
     // drift detection from #3174) surface immediately rather than being swallowed.
-    // This is the equivalent of the pre-#3797 `ecl-sdk query ... || exit 1` in the
+    // This is the equivalent of the pre-#3797 `ecl_run query ... || exit 1` in the
     // `if command -v ecl-sdk` branch.
     assert.match(
       content,
-      /\$ECL_SDK query worktree\.cleanup-wave.*\|\| exit 1/,
+      /ecl_run query worktree\.cleanup-wave.*\|\| exit 1/,
       'quick.md cleanup-wave must use || exit 1 — fail-closed for safety refusals (#3521/#3797)',
     );
   });

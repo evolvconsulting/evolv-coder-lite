@@ -13,8 +13,7 @@
   },
   "bin": {
     "evolv-coder-lite": "bin/install.js",
-    "ecl-sdk": "bin/ecl-sdk.js",
-    "ecl-tools": "bin/ecl-sdk.js"
+    "ecl-tools": "evolv-coder-lite/bin/ecl-tools.cjs"
   },
   "scripts": {
     "postinstall": "node scripts/check-windows-path.cjs"
@@ -26,16 +25,6 @@
     "agents",
     "hooks",
     "scripts",
-    "sdk/src",
-    "!sdk/src/**/*.test.ts",
-    "!sdk/src/**/*.test.cjs",
-    "!sdk/src/test-fixtures/**",
-    "sdk/shared",
-    "sdk/prompts",
-    "sdk/dist",
-    "sdk/package.json",
-    "sdk/package-lock.json",
-    "sdk/tsconfig.json",
     "docs",
     "assets",
     "CHANGELOG.md",

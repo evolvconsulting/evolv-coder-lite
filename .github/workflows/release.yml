@@ -1,8 +1,10 @@
 name: release
 
 # Publishes src/ to npm as @evolvconsulting/evolv-coder-lite when a
-# version tag is pushed. Also publishes the standalone SDK package
-# @evolvconsulting/ecl-sdk from src/sdk/.
+# version tag is pushed. v1.2.0 (ADR-0174) retired the standalone SDK
+# package boundary; the tools binary now ships inside the main package
+# at evolv-coder-lite/bin/ecl-tools.cjs, so there is a single package to
+# publish.
 #
 # Trigger: `git tag v<X.Y.Z> && git push --tags`
 # The tag's <X.Y.Z> must match src/package.json's version exactly, or
@@ -43,8 +45,7 @@ jobs:
 
       - uses: actions/setup-node@v4
         with:
-          # Match upstream's NODE_VERSION (24). 22 still ICE'd the SDK tsc build
-          # despite engines: node>=22 — upstream's release pins to 24.
+          # Match upstream's NODE_VERSION (24) — upstream's release pins to 24.
           node-version: '24'
           registry-url: 'https://registry.npmjs.org'
 
@@ -81,37 +82,22 @@ jobs:
         working-directory: src
         run: npm ci || npm install --no-audit --no-fund
 
-      - name: Pre-install SDK dependencies
-        # `npm publish` propagates --dry-run to child npm calls, which
-        # breaks the `npm ci` inside prepublishOnly's build:sdk script
-        # (it runs in dry-run mode, prints "add X" lines but never
-        # actually populates node_modules, then tsc fails with
-        # "command not found"). Pre-installing here means the lifecycle
-        # script's `npm ci` is a no-op (deps already match lockfile),
-        # and tsc finds typescript in node_modules/.bin/.
-        working-directory: src/sdk
-        run: npm ci
-
       - name: Production audit (parent)
         working-directory: src
-        run: npm audit --omit=dev --audit-level=moderate
-
-      - name: Production audit (SDK)
-        working-directory: src/sdk
         run: npm audit --omit=dev --audit-level=moderate
 
       - name: Run unit test suite
         working-directory: src
         run: node scripts/run-tests.cjs --suite unit
 
-      - name: Build SDK (tsc) before tarball smoke
+      - name: Build hooks + package identity before tarball smoke
         # release-tarball-smoke.cjs packs the parent and exercises the installed
-        # ecl-sdk binary. The parent package files allowlist ships sdk/dist;
-        # the SDK build must produce dist/ before we pack so the smoke runs
-        # against a complete tarball. SDK tarball publish below also relies
-        # on this build via its own prepublishOnly, but we run it here once
-        # so both downstream steps benefit.
-        working-directory: src/sdk
+        # ecl-tools binary. The parent's hooks/ dir and package identity are
+        # populated by `npm run build` (generate:identity + build:hooks), NOT by
+        # the bake — and `npm pack` does NOT run prepublishOnly (npm 7+). So we
+        # must build here before the smoke packs, or the tarball ships without
+        # hooks/ and the smoke runs against an incomplete package.
+        working-directory: src
         run: npm run build
 
       - name: Release tarball smoke
@@ -121,11 +107,10 @@ jobs:
       - name: Pack-contents check (README links resolve)
         run: node scripts/check-pack-contents.mjs
 
-      # ── Publish gates ──────────────────────────────────────────────────
-      # Both packages publish atomically — if the parent ships and the SDK
-      # publish fails, the dist/sdk/* shim in the parent still works because
-      # the parent bundles sdk/dist itself. Standalone @evolvconsulting/ecl-sdk
-      # then becomes available on the next release attempt.
+      # ── Publish gate ───────────────────────────────────────────────────
+      # Single package: @evolvconsulting/evolv-coder-lite. v1.2.0 (ADR-0174)
+      # retired the standalone SDK package boundary — the tools binary now
+      # ships inside this package, so there is nothing else to publish.
 
       - name: Publish parent to npm (dry-run)
         if: inputs.dry_run == 'true'
@@ -134,23 +119,9 @@ jobs:
           NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
         run: npm publish --dry-run --access public
 
-      - name: Publish SDK to npm (dry-run)
-        if: inputs.dry_run == 'true'
-        working-directory: src/sdk
-        env:
-          NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
-        run: npm publish --dry-run --access public
-
       - name: Publish parent to npm
         if: github.event_name == 'push' || inputs.dry_run != 'true'
         working-directory: src
-        env:
-          NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
-        run: npm publish --access public
-
-      - name: Publish SDK to npm
-        if: github.event_name == 'push' || inputs.dry_run != 'true'
-        working-directory: src/sdk
         env:
           NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
         run: npm publish --access public

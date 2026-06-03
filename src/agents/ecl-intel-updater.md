@@ -59,11 +59,11 @@ The /ecl:map-codebase --query command has already confirmed that intel.enabled i
 
 <!-- Layout detection: only meaningful when analysing the eCL framework's own repo (#3290). -->
 
-**Runtime layout detection (eCL framework repo only):** If `package.json` `"name"` equals `"evolv-coder-lite"`, this project IS the eCL framework. In that case, detect the runtime root to choose canonical paths:
+**Runtime layout detection (eCL framework repo only):** If `package.json` `"name"` equals `"@evolvconsulting/evolv-coder-lite"`, this project IS the eCL framework. In that case, detect the runtime root to choose canonical paths:
 
 ```bash
 # Only run layout detection when analysing the eCL framework repo itself.
-if [[ "$(jq -r '.name // ""' package.json 2>/dev/null)" == "evolv-coder-lite" ]]; then
+if [[ "$(jq -r '.name // ""' package.json 2>/dev/null)" == "@evolvconsulting/evolv-coder-lite" ]]; then
   ls -d .kilo 2>/dev/null && echo "kilo" || (ls -d .claude/evolv-coder-lite 2>/dev/null && echo "claude") || echo "unknown"
 fi
 ```

@@ -66,20 +66,10 @@ If `--wave` is absent, preserve the current behavior of executing all incomplete
 Load all context in one call:
 
 ```bash
-# SDK resolution: prefer local ecl-tools.cjs, fall back to global ecl-sdk (#3668)
-ECL_TOOLS="${RUNTIME_DIR:-$(git rev-parse --show-toplevel 2>/dev/null || pwd)}/evolv-coder-lite/bin/ecl-tools.cjs"
-if [ -f "$ECL_TOOLS" ]; then
-  ECL_SDK="node $ECL_TOOLS"
-elif command -v ecl-sdk >/dev/null 2>&1; then
-  ECL_SDK="ecl-sdk"
-else
-  echo "ERROR: ecl-sdk not found on PATH and $ECL_TOOLS does not exist." >&2
-  echo "Run: npx evolv-coder-lite-cc@latest --claude --local" >&2
-  exit 1
-fi
-INIT=$($ECL_SDK query init.execute-phase "${PHASE_ARG}")
+_GSD_SHIM_NAME="ecl-tools.cjs"; _GSD_RUNTIME_ROOT="${RUNTIME_DIR:-$(git rev-parse --show-toplevel 2>/dev/null || pwd)}"; ECL_TOOLS="${_GSD_RUNTIME_ROOT}/evolv-coder-lite/bin/${_GSD_SHIM_NAME}"; if [ -f "$ECL_TOOLS" ]; then ecl_run() { node "$ECL_TOOLS" "$@"; }; elif [ -f "${_GSD_RUNTIME_ROOT}/.claude/evolv-coder-lite/bin/${_GSD_SHIM_NAME}" ]; then ECL_TOOLS="${_GSD_RUNTIME_ROOT}/.claude/evolv-coder-lite/bin/${_GSD_SHIM_NAME}"; ecl_run() { node "$ECL_TOOLS" "$@"; }; elif command -v ecl-tools >/dev/null 2>&1; then ECL_TOOLS="$(command -v ecl-tools)"; ecl_run() { "$ECL_TOOLS" "$@"; }; elif [ -f "$HOME/.claude/evolv-coder-lite/bin/${_GSD_SHIM_NAME}" ]; then ECL_TOOLS="$HOME/.claude/evolv-coder-lite/bin/${_GSD_SHIM_NAME}"; ecl_run() { node "$ECL_TOOLS" "$@"; }; else echo "ERROR: ecl-tools.cjs not found at $ECL_TOOLS and ecl-tools is not on PATH. Run: npx -y @evolvconsulting/evolv-coder-lite@latest --claude --local" >&2; exit 1; fi
+INIT=$(ecl_run query init.execute-phase "${PHASE_ARG}")
 if [[ "$INIT" == @file:* ]]; then INIT=$(cat "${INIT#@file:}"); fi
-AGENT_SKILLS=$($ECL_SDK query agent-skills ecl-executor)
+AGENT_SKILLS=$(ecl_run query agent-skills ecl-executor)
 ```
 
 Parse JSON for: `executor_model`, `verifier_model`, `commit_docs`, `parallelization`, `branching_strategy`, `branch_name`, `phase_found`, `phase_dir`, `phase_number`, `phase_name`, `phase_slug`, `plans`, `incomplete_plans`, `plan_count`, `incomplete_count`, `state_exists`, `roadmap_exists`, `phase_req_ids`, `response_language`.
@@ -91,17 +81,17 @@ Parse JSON for: `executor_model`, `verifier_model`, `commit_docs`, `parallelizat
 Read runtime/worktree config and fail closed before any executor dispatch:
 
 ```bash
-RUNTIME=$($ECL_SDK query config-get runtime --default claude 2>/dev/null || echo "claude")
-USE_WORKTREES=$($ECL_SDK query config-get workflow.use_worktrees 2>/dev/null || echo "true")
-EXECUTOR_STALL_INTERVAL_MINUTES=$($ECL_SDK query config-get executor.stall_detect_interval_minutes 2>/dev/null || echo "5")
-EXECUTOR_STALL_THRESHOLD_MINUTES=$($ECL_SDK query config-get executor.stall_threshold_minutes 2>/dev/null || echo "10")
+RUNTIME=$(ecl_run query config-get runtime --default claude 2>/dev/null || echo "claude")
+USE_WORKTREES=$(ecl_run query config-get workflow.use_worktrees 2>/dev/null || echo "true")
+EXECUTOR_STALL_INTERVAL_MINUTES=$(ecl_run query config-get executor.stall_detect_interval_minutes 2>/dev/null || echo "5")
+EXECUTOR_STALL_THRESHOLD_MINUTES=$(ecl_run query config-get executor.stall_threshold_minutes 2>/dev/null || echo "10")
 
 if [ "$RUNTIME" = "codex" ] && [ "$USE_WORKTREES" != "false" ]; then
   echo "FATAL: Codex execute-phase worktree isolation is unsupported. Set workflow.use_worktrees=false or use a runtime with Agent isolation=\"worktree\" support." >&2
   exit 1
 fi
 # Sweep orphaned locked worktrees from prior crashed sessions before spawning executors (#3707).
-[ "$USE_WORKTREES" != "false" ] && $ECL_SDK query worktree.reap-orphans 2>/dev/null || true
+[ "$USE_WORKTREES" != "false" ] && ecl_run query worktree.reap-orphans 2>/dev/null || true
 ```
 Codex maps subagents to `spawn_agent`, which has no direct Codex mapping for Claude Code's `isolation="worktree"` parameter. Failing closed prevents main-checkout edits while the workflow believes agents are isolated.
 
@@ -124,7 +114,7 @@ When `USE_WORKTREES` (project-level) is `false`, all executor agents run without
 Read context window size for adaptive prompt enrichment:
 
 ```bash
-CONTEXT_WINDOW=$($ECL_SDK query config-get context_window 2>/dev/null || echo "200000")
+CONTEXT_WINDOW=$(ecl_run query config-get context_window 2>/dev/null || echo "200000")
 ```
 
 When `CONTEXT_WINDOW >= 500000` (1M-class models), subagent prompts include richer context:
@@ -156,7 +146,7 @@ inline path for each plan.
 ```bash
 # REQUIRED: prevents stale auto-chain from previous --auto runs
 if [[ ! "$ARGUMENTS" =~ --auto ]]; then
-  $ECL_SDK query config-set workflow._auto_chain_active false || true
+  ecl_run query config-set workflow._auto_chain_active false || true
 fi
 ```
 
@@ -164,8 +154,8 @@ Resolve `MVP_MODE` once via the centralized `phase.mvp-mode` query verb (precede
 ```bash
 MVP_FLAG_ARG=""
 if [[ "$ARGUMENTS" =~ (^|[[:space:]])--mvp([[:space:]]|$) ]]; then MVP_FLAG_ARG="--cli-flag"; fi
-MVP_MODE=$($ECL_SDK query phase.mvp-mode "${PHASE_NUMBER}" $MVP_FLAG_ARG --pick active)
-TDD_MODE=$($ECL_SDK query config-get workflow.tdd_mode 2>/dev/null || echo "false")
+MVP_MODE=$(ecl_run query phase.mvp-mode "${PHASE_NUMBER}" $MVP_FLAG_ARG --pick active)
+TDD_MODE=$(ecl_run query config-get workflow.tdd_mode 2>/dev/null || echo "false")
 ```
 
 <step name="safe_resume_gate">
@@ -187,11 +177,11 @@ Offer these recovery options:
 **MVP+TDD gate.** Task-scoped enforcement runs inside plan execution (immediately before each implementation step), where `TASK_FILE`, `PLAN_ID`, and `TASK_ID` are defined. Keep the same predicate and RED-commit contract:
 ```bash
 if [ "$MVP_MODE" = "true" ] && [ "$TDD_MODE" = "true" ]; then
-  IS_BEHAVIOR_ADDING=$($ECL_SDK query task.is-behavior-adding "$TASK_FILE" --pick is_behavior_adding)
+  IS_BEHAVIOR_ADDING=$(ecl_run query task.is-behavior-adding "$TASK_FILE" --pick is_behavior_adding)
   if [ "$IS_BEHAVIOR_ADDING" = "true" ]; then
     RED_COMMIT=$(git log --oneline --grep="^test(${PHASE_NUMBER}-${PLAN_ID}):" -- "**/*.test.*" "**/*.spec.*" "tests/" | head -1)
     if [ -z "$RED_COMMIT" ]; then
-      $ECL_SDK query state.update last_gate_trip "${PLAN_ID}/${TASK_ID}" || true
+      ecl_run query state.update last_gate_trip "${PLAN_ID}/${TASK_ID}" || true
       echo "MVP+TDD GATE TRIPPED: missing RED commit for ${PLAN_ID}/${TASK_ID}"
       exit 1
     fi
@@ -317,7 +307,7 @@ Report: "Found {plan_count} plans in {phase_dir} ({incomplete_count} incomplete)
 
 **Update STATE.md for phase start:**
 ```bash
-$ECL_SDK query state.begin-phase --phase "${PHASE_NUMBER}" --name "${PHASE_NAME}" --plans "${PLAN_COUNT}"
+ecl_run query state.begin-phase --phase "${PHASE_NUMBER}" --name "${PHASE_NAME}" --plans "${PLAN_COUNT}"
 ```
 This updates Status, Last Activity, Current focus, Current Position, and plan counts in STATE.md so frontmatter and body text reflect the active phase immediately.
 </step>
@@ -326,7 +316,7 @@ This updates Status, Last Activity, Current focus, Current Position, and plan co
 Load plan inventory with wave grouping in one call:
 
 ```bash
-PLAN_INDEX=$($ECL_SDK query phase-plan-index "${PHASE_NUMBER}")
+PLAN_INDEX=$(ecl_run query phase-plan-index "${PHASE_NUMBER}")
 ```
 
 Parse JSON for: `phase`, `plans[]` (each with `id`, `wave`, `autonomous`, `objective`, `files_modified`, `task_count`, `has_summary`), `waves` (map of wave number → plan IDs), `incomplete`, `has_checkpoints`.
@@ -368,15 +358,15 @@ executor skips them.
    `workflow.cross_ai_execution` is `true`. Plans matching both conditions are marked for cross-AI.
 
 ```bash
-CROSS_AI_ENABLED=$($ECL_SDK query config-get workflow.cross_ai_execution 2>/dev/null || echo "false")
-CROSS_AI_CMD=$($ECL_SDK query config-get workflow.cross_ai_command 2>/dev/null || echo "")
-CROSS_AI_TIMEOUT=$($ECL_SDK query config-get workflow.cross_ai_timeout 2>/dev/null || echo "300")
+CROSS_AI_ENABLED=$(ecl_run query config-get workflow.cross_ai_execution 2>/dev/null || echo "false")
+CROSS_AI_CMD=$(ecl_run query config-get workflow.cross_ai_command 2>/dev/null || echo "")
+CROSS_AI_TIMEOUT=$(ecl_run query config-get workflow.cross_ai_timeout 2>/dev/null || echo "300")
 ```
 
 **If no plans are marked for cross-AI:** Skip to execute_waves.
 
 **If plans are marked but `cross_ai_command` is empty:** Error — tell user to set
-`workflow.cross_ai_command` via `ecl-sdk query config-set workflow.cross_ai_command "<command>"`.
+`workflow.cross_ai_command` via `ecl-tools.cjs query config-set workflow.cross_ai_command "<command>"`.
 
 **For each cross-AI plan (sequentially):**
 
@@ -621,18 +611,20 @@ increases monotonically across waves. `{status}` is `complete` (success),
        </execution_context>
 
        <files_to_read>
-       Read these files at execution start using the Read tool:
-       - {phase_dir}/{plan_file} (Plan)
-       - .planning/PROJECT.md (Project context — core value, requirements, evolution rules)
-       - .planning/STATE.md (State)
-       - .planning/config.json (Config, if exists)
+       Read these files at execution start using the Read tool.
+       First resolve repo root so every path is anchored:
+       \`PROJECT_ROOT=$(git rev-parse --show-toplevel 2>/dev/null)\`
+       - ${PROJECT_ROOT}/{phase_dir}/{plan_file} (Plan)
+       - ${PROJECT_ROOT}/.planning/PROJECT.md (Project context — core value, requirements, evolution rules)
+       - ${PROJECT_ROOT}/.planning/STATE.md (State)
+       - ${PROJECT_ROOT}/.planning/config.json (Config, if exists)
        ${CONTEXT_WINDOW >= 500000 ? `
-       - ${phase_dir}/*-CONTEXT.md (User decisions from discuss-phase — honors locked choices)
-       - ${phase_dir}/*-RESEARCH.md (Technical research — pitfalls and patterns to follow)
-       - ${prior_wave_summaries} (SUMMARY.md files from earlier waves in this phase — what was already built)
+       - ${PROJECT_ROOT}/${phase_dir}/*-CONTEXT.md (User decisions from discuss-phase — honors locked choices)
+       - ${PROJECT_ROOT}/${phase_dir}/*-RESEARCH.md (Technical research — pitfalls and patterns to follow)
+       - ${PROJECT_ROOT}/${prior_wave_summaries} (SUMMARY.md files from earlier waves in this phase — what was already built)
        ` : ''}
-       - ./CLAUDE.md (Project instructions, if exists — follow project-specific guidelines and coding conventions)
-       - .claude/skills/ or .agents/skills/ (Project skills, if either exists — list skills, read SKILL.md for each, follow relevant rules during implementation)
+       - ${PROJECT_ROOT}/CLAUDE.md (Project instructions, if exists — follow project-specific guidelines and coding conventions)
+       - ${PROJECT_ROOT}/.claude/skills/ or ${PROJECT_ROOT}/.agents/skills/ (Project skills, if either exists — list skills, read SKILL.md for each, follow relevant rules during implementation)
        </files_to_read>
 
        ${AGENT_SKILLS}
@@ -728,7 +720,7 @@ increases monotonically across waves. `{status}` is `complete` (success),
 
 5. **Post-wave hook validation (parallel mode only):** Hooks run on every executor commit by default (#2924); this post-wave run only fires when `workflow.worktree_skip_hooks=true` opted out of per-commit hooks:
    ```bash
-   SKIP_HOOKS=$($ECL_SDK query config-get workflow.worktree_skip_hooks 2>/dev/null || echo "false")
+   SKIP_HOOKS=$(ecl_run query config-get workflow.worktree_skip_hooks 2>/dev/null || echo "false")
    if [ "$SKIP_HOOKS" = "true" ]; then
      # Stash uncommitted changes under a named ref so we always pop (bare `git stash` strands them on hook/script failure). #3542: `refs/stash` is shared across worktrees, so this helper runs ONLY in the orchestrator's main checkout after all wave worktrees have been merged + removed; executors are forbidden from running any `git stash` subcommand (see `<destructive_git_prohibition>` in `agents/ecl-executor.md`).
      STASHED=false
@@ -771,7 +763,7 @@ increases monotonically across waves. `{status}` is `complete` (success),
    [ -z "${EXPECTED_BRANCH:-}" ] || [ "$ORCH_BRANCH" = "$EXPECTED_BRANCH" ] || { echo "FATAL: orchestrator on '$ORCH_BRANCH' but expected '$EXPECTED_BRANCH' before worktree cleanup — refusing to merge (#3174-class drift)" >&2; exit 1; }
 
    # Fail closed: SDK refusal (safety guard #3174/#3384) must surface — do not swallow exit 1.
-   $ECL_SDK query worktree.cleanup-wave --manifest "$WAVE_WORKTREE_MANIFEST" || exit 1
+   ecl_run query worktree.cleanup-wave --manifest "$WAVE_WORKTREE_MANIFEST" || exit 1
    ```
 
    **Cleanup-tail snippet (use after any wave whose merges did not flow through the templated path above):**
@@ -844,12 +836,12 @@ increases monotonically across waves. `{status}` is `complete` (success),
    if [ "${TEST_EXIT}" -eq 0 ]; then
      # Update ROADMAP plan progress for each completed plan in this wave
      for plan_id in {completed_plan_ids}; do
-       $ECL_SDK query roadmap.update-plan-progress "${PHASE_NUMBER}" "${plan_id}" "complete"
+       ecl_run query roadmap.update-plan-progress "${PHASE_NUMBER}" "${plan_id}" "complete"
      done
 
      # Only commit tracking files if they actually changed
      if ! git diff --quiet .planning/ROADMAP.md .planning/STATE.md 2>/dev/null; then
-       $ECL_SDK query commit "docs(phase-${PHASE_NUMBER}): update tracking after wave ${N}" --files .planning/ROADMAP.md .planning/STATE.md
+       ecl_run query commit "docs(phase-${PHASE_NUMBER}): update tracking after wave ${N}" --files .planning/ROADMAP.md .planning/STATE.md
      fi
    elif [ "${TEST_EXIT}" -eq 124 ]; then
      echo "⚠ Skipping tracking update — test suite timed out. Plans remain in-progress. Run tests manually to confirm."
@@ -925,7 +917,7 @@ increases monotonically across waves. `{status}` is `complete` (success),
 7. **Handle failures:**
    **Step 7.0 — classify before branching (#3095):**
    ```bash
-   CLASS_JSON=$($ECL_SDK query agent.classify-failure -- "$AGENT_RETURN_BODY")
+   CLASS_JSON=$(ecl_run query agent.classify-failure -- "$AGENT_RETURN_BODY")
    CLASS=$(echo "$CLASS_JSON" | jq -r '.class')
    SENTINEL=$(echo "$CLASS_JSON" | jq -r '.sentinel // empty')
    RETRY_AFTER=$(echo "$CLASS_JSON" | jq -r '.retryAfterSeconds // empty')
@@ -951,7 +943,7 @@ increases monotonically across waves. `{status}` is `complete` (success),
    Report failed plan and ask Continue/Stop; continuing may cascade into dependent plan failures.
 
 7b. **Pre-wave dependency check (waves 2+ only):**
-    Before wave N+1, run `ecl-sdk query verify.key-links {phase_dir}/{plan}-PLAN.md` for each upcoming plan.
+    Before wave N+1, run `ecl-tools.cjs query verify.key-links {phase_dir}/{plan}-PLAN.md` for each upcoming plan.
     If any PRIOR-wave artifact link fails, present:
     - `## Cross-Plan Wiring Gap` with plan/link/from/pattern rows
     - Options: investigate+fix before continue, or continue with cascade risk
@@ -964,7 +956,7 @@ Plans with `autonomous: false` require user interaction.
 **Auto-mode checkpoint handling:**
 Read auto-advance config (chain flag OR user preference — same boolean as `check.auto-mode`):
 ```bash
-AUTO_MODE=$($ECL_SDK query check auto-mode --pick active 2>/dev/null || echo "false")
+AUTO_MODE=$(ecl_run query check auto-mode --pick active 2>/dev/null || echo "false")
 ```
 
 When executor returns a checkpoint AND `AUTO_MODE` is `true`:
@@ -1025,7 +1017,7 @@ After all waves:
 
 **Security gate check:**
 ```bash
-SECURITY_CFG=$($ECL_SDK query config-get workflow.security_enforcement --raw 2>/dev/null || echo "true")
+SECURITY_CFG=$(ecl_run query config-get workflow.security_enforcement --raw 2>/dev/null || echo "true")
 SECURITY_FILE=$(ls "${PHASE_DIR}"/*-SECURITY.md 2>/dev/null | head -1)
 ```
 
@@ -1049,7 +1041,7 @@ If `SECURITY_CFG` is `true` AND SECURITY.md exists: check frontmatter `threats_o
 **Optional step — TDD collaborative review.**
 
 ```bash
-TDD_MODE=$($ECL_SDK query config-get workflow.tdd_mode 2>/dev/null || echo "false")
+TDD_MODE=$(ecl_run query config-get workflow.tdd_mode 2>/dev/null || echo "false")
 ```
 
 **Skip if `TDD_MODE` is `false`.**
@@ -1102,7 +1094,7 @@ The verifier agent (step `verify_phase_goal`) still checks TDD discipline in bot
 If `WAVE_FILTER` was used, re-run plan discovery after execution:
 
 ```bash
-POST_PLAN_INDEX=$($ECL_SDK query phase-plan-index "${PHASE_NUMBER}")
+POST_PLAN_INDEX=$(ecl_run query phase-plan-index "${PHASE_NUMBER}")
 ```
 
 Apply the same "incomplete" filtering rules as earlier:
@@ -1134,7 +1126,7 @@ Selected wave finished successfully. This phase still has incomplete plans, so p
 
 **Config gate:**
 ```bash
-CODE_REVIEW_ENABLED=$($ECL_SDK query config-get workflow.code_review 2>/dev/null || echo "true")
+CODE_REVIEW_ENABLED=$(ecl_run query config-get workflow.code_review 2>/dev/null || echo "true")
 ```
 
 If `CODE_REVIEW_ENABLED` is `"false"`: display "Code review skipped (workflow.code_review=false)" and proceed to next step.
@@ -1177,7 +1169,7 @@ fi
 
 **2. Find parent UAT file:**
 ```bash
-PARENT_INFO=$($ECL_SDK query find-phase "${PARENT_PHASE}" --raw)
+PARENT_INFO=$(ecl_run query find-phase "${PARENT_PHASE}" --raw)
 # Extract directory from PARENT_INFO JSON, then find UAT file in that directory
 ```
 
@@ -1208,7 +1200,7 @@ mv .planning/debug/{slug}.md .planning/debug/resolved/
 
 **6. Commit updated artifacts:**
 ```bash
-$ECL_SDK query commit "docs(phase-${PARENT_PHASE}): resolve UAT gaps and debug sessions after ${PHASE_NUMBER} gap closure" --files .planning/phases/*${PARENT_PHASE}*/*-UAT.md .planning/debug/resolved/*.md
+ecl_run query commit "docs(phase-${PARENT_PHASE}): resolve UAT gaps and debug sessions after ${PHASE_NUMBER} gap closure" --files .planning/phases/*${PARENT_PHASE}*/*-UAT.md .planning/debug/resolved/*.md
 ```
 </step>
 
@@ -1236,7 +1228,7 @@ Collect all unique test file paths into `REGRESSION_FILES`.
 
 ```bash
 # Resolve test command: project config > Makefile > language sniff
-REG_TEST_CMD=$($ECL_SDK query config-get workflow.test_command --default "" 2>/dev/null || true)
+REG_TEST_CMD=$(ecl_run query config-get workflow.test_command --default "" 2>/dev/null || true)
 if [ -z "$REG_TEST_CMD" ]; then
   if [ -f "Makefile" ] && grep -q "^test:" Makefile; then
     REG_TEST_CMD="make test"
@@ -1292,7 +1284,7 @@ build/types pass because TypeScript types come from config, not the live databas
 **Run after execution completes but BEFORE verification marks success.**
 
 ```bash
-SCHEMA_DRIFT=$($ECL_SDK query verify.schema-drift "${PHASE_NUMBER}" 2>/dev/null)
+SCHEMA_DRIFT=$(ecl_run query verify.schema-drift "${PHASE_NUMBER}" 2>/dev/null)
 ```
 
 Parse JSON result for: `drift_detected`, `blocking`, `schema_files`, `orms`, `unpushed_orms`, `message`.
@@ -1366,7 +1358,7 @@ spawn template, and the two `workflow.drift_*` config keys.
 Verify phase achieved its GOAL, not just completed tasks.
 
 ```bash
-VERIFIER_SKILLS=$($ECL_SDK query agent-skills ecl-verifier)
+VERIFIER_SKILLS=$(ecl_run query agent-skills ecl-verifier)
 ```
 
 ```
@@ -1451,7 +1443,7 @@ blocked: 0
 
 Commit the file:
 ```bash
-$ECL_SDK query commit "test({phase_num}): persist human verification items as UAT" --files "{phase_dir}/{phase_num}-HUMAN-UAT.md"
+ecl_run query commit "test({phase_num}): persist human verification items as UAT" --files "{phase_dir}/{phase_num}-HUMAN-UAT.md"
 ```
 
 **Step B: Present to user:**
@@ -1500,7 +1492,7 @@ Gap closure cycle: `/ecl:plan-phase {X} --gaps ${ECL_WS}` reads VERIFICATION.md 
 **Mark phase complete and update all tracking files:**
 
 ```bash
-COMPLETION=$($ECL_SDK query phase.complete "${PHASE_NUMBER}")
+COMPLETION=$(ecl_run query phase.complete "${PHASE_NUMBER}")
 ```
 
 The CLI handles:
@@ -1523,7 +1515,7 @@ These items are tracked and will appear in `/ecl:progress` and `/ecl:audit-uat`.
 ```
 
 ```bash
-$ECL_SDK query commit "docs(phase-{X}): complete phase execution" --files .planning/ROADMAP.md .planning/STATE.md .planning/REQUIREMENTS.md {phase_dir}/*-VERIFICATION.md
+ecl_run query commit "docs(phase-{X}): complete phase execution" --files .planning/ROADMAP.md .planning/STATE.md .planning/REQUIREMENTS.md {phase_dir}/*-VERIFICATION.md
 ```
 </step>
 
@@ -1535,7 +1527,7 @@ entries from the completed phase to the global learnings store at `~/.ecl/knowle
 
 **Check config gate:**
 ```bash
-GL_ENABLED=$($ECL_SDK query config-get features.global_learnings --raw 2>/dev/null || echo "false")
+GL_ENABLED=$(ecl_run query config-get features.global_learnings --raw 2>/dev/null || echo "false")
 ```
 
 **If `GL_ENABLED` is not `true`:** Skip this step entirely (feature disabled by default).
@@ -1545,7 +1537,7 @@ GL_ENABLED=$($ECL_SDK query config-get features.global_learnings --raw 2>/dev/nu
 1. Check if LEARNINGS.md exists in the phase directory (use the `phase_dir` value from init context)
 2. If found, copy to global store:
 ```bash
-$ECL_SDK query learnings.copy 2>/dev/null || echo "⚠ Learnings copy failed — continuing"
+ecl_run query learnings.copy 2>/dev/null || echo "⚠ Learnings copy failed — continuing"
 ```
 Copy failure must NOT block phase completion.
 </step>
@@ -1573,7 +1565,7 @@ for TODO_FILE in "$PENDING_DIR"/*.md; do
 done
 
 if [ ${#CLOSED[@]} -gt 0 ]; then
-  $ECL_SDK query commit "docs(phase-${PHASE_NUMBER}): auto-close ${#CLOSED[@]} todo(s) resolved by this phase" --files .planning/todos/completed/ .planning/STATE.md|| true
+  ecl_run query commit "docs(phase-${PHASE_NUMBER}): auto-close ${#CLOSED[@]} todo(s) resolved by this phase" --files .planning/todos/completed/ .planning/STATE.md|| true
   echo "◆ Closed ${#CLOSED[@]} todo(s) resolved by Phase ${PHASE_NUMBER}:"
   for f in "${CLOSED[@]}"; do echo "  ✓ $f"; done
 fi
@@ -1598,7 +1590,7 @@ PROJECT.md falls behind silently over multiple phases.
 5. Commit the change:
 
 ```bash
-$ECL_SDK query commit "docs(phase-{X}): evolve PROJECT.md after phase completion" --files .planning/PROJECT.md
+ecl_run query commit "docs(phase-{X}): evolve PROJECT.md after phase completion" --files .planning/PROJECT.md
 ```
 
 **Skip this step if** `.planning/PROJECT.md` does not exist.
@@ -1636,7 +1628,7 @@ STOP. Do not proceed to auto-advance or transition.
 1. Parse `--auto` flag from $ARGUMENTS
 2. Read consolidated auto-mode (`active` = chain flag OR user preference; chain flag already synced in init step):
    ```bash
-   AUTO_MODE=$($ECL_SDK query check auto-mode --pick active 2>/dev/null || echo "false")
+   AUTO_MODE=$(ecl_run query check auto-mode --pick active 2>/dev/null || echo "false")
    ```
 
 **If `--auto` flag present OR `AUTO_MODE` is true (AND verification passed with no gaps):**
@@ -1702,7 +1694,7 @@ For 1M+ context models, consider:
 </context_efficiency>
 
 <failure_handling>
-- **Quota / rate-limit (any runtime — #3095):** Agent return body contains a sentinel like `usage limit`, `rate limit`, `429`, `too many requests`, `RESOURCE_EXHAUSTED`, `usage_limit_reached`. Route via `ecl-sdk query agent.classify-failure` → `class: "quota-exceeded"`. Do not offer retry-now; the right action is wait-for-reset and resume.
+- **Quota / rate-limit (any runtime — #3095):** Agent return body contains a sentinel like `usage limit`, `rate limit`, `429`, `too many requests`, `RESOURCE_EXHAUSTED`, `usage_limit_reached`. Route via `ecl-tools.cjs query agent.classify-failure` → `class: "quota-exceeded"`. Do not offer retry-now; the right action is wait-for-reset and resume.
 - **classifyHandoffIfNeeded false failure:** Agent reports "failed" but error is `classifyHandoffIfNeeded is not defined` → Claude Code bug, not eCL. Spot-check (SUMMARY exists, commits present) → if pass, treat as success
 - **Agent fails mid-plan:** Missing SUMMARY.md → report, ask user how to proceed
 - **Dependency chain breaks:** Wave 1 fails → Wave 2 dependents likely fail → user chooses attempt or skip

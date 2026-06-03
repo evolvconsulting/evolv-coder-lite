@@ -6,8 +6,6 @@ const os = require('os');
 const readline = require('readline');
 const crypto = require('crypto');
 const {
-  buildWindowsShimTriple: buildWindowsShimTripleFromProjection,
-  formatSdkPathDiagnostic: formatSdkPathDiagnosticFromProjection,
   isManagedHookBasename,
   isManagedHookCommand,
   projectLocalHookPrefix,
@@ -28,6 +26,9 @@ const {
   transformContentToHyphen,
   readCmdNames: readGsdCommandNames,
 } = require(path.join(__dirname, '..', 'scripts', 'fix-slash-commands.cjs'));
+const {
+  resolveAntigravityGlobalDir,
+} = require('../evolv-coder-lite/bin/lib/runtime-homes.cjs');
 
 /**
  * Runtimes that register hyphen-form `name:` per #2808 AND copy agent bodies
@@ -147,7 +148,60 @@ const { MODEL_PROFILES: ECL_MODEL_PROFILES } = require(path.join(_gsdLibDir, 'mo
 const {
   RUNTIME_PROFILE_MAP: ECL_RUNTIME_PROFILE_MAP,
   resolveTierEntry: gsdResolveTierEntry,
+  EFFORT_SET: ECL_EFFORT_SET,
 } = require(path.join(_gsdLibDir, 'core.cjs'));
+
+// #443 — model-catalog and config-defaults.manifest.json exports needed only
+// by effort-resolution code paths (resolveInstallTimeEffort /
+// generateCodexAgentToml / Claude .md effort injection).  Loaded lazily the
+// first time they are needed so that requiring install.js in test contexts that
+// never trigger an install does NOT produce module-load-time side effects (the
+// manifest read + hard throw) that could alter subprocess exit codes or stderr.
+let _gsdEffortCatalogCache = null;
+function _getGsdEffortCatalog() {
+  if (_gsdEffortCatalogCache) return _gsdEffortCatalogCache;
+
+  const { AGENT_DEFAULT_TIERS, renderEffortForRuntime } = require(path.join(_gsdLibDir, 'model-catalog.cjs'));
+
+  const manifestPath = path.join(
+    __dirname,
+    '..',
+    'evolv-coder-lite',
+    'bin',
+    'shared',
+    'config-defaults.manifest.json'
+  );
+  let manifestData;
+  try {
+    manifestData = JSON.parse(fs.readFileSync(manifestPath, 'utf-8'));
+  } catch (_err) {
+    // Fail loudly — a missing manifest is a broken install, not a soft degradation.
+    throw new Error(
+      `ecl install: cannot load config-defaults.manifest.json at ${manifestPath}: ${_err.message}`
+    );
+  }
+
+  const tierDefaults =
+    (manifestData.effort &&
+      manifestData.effort.routing_tier_defaults &&
+      typeof manifestData.effort.routing_tier_defaults === 'object' &&
+      !Array.isArray(manifestData.effort.routing_tier_defaults))
+      ? manifestData.effort.routing_tier_defaults
+      : { light: 'low', standard: 'high', heavy: 'xhigh' }; // guard: unreachable if manifest is valid
+
+  const effortDefault =
+    (manifestData.effort && typeof manifestData.effort.default === 'string')
+      ? manifestData.effort.default
+      : 'high'; // guard: unreachable if manifest is valid
+
+  _gsdEffortCatalogCache = {
+    AGENT_DEFAULT_TIERS,
+    renderEffortForRuntime,
+    EFFORT_MANIFEST_TIER_DEFAULTS: tierDefaults,
+    EFFORT_MANIFEST_DEFAULT: effortDefault,
+  };
+  return _gsdEffortCatalogCache;
+}
 
 const {
   MINIMAL_SKILL_ALLOWLIST,
@@ -217,16 +271,9 @@ const _profileArgRaw = (() => {
 // configDir is resolved) and may override 'full' — see writeActiveProfile call below.
 const _profileIsCore = _profileArgRaw === 'core';
 const _requestedProfileName = (hasMinimal || _profileIsCore) ? 'core' : (_profileArgRaw || null);
-const hasSdk = args.includes('--sdk');
-const hasNoSdk = args.includes('--no-sdk');
 
 if (hasMinimal && _profileArgRaw) {
   console.error(`  ${yellow}Cannot specify both --minimal/--core-only and --profile${reset}`);
-  process.exit(1);
-}
-
-if (hasSdk && hasNoSdk) {
-  console.error(`  ${yellow}Cannot specify both --sdk and --no-sdk${reset}`);
   process.exit(1);
 }
 
@@ -282,7 +329,7 @@ Please install a Linux-native Node.js inside WSL:
   curl -fsSL https://fnm.vercel.app/install | bash
   fnm install --lts
 
-Then re-run: npx @evolvconsulting/evolv-coder-lite@latest
+Then re-run: npx ${pkg.name}@latest
 `);
     process.exit(1);
   }
@@ -330,6 +377,14 @@ function getConfigDirFromHome(runtime, isGlobal) {
   if (runtime === 'codex') return "'.codex'";
   if (runtime === 'antigravity') {
     if (!isGlobal) return "'.agent'";
+    const antigravityDir = resolveAntigravityGlobalDir();
+    const rel = path.relative(os.homedir(), antigravityDir);
+    const segments = rel.split(path.sep).filter(Boolean);
+    if (segments.length > 0 && !rel.startsWith('..') && !path.isAbsolute(rel)) {
+      return segments.map((seg) => `'${seg}'`).join(', ');
+    }
+    // If resolution points outside HOME (e.g. via env override), keep the
+    // stable legacy template so generated path.join() calls remain valid.
     return "'.gemini', 'antigravity'";
   }
   if (runtime === 'cursor') return "'.cursor'";
@@ -449,14 +504,12 @@ function getGlobalDir(runtime, explicitDir = null) {
   }
 
   if (runtime === 'antigravity') {
-    // Antigravity: --config-dir > ANTIGRAVITY_CONFIG_DIR > ~/.gemini/antigravity
+    // Antigravity: --config-dir > ANTIGRAVITY_CONFIG_DIR > auto-detected
+    // ~/.gemini/{antigravity,antigravity-ide,antigravity-cli}
     if (explicitDir) {
       return expandTilde(explicitDir);
     }
-    if (process.env.ANTIGRAVITY_CONFIG_DIR) {
-      return expandTilde(process.env.ANTIGRAVITY_CONFIG_DIR);
-    }
-    return path.join(os.homedir(), '.gemini', 'antigravity');
+    return resolveAntigravityGlobalDir();
   }
 
   if (runtime === 'cursor') {
@@ -570,29 +623,48 @@ const banner = '\n' +
   '  A meta-prompting, context engineering and spec-driven\n' +
   '  development system for Claude Code, OpenCode, Gemini, Kilo, Codex, Copilot, Antigravity, Cursor, Windsurf, Augment, Trae, Qwen Code, Hermes Agent, Cline and CodeBuddy.\n';
 
-// Parse --config-dir argument
-function parseConfigDirArg() {
-  const configDirIndex = args.findIndex(arg => arg === '--config-dir' || arg === '-c');
+// Pure seam: parse --config-dir / -c from an arbitrary args array.
+// Returns the path string, '' for an empty equals-form value, or null when the
+// flag is absent.  Space-separated form returns null (not an error string) when
+// the next token is missing or flag-looking — callers that want process.exit
+// behaviour must check after calling this function.
+// Exported via module.exports so unit tests can exercise it directly.
+function parseConfigDirFromArgs(argsArray) {
+  const configDirIndex = argsArray.findIndex(arg => arg === '--config-dir' || arg === '-c');
   if (configDirIndex !== -1) {
-    const nextArg = args[configDirIndex + 1];
-    // Error if --config-dir is provided without a value or next arg is another flag
+    const nextArg = argsArray[configDirIndex + 1];
+    // No value / next token is a flag → signal "missing" by returning null
     if (!nextArg || nextArg.startsWith('-')) {
-      console.error(`  ${yellow}--config-dir requires a path argument${reset}`);
-      process.exit(1);
+      return null;
     }
     return nextArg;
   }
-  // Also handle --config-dir=value format
-  const configDirArg = args.find(arg => arg.startsWith('--config-dir=') || arg.startsWith('-c='));
+  // Handle --config-dir=value and -c=value format.
+  // Use indexOf('=') + 1 so that = signs inside the path value are preserved.
+  const configDirArg = argsArray.find(arg => arg.startsWith('--config-dir=') || arg.startsWith('-c='));
   if (configDirArg) {
-    const value = configDirArg.split('=')[1];
-    if (!value) {
-      console.error(`  ${yellow}--config-dir requires a non-empty path${reset}`);
-      process.exit(1);
-    }
-    return value;
+    return configDirArg.slice(configDirArg.indexOf('=') + 1);
   }
   return null;
+}
+
+// Parse --config-dir argument
+function parseConfigDirArg() {
+  const result = parseConfigDirFromArgs(args);
+  if (result === null) {
+    // Check if the space-separated form was present but missing a value
+    const configDirIndex = args.findIndex(arg => arg === '--config-dir' || arg === '-c');
+    if (configDirIndex !== -1) {
+      console.error(`  ${yellow}--config-dir requires a path argument${reset}`);
+      process.exit(1);
+    }
+    return null;
+  }
+  if (result === '') {
+    console.error(`  ${yellow}--config-dir requires a non-empty path${reset}`);
+    process.exit(1);
+  }
+  return result;
 }
 const explicitConfigDir = parseConfigDirArg();
 const hasHelp = args.includes('--help') || args.includes('-h');
@@ -606,7 +678,7 @@ if (hasUninstall) {
 
 // Show help if requested
 if (hasHelp) {
-  console.log(`  ${yellow}Usage:${reset} npx @evolvconsulting/evolv-coder-lite [options]\n\n  ${yellow}Options:${reset}\n    ${cyan}-g, --global${reset}              Install globally (to config directory)\n    ${cyan}-l, --local${reset}               Install locally (to current directory)\n    ${cyan}--claude${reset}                  Install for Claude Code only\n    ${cyan}--opencode${reset}                Install for OpenCode only\n    ${cyan}--gemini${reset}                  Install for Gemini only\n    ${cyan}--kilo${reset}                    Install for Kilo only\n    ${cyan}--codex${reset}                   Install for Codex only\n    ${cyan}--copilot${reset}                 Install for Copilot only\n    ${cyan}--antigravity${reset}             Install for Antigravity only\n    ${cyan}--cursor${reset}                  Install for Cursor only\n    ${cyan}--windsurf${reset}                Install for Windsurf only\n    ${cyan}--augment${reset}                 Install for Augment only\n    ${cyan}--trae${reset}                    Install for Trae only\n    ${cyan}--qwen${reset}                    Install for Qwen Code only\n    ${cyan}--hermes${reset}                  Install for Hermes Agent only\n    ${cyan}--cline${reset}                   Install for Cline only\n    ${cyan}--codebuddy${reset}              Install for CodeBuddy only\n    ${cyan}--all${reset}                     Install for all runtimes\n    ${cyan}-u, --uninstall${reset}           Uninstall eCL (remove all eCL files)\n    ${cyan}-c, --config-dir <path>${reset}   Specify custom config directory\n    ${cyan}-h, --help${reset}                Show this help message\n    ${cyan}--force-statusline${reset}        Replace existing statusline config\n    ${cyan}--portable-hooks${reset}          Emit \$HOME-relative hook paths in settings.json\n                              (for WSL/Docker bind-mount setups; also ECL_PORTABLE_HOOKS=1)\n    ${cyan}--profile=<name>${reset}         Install a named skill profile. Profiles:\n                              core     — 7 main-loop skills incl. phase (~130 desc tokens)\n                              standard — ~13 skills incl. phase, review, config (~700)\n                              full     — all 66 skills (default)\n                              Composable: --profile=core,audit installs union of closures.\n                              Profile is persisted and respected by \`ecl update\`.\n    ${cyan}--minimal${reset}                 Alias for --profile=core (back-compat).\n                              Cuts cold-start overhead from ~12k tokens to ~700.\n                              Alias: --core-only.\n\n  ${yellow}Examples:${reset}\n    ${dim}# Interactive install (prompts for runtime and location)${reset}\n    npx @evolvconsulting/evolv-coder-lite\n\n    ${dim}# Install for Claude Code globally${reset}\n    npx @evolvconsulting/evolv-coder-lite --claude --global\n\n    ${dim}# Install for Gemini globally${reset}\n    npx @evolvconsulting/evolv-coder-lite --gemini --global\n\n    ${dim}# Install for Kilo globally${reset}\n    npx @evolvconsulting/evolv-coder-lite --kilo --global\n\n    ${dim}# Install for Codex globally${reset}\n    npx @evolvconsulting/evolv-coder-lite --codex --global\n\n    ${dim}# Install for Copilot globally${reset}\n    npx @evolvconsulting/evolv-coder-lite --copilot --global\n\n    ${dim}# Install for Copilot locally${reset}\n    npx @evolvconsulting/evolv-coder-lite --copilot --local\n\n    ${dim}# Install for Antigravity globally${reset}\n    npx @evolvconsulting/evolv-coder-lite --antigravity --global\n\n    ${dim}# Install for Antigravity locally${reset}\n    npx @evolvconsulting/evolv-coder-lite --antigravity --local\n\n    ${dim}# Install for Cursor globally${reset}\n    npx @evolvconsulting/evolv-coder-lite --cursor --global\n\n    ${dim}# Install for Cursor locally${reset}\n    npx @evolvconsulting/evolv-coder-lite --cursor --local\n\n    ${dim}# Install for Windsurf globally${reset}\n    npx @evolvconsulting/evolv-coder-lite --windsurf --global\n\n    ${dim}# Install for Windsurf locally${reset}\n    npx @evolvconsulting/evolv-coder-lite --windsurf --local\n\n    ${dim}# Install for Augment globally${reset}\n    npx @evolvconsulting/evolv-coder-lite --augment --global\n\n    ${dim}# Install for Augment locally${reset}\n    npx @evolvconsulting/evolv-coder-lite --augment --local\n\n    ${dim}# Install for Trae globally${reset}\n    npx @evolvconsulting/evolv-coder-lite --trae --global\n\n    ${dim}# Install for Trae locally${reset}\n    npx @evolvconsulting/evolv-coder-lite --trae --local\n\n    ${dim}# Install for Hermes Agent globally${reset}\n    npx @evolvconsulting/evolv-coder-lite --hermes --global\n\n    ${dim}# Install for Hermes Agent locally${reset}\n    npx @evolvconsulting/evolv-coder-lite --hermes --local\n\n    ${dim}# Install for Cline locally${reset}\n    npx @evolvconsulting/evolv-coder-lite --cline --local\n\n    ${dim}# Install for CodeBuddy globally${reset}\n    npx @evolvconsulting/evolv-coder-lite --codebuddy --global\n\n    ${dim}# Install for CodeBuddy locally${reset}\n    npx @evolvconsulting/evolv-coder-lite --codebuddy --local\n\n    ${dim}# Install for all runtimes globally${reset}\n    npx @evolvconsulting/evolv-coder-lite --all --global\n\n    ${dim}# Install to custom config directory${reset}\n    npx @evolvconsulting/evolv-coder-lite --kilo --global --config-dir ~/.kilo-work\n\n    ${dim}# Install to current project only${reset}\n    npx @evolvconsulting/evolv-coder-lite --claude --local\n\n    ${dim}# Uninstall eCL from Cursor globally${reset}\n    npx @evolvconsulting/evolv-coder-lite --cursor --global --uninstall\n\n  ${yellow}Notes:${reset}\n    The --config-dir option is useful when you have multiple configurations.\n    It takes priority over CLAUDE_CONFIG_DIR / OPENCODE_CONFIG_DIR / GEMINI_CONFIG_DIR / KILO_CONFIG_DIR / CODEX_HOME / COPILOT_CONFIG_DIR / ANTIGRAVITY_CONFIG_DIR / CURSOR_CONFIG_DIR / WINDSURF_CONFIG_DIR / AUGMENT_CONFIG_DIR / TRAE_CONFIG_DIR / QWEN_CONFIG_DIR / HERMES_HOME / CLINE_CONFIG_DIR / CODEBUDDY_CONFIG_DIR environment variables.\n`);
+  console.log(`  ${yellow}Usage:${reset} npx ${pkg.name} [options]\n\n  ${yellow}Options:${reset}\n    ${cyan}-g, --global${reset}              Install globally (to config directory)\n    ${cyan}-l, --local${reset}               Install locally (to current directory)\n    ${cyan}--claude${reset}                  Install for Claude Code only\n    ${cyan}--opencode${reset}                Install for OpenCode only\n    ${cyan}--gemini${reset}                  Install for Gemini only\n    ${cyan}--kilo${reset}                    Install for Kilo only\n    ${cyan}--codex${reset}                   Install for Codex only\n    ${cyan}--copilot${reset}                 Install for Copilot only\n    ${cyan}--antigravity${reset}             Install for Antigravity only\n    ${cyan}--cursor${reset}                  Install for Cursor only\n    ${cyan}--windsurf${reset}                Install for Windsurf only\n    ${cyan}--augment${reset}                 Install for Augment only\n    ${cyan}--trae${reset}                    Install for Trae only\n    ${cyan}--qwen${reset}                    Install for Qwen Code only\n    ${cyan}--hermes${reset}                  Install for Hermes Agent only\n    ${cyan}--cline${reset}                   Install for Cline only\n    ${cyan}--codebuddy${reset}              Install for CodeBuddy only\n    ${cyan}--all${reset}                     Install for all runtimes\n    ${cyan}-u, --uninstall${reset}           Uninstall eCL (remove all eCL files)\n    ${cyan}-c, --config-dir <path>${reset}   Specify custom config directory\n    ${cyan}-h, --help${reset}                Show this help message\n    ${cyan}--force-statusline${reset}        Replace existing statusline config\n    ${cyan}--portable-hooks${reset}          Emit \$HOME-relative hook paths in settings.json\n                              (for WSL/Docker bind-mount setups; also ECL_PORTABLE_HOOKS=1)\n    ${cyan}--profile=<name>${reset}         Install a named skill profile. Profiles:\n                              core     — 7 main-loop skills incl. phase (~130 desc tokens)\n                              standard — ~13 skills incl. phase, review, config (~700)\n                              full     — all 66 skills (default)\n                              Composable: --profile=core,audit installs union of closures.\n                              Profile is persisted and respected by \`ecl update\`.\n    ${cyan}--minimal${reset}                 Alias for --profile=core (back-compat).\n                              Cuts cold-start overhead from ~12k tokens to ~700.\n                              Alias: --core-only.\n\n  ${yellow}Examples:${reset}\n    ${dim}# Interactive install (prompts for runtime and location)${reset}\n    npx ${pkg.name}\n\n    ${dim}# Install for Claude Code globally${reset}\n    npx ${pkg.name} --claude --global\n\n    ${dim}# Install for Gemini globally${reset}\n    npx ${pkg.name} --gemini --global\n\n    ${dim}# Install for Kilo globally${reset}\n    npx ${pkg.name} --kilo --global\n\n    ${dim}# Install for Codex globally${reset}\n    npx ${pkg.name} --codex --global\n\n    ${dim}# Install for Copilot globally${reset}\n    npx ${pkg.name} --copilot --global\n\n    ${dim}# Install for Copilot locally${reset}\n    npx ${pkg.name} --copilot --local\n\n    ${dim}# Install for Antigravity globally${reset}\n    npx ${pkg.name} --antigravity --global\n\n    ${dim}# Install for Antigravity locally${reset}\n    npx ${pkg.name} --antigravity --local\n\n    ${dim}# Install for Cursor globally${reset}\n    npx ${pkg.name} --cursor --global\n\n    ${dim}# Install for Cursor locally${reset}\n    npx ${pkg.name} --cursor --local\n\n    ${dim}# Install for Windsurf globally${reset}\n    npx ${pkg.name} --windsurf --global\n\n    ${dim}# Install for Windsurf locally${reset}\n    npx ${pkg.name} --windsurf --local\n\n    ${dim}# Install for Augment globally${reset}\n    npx ${pkg.name} --augment --global\n\n    ${dim}# Install for Augment locally${reset}\n    npx ${pkg.name} --augment --local\n\n    ${dim}# Install for Trae globally${reset}\n    npx ${pkg.name} --trae --global\n\n    ${dim}# Install for Trae locally${reset}\n    npx ${pkg.name} --trae --local\n\n    ${dim}# Install for Hermes Agent globally${reset}\n    npx ${pkg.name} --hermes --global\n\n    ${dim}# Install for Hermes Agent locally${reset}\n    npx ${pkg.name} --hermes --local\n\n    ${dim}# Install for Cline locally${reset}\n    npx ${pkg.name} --cline --local\n\n    ${dim}# Install for CodeBuddy globally${reset}\n    npx ${pkg.name} --codebuddy --global\n\n    ${dim}# Install for CodeBuddy locally${reset}\n    npx ${pkg.name} --codebuddy --local\n\n    ${dim}# Install for all runtimes globally${reset}\n    npx ${pkg.name} --all --global\n\n    ${dim}# Install to custom config directory${reset}\n    npx ${pkg.name} --kilo --global --config-dir ~/.kilo-work\n\n    ${dim}# Install to current project only${reset}\n    npx ${pkg.name} --claude --local\n\n    ${dim}# Uninstall eCL from Cursor globally${reset}\n    npx ${pkg.name} --cursor --global --uninstall\n\n  ${yellow}Notes:${reset}\n    The --config-dir option is useful when you have multiple configurations.\n    It takes priority over CLAUDE_CONFIG_DIR / OPENCODE_CONFIG_DIR / GEMINI_CONFIG_DIR / KILO_CONFIG_DIR / CODEX_HOME / COPILOT_CONFIG_DIR / ANTIGRAVITY_CONFIG_DIR / CURSOR_CONFIG_DIR / WINDSURF_CONFIG_DIR / AUGMENT_CONFIG_DIR / TRAE_CONFIG_DIR / QWEN_CONFIG_DIR / HERMES_HOME / CLINE_CONFIG_DIR / CODEBUDDY_CONFIG_DIR environment variables.\n`);
   process.exit(0);
 }
 
@@ -1002,8 +1074,8 @@ function reconcileCodexHooksJsonSessionStart(targetDir, opts = {}) {
  * (a Windows PE binary) via execvp(), which fails with ENOEXEC on Windows PE
  * binaries that the MSYS layer doesn't know how to fork-exec natively.
  *
- * Fix: write a .cmd shim (same IR pattern as buildWindowsShimTriple for
- * ecl-sdk.cmd) whose content is `@ECHO OFF / @SETLOCAL / @"node.exe" "script.js" %*`.
+ * Fix: write a .cmd shim (using the same CRLF .cmd shim pattern) whose
+ * content is `@ECHO OFF / @SETLOCAL / @"node.exe" "script.js" %*`.
  * cmd.exe executes
  * .cmd natively via CreateProcess — no POSIX exec layer, no MSYS shebang
  * walk, no PE binary fork-exec failure.
@@ -1049,9 +1121,8 @@ function buildCodexHookWindowsShimIR(scriptAbsPath, absoluteRunnerToken) {
     eol: { cmd: '\r\n' },            // CRLF — canonical for cmd.exe .cmd files
     passthroughArgs: true,           // the shim forwards all args via %*
     render: {
-      // Mirror buildWindowsShimTriple's CRLF line endings for strict
-      // cmd.exe compatibility (LF-only .cmd files work in modern Windows but
-      // CRLF is canonical and what the existing ecl-sdk.cmd triple emits).
+      // Use CRLF line endings for strict cmd.exe compatibility (LF-only
+      // .cmd files work in modern Windows but CRLF is the canonical format).
       cmd: () => `@ECHO OFF\r\n@SETLOCAL\r\n@${runnerQuoted} ${scriptQuoted} %*\r\n`,
     },
   };
@@ -1143,6 +1214,25 @@ function removeCodexHooksJsonSessionStart(targetDir) {
  */
 function buildHookCommand(configDir, hookName, opts) {
   if (!opts) opts = {};
+  const platform = opts.platform || process.platform;
+  const runtime = opts.runtime || 'generic';
+  const isShellHook = hookName.endsWith('.sh');
+
+  // #166: Claude Code executes these hook commands inside a bash context on
+  // Windows, so wrapping `.sh` hooks with an explicit `bash.exe` path can
+  // trigger `bash.exe: ... cannot execute binary file`. Emit only the quoted
+  // script path for Claude on Windows.
+  if (platform === 'win32' && runtime === 'claude' && isShellHook) {
+    if (opts.portableHooks) {
+      const portableBaseDir = projectPortableHookBaseDir({
+        configDir,
+        homeDir: os.homedir(),
+      });
+      return JSON.stringify(`${portableBaseDir}/hooks/${hookName}`);
+    }
+    return JSON.stringify(configDir.replace(/\\/g, '/') + '/hooks/' + hookName);
+  }
+
   // POSIX .sh hooks run under PATH-resolved `bash`: POSIX guarantees /bin/sh
   // but not /bin/bash, and distros like NixOS do not ship /bin/bash by default.
   // Windows Codex launches hooks from PowerShell/cmd environments where bare
@@ -1152,7 +1242,7 @@ function buildHookCommand(configDir, hookName, opts) {
   // start with a minimal PATH that may not include nvm/Homebrew/Volta node
   // binaries (#2979).
   const nodeRunner = resolveNodeRunner();
-  const runner = hookName.endsWith('.sh') ? resolveBashRunner(opts) : nodeRunner;
+  const runner = isShellHook ? resolveBashRunner(opts) : nodeRunner;
   // Runner resolvers return null when the executable path is unavailable.
   // Fall through with null so callers can skip registration with a warning
   // instead of emitting a command that recreates the original hook failure.
@@ -1167,7 +1257,7 @@ function buildHookCommand(configDir, hookName, opts) {
       absoluteRunner: runner,
       scriptPath: `${portableBaseDir}/hooks/${hookName}`,
       runtime: opts.runtime || 'generic',
-      platform: opts.platform || process.platform,
+      platform,
     });
   }
 
@@ -1176,8 +1266,8 @@ function buildHookCommand(configDir, hookName, opts) {
   return projectManagedHookCommand({
     absoluteRunner: runner,
     scriptPath: hooksPath,
-    runtime: opts.runtime || 'generic',
-    platform: opts.platform || process.platform,
+    runtime,
+    platform,
   });
 }
 
@@ -1364,6 +1454,185 @@ function readGsdEffectiveModelOverrides(targetDir = null) {
   if (!global && !projectOverrides) return null;
   // Per-project wins on conflict; preserve non-conflicting global keys.
   return { ...(global || {}), ...(projectOverrides || {}) };
+}
+
+/**
+ * #443 — Read the merged `effort` config block for install-time effort resolution.
+ *
+ * Probes the same config sources as readGsdRuntimeProfileResolver (per-project
+ * `.planning/config.json` wins over `~/.ecl/defaults.json`) but extracts the
+ * `effort` object instead of the model-profile fields.
+ *
+ * Returns the merged `effort` object or null when neither source defines one.
+ * The caller can pass this to resolveInstallTimeEffort() which is pure and
+ * requires no filesystem access beyond what this helper already performs.
+ *
+ * @param {string|null} targetDir  Runtime install root (walks up to find .planning/).
+ * @returns {object|null}
+ */
+function readGsdEffectiveEffortConfig(targetDir = null) {
+  const homeDefaults = _readGsdConfigFile(
+    path.join(os.homedir(), '.ecl', 'defaults.json'),
+    '~/.ecl/defaults.json'
+  );
+
+  let projectConfig = null;
+  if (targetDir) {
+    let probeDir = path.resolve(targetDir);
+    for (let depth = 0; depth < 8; depth += 1) {
+      const candidate = path.join(probeDir, '.planning', 'config.json');
+      if (fs.existsSync(candidate)) {
+        projectConfig = _readGsdConfigFile(candidate, '.planning/config.json');
+        break;
+      }
+      const parent = path.dirname(probeDir);
+      if (parent === probeDir) break;
+      probeDir = parent;
+    }
+  }
+
+  const homeEffort = (homeDefaults && homeDefaults.effort && typeof homeDefaults.effort === 'object' && !Array.isArray(homeDefaults.effort))
+    ? homeDefaults.effort
+    : null;
+  const projectEffort = (projectConfig && projectConfig.effort && typeof projectConfig.effort === 'object' && !Array.isArray(projectConfig.effort))
+    ? projectConfig.effort
+    : null;
+
+  if (!homeEffort && !projectEffort) return null;
+
+  // Per-project wins on conflict within each sub-field. Merge field-by-field so
+  // a project config that only sets agent_overrides still inherits global
+  // routing_tier_defaults and default.
+  return {
+    ...(homeEffort || {}),
+    ...(projectEffort || {}),
+    // Deep-merge agent_overrides (project wins per-key)
+    agent_overrides: {
+      ...((homeEffort && homeEffort.agent_overrides) || {}),
+      ...((projectEffort && projectEffort.agent_overrides) || {}),
+    },
+  };
+}
+
+
+/**
+ * #443 — Resolve install-time effort for a given agent, using the same
+ * precedence chain as resolveEffortInternal() in core.cjs, but operating
+ * on a pre-loaded effortCfg object (no loadConfig side-effects at install).
+ *
+ * Precedence (mirrors resolveEffortInternal):
+ *   1. effortCfg.agent_overrides[agentName]
+ *   2. effortCfg.routing_tier_defaults[agentTier]  (if effortCfg present)
+ *      — OR manifest tier defaults when effortCfg is null
+ *   3. effortCfg.default
+ *   4. 'high' (hardcoded fallback)
+ *
+ * @param {object|null} effortCfg   Result of readGsdEffectiveEffortConfig().
+ * @param {string} agentName        e.g. 'ecl-planner'
+ * @returns {string}                Universal effort string (low/medium/high/xhigh/max/minimal)
+ */
+function resolveInstallTimeEffort(effortCfg, agentName) {
+  // Validates each candidate against the canonical EFFORT_SET (sourced once
+  // from core.cjs) before accepting it, mirroring resolveEffortInternal exactly.
+  // Invalid values fall through to the next precedence layer; final fallback 'high'.
+
+  // Step 1: agent_overrides
+  if (effortCfg) {
+    const ao = effortCfg.agent_overrides;
+    if (ao && typeof ao === 'object' && !Array.isArray(ao)) {
+      const v = ao[agentName];
+      if (typeof v === 'string' && ECL_EFFORT_SET.has(v)) return v;
+    }
+  }
+
+  // Step 2: routing_tier_defaults keyed by the agent's catalog tier
+  const { AGENT_DEFAULT_TIERS, EFFORT_MANIFEST_TIER_DEFAULTS, EFFORT_MANIFEST_DEFAULT } = _getGsdEffortCatalog();
+  const agentTier = AGENT_DEFAULT_TIERS[agentName];
+  if (agentTier) {
+    if (effortCfg && effortCfg.routing_tier_defaults &&
+        typeof effortCfg.routing_tier_defaults === 'object' &&
+        !Array.isArray(effortCfg.routing_tier_defaults)) {
+      const v = effortCfg.routing_tier_defaults[agentTier];
+      if (typeof v === 'string' && ECL_EFFORT_SET.has(v)) return v;
+    } else if (!effortCfg) {
+      // No effort config — use manifest tier defaults
+      const v = EFFORT_MANIFEST_TIER_DEFAULTS[agentTier];
+      if (typeof v === 'string' && ECL_EFFORT_SET.has(v)) return v;
+    }
+    // effortCfg exists but has no routing_tier_defaults — fall through
+  }
+
+  // Step 3: effort.default
+  if (effortCfg) {
+    const d = effortCfg.default;
+    if (typeof d === 'string' && ECL_EFFORT_SET.has(d)) return d;
+  }
+
+  // Step 4: manifest default (sourced from config-defaults.manifest.json effort.default)
+  // If even the manifest default is invalid, fall back to 'high'.
+  if (typeof EFFORT_MANIFEST_DEFAULT === 'string' && ECL_EFFORT_SET.has(EFFORT_MANIFEST_DEFAULT)) {
+    return EFFORT_MANIFEST_DEFAULT;
+  }
+  return 'high';
+}
+
+/**
+ * #443 — Inject `effort: <value>` into YAML frontmatter of a Claude .md agent
+ * file in a newline-agnostic way (LF and CRLF source files are both handled).
+ *
+ * The function:
+ *   - Detects the file's EOL (CRLF if the first `---` line ends with \r\n,
+ *     otherwise LF).
+ *   - Skips injection if an `effort:` key already exists in the frontmatter
+ *     (idempotent).
+ *   - Inserts `effort: <value>` immediately before the closing `---` delimiter,
+ *     using the same EOL as the surrounding frontmatter so the output file
+ *     stays EOL-consistent.
+ *   - Returns the original content unchanged when no YAML frontmatter is found.
+ *
+ * @param {string} content      Raw file content (may have LF or CRLF endings).
+ * @param {string} effortValue  Rendered effort string, e.g. "xhigh".
+ * @returns {string}            Updated content with `effort:` injected, or the
+ *                              original content when no frontmatter is found.
+ */
+function injectEffortFrontmatter(content, effortValue) {
+  // Detect the dominant EOL from the first line (the opening `---`).
+  // If the very first `---` is followed by \r\n, treat the whole file as CRLF.
+  const eol = /^---\r\n/.test(content) ? '\r\n' : '\n';
+
+  // Build a frontmatter-matching regex that tolerates an optional \r before
+  // each \n, so we handle both LF and CRLF files without needing to normalise
+  // the whole content.
+  //
+  // Breakdown:
+  //   ^---\r?\n        — opening delimiter (with optional \r)
+  //   ([\s\S]*?)       — frontmatter body (non-greedy)
+  //   ^---\r?$         — closing delimiter line (optional \r, $ before \n in
+  //                       multiline mode)
+  //   (\r?\n|$)        — newline after closing --- (or end of string)
+  //
+  // The `m` flag makes ^ / $ match at every line boundary.
+  const fmRe = /^---\r?\n([\s\S]*?)^---\r?$/m;
+  const match = fmRe.exec(content);
+  if (!match) return content; // no YAML frontmatter — leave unchanged
+
+  // Idempotency guard: don't insert a second effort: line.
+  const fmBody = match[1]; // content between the two `---` lines
+  if (/^effort:/m.test(fmBody)) return content;
+
+  // Locate the exact position of the closing `---` line so we can insert
+  // before it using a simple string splice (avoids re-running the regex and
+  // avoids any edge-cases with $ matching \r differently per engine).
+  const closeIdx = match.index + 4 + fmBody.length; // 4 = len("---\n") (opening)
+  // Actually compute based on the full match start + captured group length:
+  // match[0] = full frontmatter block; match.index = start of that block.
+  // The closing `---` starts at: match.index + ("---" + eol).length + fmBody.length
+  const openLen = 3 + eol.length; // "---" + eol
+  const closingStart = match.index + openLen + fmBody.length;
+
+  const before = content.slice(0, closingStart);
+  const after = content.slice(closingStart);
+  return `${before}effort: ${effortValue}${eol}${after}`;
 }
 
 /**
@@ -2597,6 +2866,7 @@ eCL workflows use \`Task(...)\` (Claude Code syntax). Translate to Codex collabo
 
 Direct mapping:
 - \`Task(subagent_type="X", prompt="Y")\` → \`spawn_agent(agent_type="X", message="Y")\`
+- \`Agent(subagent_type="X", prompt="Y")\` → \`spawn_agent(agent_type="X", message="Y")\`
 - \`Task(model="...")\` → omit. \`spawn_agent\` has no inline \`model\` parameter;
   eCL embeds the resolved per-agent model directly into each agent's \`.toml\`
   at install time so \`model_overrides\` from \`.planning/config.json\` and
@@ -2615,6 +2885,9 @@ Spawn restriction:
 - Codex restricts \`spawn_agent\` to cases where the user has explicitly
   requested sub-agents. When automatic spawning is not permitted, do the
   work inline in the current agent rather than attempting to force a spawn.
+- In some Codex sessions, multi-agent tooling can be deferred. If \`spawn_agent\`
+  is not currently visible, discover tools first via \`tool_search\` before
+  defaulting to inline execution.
 
 Parallel fan-out:
 - Spawn multiple agents → collect agent IDs → \`wait(ids)\` for all to complete
@@ -2672,8 +2945,14 @@ purpose: ${toSingleLine(description)}
  * Generate a per-agent .toml config file for Codex.
  * Sets required agent metadata, sandbox_mode, and developer_instructions
  * from the agent markdown content.
+ *
+ * @param {string} agentName
+ * @param {string} agentContent
+ * @param {object|null} modelOverrides
+ * @param {object|null} runtimeResolver  — runtime-aware tier resolver from readGsdRuntimeProfileResolver
+ * @param {object|null} effortCfg        — #443: merged effort config from readGsdEffectiveEffortConfig
  */
-function generateCodexAgentToml(agentName, agentContent, modelOverrides = null, runtimeResolver = null) {
+function generateCodexAgentToml(agentName, agentContent, modelOverrides = null, runtimeResolver = null, effortCfg = null) {
   const sandboxMode = CODEX_AGENT_SANDBOX[agentName] || 'read-only';
   const { frontmatter, body } = extractFrontmatterAndBody(agentContent);
   const frontmatterText = frontmatter || '';
@@ -2702,11 +2981,19 @@ function generateCodexAgentToml(agentName, agentContent, modelOverrides = null, 
     const entry = runtimeResolver.resolve(resolvedName) || runtimeResolver.resolve(agentName);
     if (entry?.model) {
       lines.push(`model = ${JSON.stringify(entry.model)}`);
-      if (entry.reasoning_effort) {
-        lines.push(`model_reasoning_effort = ${JSON.stringify(entry.reasoning_effort)}`);
-      }
+      // model is resolved here; reasoning_effort from catalog tier is REPLACED by the
+      // unified effort resolver below (#443). Do NOT emit entry.reasoning_effort here.
     }
   }
+
+  // #443 — Unified effort for Codex .toml. Uses the same config-driven precedence chain
+  // as the Claude .md effort injection (resolveInstallTimeEffort), so both runtimes read
+  // from the same effort.agent_overrides / effort.routing_tier_defaults / effort.default
+  // config source. Codex does not support 'max' → clamped to 'xhigh' by
+  // gsdRenderEffortForRuntime('codex', ...).
+  const _universalEffortCodex = resolveInstallTimeEffort(effortCfg, resolvedName !== agentName ? resolvedName : agentName);
+  const _renderedEffortCodex = _getGsdEffortCatalog().renderEffortForRuntime('codex', _universalEffortCodex).value;
+  lines.push(`model_reasoning_effort = ${JSON.stringify(_renderedEffortCodex)}`);
 
   // Agent prompts contain raw backslashes in regexes and shell snippets.
   // TOML literal multiline strings preserve them without escape parsing.
@@ -4973,7 +5260,10 @@ function installCodexConfig(targetDir, agentsSrc) {
     // setting runtime in the project config reaches the Codex emit path is
     // false (review finding #1).
     const runtimeResolver = readGsdRuntimeProfileResolver(targetDir);
-    const tomlContent = generateCodexAgentToml(name, content, modelOverrides, runtimeResolver);
+    // #443 — pass unified effort config so model_reasoning_effort in the .toml
+    // follows the same config-driven precedence as the Claude .md effort key.
+    const effortCfg = readGsdEffectiveEffortConfig(targetDir);
+    const tomlContent = generateCodexAgentToml(name, content, modelOverrides, runtimeResolver, effortCfg);
     fs.writeFileSync(path.join(agentsTomlDir, `${name}.toml`), tomlContent);
   }
 
@@ -6662,6 +6952,28 @@ function validateHookFields(settings) {
 }
 
 /**
+ * eCL hook filenames removed during uninstall.
+ * Module-level so tests can assert structurally instead of regex-parsing source
+ * (retires pending-migration-to-typed-ir on hooks-opt-in.test.cjs, per #455).
+ */
+const ECL_UNINSTALL_HOOKS = [
+  'ecl-statusline.js',
+  'ecl-check-update.js',
+  'ecl-check-update.cmd',
+  'ecl-check-update-worker.js',
+  'ecl-context-monitor.js',
+  'ecl-prompt-guard.js',
+  'ecl-read-guard.js',
+  'ecl-read-injection-scanner.js',
+  'ecl-update-banner.js',
+  'ecl-workflow-guard.js',
+  'ecl-session-state.sh',
+  'ecl-validate-commit.sh',
+  'ecl-phase-boundary.sh',
+  'ecl-graphify-update.sh',
+];
+
+/**
  * Uninstall eCL from the specified directory for a specific runtime
  * Removes only eCL-specific files/directories, preserves user content
  * @param {boolean} isGlobal - Whether to uninstall from global or local
@@ -6910,9 +7222,8 @@ function uninstall(isGlobal, runtime = 'claude') {
   // 4. Remove eCL hooks
   const hooksDir = path.join(targetDir, 'hooks');
   if (fs.existsSync(hooksDir)) {
-    const gsdHooks = ['ecl-statusline.js', 'ecl-check-update.js', 'ecl-check-update.cmd', 'ecl-context-monitor.js', 'ecl-prompt-guard.js', 'ecl-read-guard.js', 'ecl-read-injection-scanner.js', 'ecl-update-banner.js', 'ecl-workflow-guard.js', 'ecl-session-state.sh', 'ecl-validate-commit.sh', 'ecl-phase-boundary.sh', 'ecl-graphify-update.sh'];
     let hookCount = 0;
-    for (const hook of gsdHooks) {
+    for (const hook of ECL_UNINSTALL_HOOKS) {
       const hookPath = path.join(hooksDir, hook);
       if (fs.existsSync(hookPath)) {
         fs.unlinkSync(hookPath);
@@ -7981,45 +8292,6 @@ function install(isGlobal, runtime = 'claude', options = {}) {
     ? targetDir.replace(os.homedir(), '~')
     : targetDir.replace(process.cwd(), '.');
 
-  // #3406: warn if a stale standalone `@evolvconsulting/ecl-sdk` is globally installed
-  // and shadows the `ecl-sdk` shim this installer wires up. Only meaningful
-  // for global installs (the shim collision lives in the global node_modules
-  // bin dir). Guarded by ECL_SKIP_STALE_SDK_CHECK so CI/tests can silence it.
-  // #3406 CR: opt-out only on explicit "1" / "true" / "yes" rather than any
-  // non-empty value. Without this guard `ECL_SKIP_STALE_SDK_CHECK=0` and
-  // `ECL_SKIP_STALE_SDK_CHECK=false` would silently disable the check.
-  const skipRaw = process.env.ECL_SKIP_STALE_SDK_CHECK;
-  const skipStaleCheck = skipRaw === '1' || skipRaw === 'true' || skipRaw === 'yes';
-  if (isGlobal && !skipStaleCheck) {
-    try {
-      const { execFileSync } = require('child_process');
-      const npmCmd = process.platform === 'win32' ? 'npm.cmd' : 'npm';
-      const staleInfo = detectStaleStandaloneSdk(() => {
-        try {
-          return execFileSync(
-            npmCmd,
-            ['ls', '-g', '@evolvconsulting/ecl-sdk', '--json', '--depth=0'],
-            { encoding: 'utf-8', stdio: ['ignore', 'pipe', 'ignore'], timeout: 10_000 }
-          );
-        } catch (e) {
-          // `npm ls -g <missing>` exits 1 with the JSON still on stdout when
-          // the package is absent. execFileSync throws on non-zero exit but
-          // attaches stdout to the error. Recover the JSON in that case so
-          // the detector classifies "absent" correctly.
-          if (e && typeof e.stdout !== 'undefined') {
-            return Buffer.isBuffer(e.stdout) ? e.stdout.toString('utf-8') : String(e.stdout);
-          }
-          throw e;
-        }
-      });
-      if (staleInfo.stale) {
-        console.warn(`\n${yellow}${formatStaleStandaloneSdkWarning(staleInfo)}${reset}\n`);
-      }
-    } catch {
-      // Detection is best-effort; never block install on its failure.
-    }
-  }
-
   // Path prefix for file references in markdown content (e.g. ecl-tools.cjs).
   // Replaces $HOME/.claude/ or ~/.claude/ so the result is <pathPrefix>evolv-coder-lite/bin/...
   // For global installs: use $HOME/ so paths expand correctly inside double-quoted
@@ -8538,22 +8810,19 @@ function install(isGlobal, runtime = 'claude', options = {}) {
     failures.push('evolv-coder-lite');
   }
 
-  // #3288 / #3571 — Copy sdk/shared manifests into the evolv-coder-lite payload
+  // Copy shared manifests into the evolv-coder-lite payload
   // at the co-located path that CJS modules resolve first:
   //   evolv-coder-lite/bin/shared/*.json
   //
-  // The install copies evolv-coder-lite/ but NOT sdk/ — CJS modules' legacy
-  // source-repo paths (3 levels up → sdk/shared/) therefore resolve to a
-  // non-existent location in every post-install layout. Copying these shared
-  // files alongside the CJS files ensures require() succeeds without needing
-  // sdk/ to exist.
+  // This source now lives under evolv-coder-lite/bin/shared in-repo.
   const sharedPayloadFiles = [
     'model-catalog.json',
     'config-defaults.manifest.json',
     'config-schema.manifest.json',
+    'runtime-aliases.manifest.json',
   ];
   for (const fileName of sharedPayloadFiles) {
-    const sharedSrc = path.join(src, 'sdk', 'shared', fileName);
+    const sharedSrc = path.join(src, 'evolv-coder-lite', 'bin', 'shared', fileName);
     const sharedDest = path.join(skillDest, 'bin', 'shared', fileName);
     const displayPath = `evolv-coder-lite/bin/shared/${fileName}`;
     if (fs.existsSync(sharedSrc)) {
@@ -8565,7 +8834,7 @@ function install(isGlobal, runtime = 'claude', options = {}) {
         failures.push(displayPath);
       }
     } else {
-      failures.push(`sdk/shared/${fileName} (source missing)`);
+      failures.push(`evolv-coder-lite/bin/shared/${fileName} (source missing)`);
     }
   }
 
@@ -8683,6 +8952,20 @@ function install(isGlobal, runtime = 'claude', options = {}) {
           content = content.replace(/\bClaude Code\b/g, 'Hermes Agent');
           content = content.replace(/\.claude\//g, '.hermes/');
         }
+        // #443 — Inject `effort:` into the Claude .md frontmatter ONLY.
+        // Gemini/OpenCode/Qwen/Hermes also produce .md files but break on
+        // unknown frontmatter keys (the repo bans skills:/permissionMode: for
+        // the same reason — see tests/agent-frontmatter.test.cjs).
+        // Claude Code reads per-subagent `effort:` frontmatter (anthropics/claude-code #31536).
+        // Injection is per-runtime at install time because the canonical source
+        // agents/*.md must stay Gemini-safe (no effort: key in source).
+        if (runtime === 'claude') {
+          const _effortCfg = readGsdEffectiveEffortConfig(targetDir);
+          const _agentName = entry.name.replace(/\.md$/, '');
+          const _universalEffort = resolveInstallTimeEffort(_effortCfg, _agentName);
+          const _renderedEffort = _getGsdEffortCatalog().renderEffortForRuntime('claude', _universalEffort).value;
+          content = injectEffortFrontmatter(content, _renderedEffort);
+        }
         // #3677 — normalize retired `/ecl:<cmd>` colon refs in the agent body
         // to the canonical hyphen form `/ecl-<cmd>` for hyphen-`name:`
         // runtimes (claude / qwen / hermes). Self-converting runtimes and
@@ -8742,9 +9025,7 @@ function install(isGlobal, runtime = 'claude', options = {}) {
         const srcFile = path.join(hooksSrc, entry);
         if (fs.statSync(srcFile).isFile()) {
           const destFile = path.join(hooksDest, entry);
-          // Template .js files to replace '.claude' with runtime-specific config dir
-          // and stamp the current eCL version into the hook version header
-          if (entry.endsWith('.js')) {
+          if (entry.endsWith('.js') || entry.endsWith('.cjs')) {
             let content = fs.readFileSync(srcFile, 'utf8');
             content = content.replace(/'\.claude'/g, configDirReplacement);
             content = content.replace(/\/\.claude\//g, `/${getDirName(runtime)}/`);
@@ -8757,13 +9038,15 @@ function install(isGlobal, runtime = 'claude', options = {}) {
               content = content.replace(/CLAUDE\.md/g, 'HERMES.md');
               content = content.replace(/\bClaude Code\b/g, 'Hermes Agent');
             }
+            // #376: rewrite ecl: → ecl- for hyphen-namespace runtimes
+            if (shouldNormalizeHyphenNamespaceInAgentBody(runtime)) {
+              content = content.replace(/ecl:/gi, 'ecl-');
+            }
             content = content.replace(/\{\{ECL_VERSION\}\}/g, pkg.version);
             fs.writeFileSync(destFile, content);
-            // Ensure hook files are executable (fixes #1162 — missing +x permission)
-            try { fs.chmodSync(destFile, 0o755); } catch (e) { /* Windows doesn't support chmod */ }
+            try { fs.chmodSync(destFile, 0o755); } catch (e) { /* Windows */ }
           } else {
-            // .sh hooks carry a ecl-hook-version header so ecl-check-update.js can
-            // detect staleness after updates — stamp the version just like .js hooks.
+            // non-.js: .sh hooks need {{ECL_VERSION}} stamped; others are copied as-is
             if (entry.endsWith('.sh')) {
               let content = fs.readFileSync(srcFile, 'utf8');
               content = content.replace(/\{\{ECL_VERSION\}\}/g, pkg.version);
@@ -9301,13 +9584,92 @@ function install(isGlobal, runtime = 'claude', options = {}) {
     return { settingsPath: null, settings: null, statuslineCommand: null, updateBannerCommand: null, runtime, configDir: targetDir };
   }
 
-  // Configure statusline and hooks in settings.json
+  // Configure statusline and hooks in settings.json (or settings.local.json for local Claude installs).
   // Gemini and Antigravity use AfterTool instead of PostToolUse for post-tool hooks
   const postToolEvent = (runtime === 'gemini' || runtime === 'antigravity') ? 'AfterTool' : 'PostToolUse';
-  const settingsPath = path.join(targetDir, 'settings.json');
+  // #338: local Claude installs write to settings.local.json (Claude Code's per-user/gitignored slot)
+  // so engineer-specific absolute paths (Node binary, home dir) never land in the repo-shared
+  // settings.json. Global installs and all other runtimes continue to use settings.json.
+  const isLocalClaude = (runtime === 'claude' && !isGlobal);
+  const settingsFileName = isLocalClaude ? 'settings.local.json' : 'settings.json';
+  const settingsPath = path.join(targetDir, settingsFileName);
+
+  // #338 migration: if a prior local Claude install wrote eCL-shaped entries to settings.json,
+  // relocate them to settings.local.json and clear them from the shared file in the same run.
+  if (isLocalClaude) {
+    const sharedSettingsPath = path.join(targetDir, 'settings.json');
+    const sharedRaw = readSettings(sharedSettingsPath);
+    if (sharedRaw && typeof sharedRaw === 'object') {
+      const hasGsdHooks = sharedRaw.hooks && Object.values(sharedRaw.hooks).some(
+        entries => Array.isArray(entries) && entries.some(
+          entry => entry && entry.hooks && Array.isArray(entry.hooks) && entry.hooks.some(
+            h => h && typeof h.command === 'string' && isManagedHookCommand(h.command, { surface: 'settings-json' })
+          )
+        )
+      );
+      const hasGsdStatusline = sharedRaw.statusLine && sharedRaw.statusLine.command &&
+        isManagedHookCommand(sharedRaw.statusLine.command, { surface: 'settings-json' });
+      if (hasGsdHooks || hasGsdStatusline) {
+        // Merge eCL entries into settings.local.json
+        const localRaw = readSettings(settingsPath) || {};
+        if (hasGsdStatusline && !localRaw.statusLine) {
+          localRaw.statusLine = sharedRaw.statusLine;
+        }
+        if (hasGsdHooks) {
+          if (!localRaw.hooks) localRaw.hooks = {};
+          for (const [eventName, entries] of Object.entries(sharedRaw.hooks || {})) {
+            if (!Array.isArray(entries)) continue;
+            const gsdEntries = entries.filter(
+              entry => entry && entry.hooks && Array.isArray(entry.hooks) && entry.hooks.some(
+                h => h && typeof h.command === 'string' && isManagedHookCommand(h.command, { surface: 'settings-json' })
+              )
+            );
+            if (gsdEntries.length > 0) {
+              if (!localRaw.hooks[eventName]) localRaw.hooks[eventName] = [];
+              // Only merge entries not already present in local
+              for (const entry of gsdEntries) {
+                const alreadyPresent = localRaw.hooks[eventName].some(
+                  le => le && le.hooks && Array.isArray(le.hooks) && le.hooks.some(
+                    lh => lh && entry.hooks.some(eh => eh && eh.command === lh.command)
+                  )
+                );
+                if (!alreadyPresent) localRaw.hooks[eventName].push(entry);
+              }
+            }
+          }
+        }
+        fs.mkdirSync(path.dirname(settingsPath), { recursive: true });
+        writeSettings(settingsPath, localRaw);
+
+        // Remove eCL entries from shared settings.json
+        if (hasGsdStatusline) {
+          delete sharedRaw.statusLine;
+        }
+        if (hasGsdHooks) {
+          for (const [eventName, entries] of Object.entries(sharedRaw.hooks || {})) {
+            if (!Array.isArray(entries)) continue;
+            sharedRaw.hooks[eventName] = entries.filter(
+              entry => !(entry && entry.hooks && Array.isArray(entry.hooks) && entry.hooks.some(
+                h => h && typeof h.command === 'string' && isManagedHookCommand(h.command, { surface: 'settings-json' })
+              ))
+            );
+            if (sharedRaw.hooks[eventName].length === 0) {
+              delete sharedRaw.hooks[eventName];
+            }
+          }
+          if (sharedRaw.hooks && Object.keys(sharedRaw.hooks).length === 0) {
+            delete sharedRaw.hooks;
+          }
+        }
+        writeSettings(sharedSettingsPath, sharedRaw);
+        console.log(`  ${green}✓${reset} Migrated eCL hook entries from settings.json to settings.local.json (#338)`);
+      }
+    }
+  }
+
   const rawSettings = readSettings(settingsPath);
   if (rawSettings === null) {
-    console.log('  ' + yellow + 'i' + reset + '  Skipping settings.json configuration — file could not be parsed (comments or malformed JSON). Your existing settings are preserved.');
+    console.log('  ' + yellow + 'i' + reset + '  Skipping settings.local.json configuration — file could not be parsed (comments or malformed JSON). Your existing settings are preserved.');
     persistActiveProfileMarker();
     return;
   }
@@ -9564,18 +9926,24 @@ function install(isGlobal, runtime = 'claude', options = {}) {
 
     // Configure workflow guard hook (opt-in via hooks.workflow_guard: true)
     // Detects file edits outside eCL workflow context and advises using
-    // /ecl-quick or /ecl-fast for state-tracked changes. Advisory only.
+    // /ecl-quick or /ecl-fast for state-tracked changes. Also hard-blocks
+    // unsafe Bash commands that violate worktree-agent isolation.
     const workflowGuardCommand = isGlobal
       ? buildHookCommand(targetDir, 'ecl-workflow-guard.js', hookOpts)
       : localCmd('ecl-workflow-guard.js');
-    const hasWorkflowGuardHook = settings.hooks[preToolEvent].some(entry =>
+    const workflowGuardMatcher = 'Bash|Edit|Write|MultiEdit';
+    const workflowGuardHookEntry = settings.hooks[preToolEvent].find(entry =>
       entry.hooks && entry.hooks.some(h => h.command && h.command.includes('ecl-workflow-guard'))
     );
+    const hasWorkflowGuardHook = Boolean(workflowGuardHookEntry);
 
     const workflowGuardFile = path.join(targetDir, 'hooks', 'ecl-workflow-guard.js');
-    if (!hasWorkflowGuardHook && fs.existsSync(workflowGuardFile) && workflowGuardCommand) {
+    if (hasWorkflowGuardHook && workflowGuardHookEntry.matcher !== workflowGuardMatcher) {
+      workflowGuardHookEntry.matcher = workflowGuardMatcher;
+      console.log(`  ${green}✓${reset} Updated workflow guard hook matcher`);
+    } else if (!hasWorkflowGuardHook && fs.existsSync(workflowGuardFile) && workflowGuardCommand) {
       settings.hooks[preToolEvent].push({
-        matcher: 'Write|Edit',
+        matcher: workflowGuardMatcher,
         hooks: [
           {
             type: 'command',
@@ -9796,7 +10164,7 @@ function finishInstall(settingsPath, settings, statuslineCommand, shouldInstallS
   }
 
   // Configure OpenCode permissions
-  if (isOpencode) {
+  if (isOpencode && !process.env.ECL_TEST_MODE) {
     configureOpencodePermissions(isGlobal, configDir);
   }
 
@@ -9808,8 +10176,8 @@ function finishInstall(settingsPath, settings, statuslineCommand, shouldInstallS
   // For non-Claude runtimes, set resolve_model_ids: "omit" in ~/.ecl/defaults.json
   // so resolveModelInternal() returns '' instead of Claude aliases (opus/sonnet/haiku)
   // that the runtime can't resolve. Users can still use model_overrides for explicit IDs.
-  // See #1156.
-  if (runtime !== 'claude') {
+  // See #1156. Guard matches the #130-class pattern on configureOpencodePermissions above.
+  if (runtime !== 'claude' && !process.env.ECL_TEST_MODE) {
     const gsdDir = path.join(os.homedir(), '.ecl');
     const defaultsPath = path.join(gsdDir, 'defaults.json');
     try {
@@ -10286,8 +10654,13 @@ function maybeSuggestPathExport(globalBin, homeDir) {
   });
   if (onPath) return;
 
+  // Already added to PATH via an rc file, but the current shell predates that
+  // edit — tell the user to reopen rather than (wrongly) suggesting they add it
+  // again. Applies to whatever bin dir we install into (retained shim-agnostic).
   if (homePathCoveredByRc(globalBin, homeDir)) {
-    console.log(`  ${yellow}⚠${reset} ${bold}ecl-sdk${reset}'s directory is already on your PATH via an rc file entry — try reopening your shell (or ${cyan}source ~/.zshrc${reset}).`);
+    console.log('');
+    console.log(`  ${yellow}⚠${reset} ${bold}${globalBin}${reset}'s directory is already on your PATH via an rc file entry — try reopening your shell (or ${cyan}source ~/.zshrc${reset}).`);
+    console.log('');
     return;
   }
 
@@ -10303,892 +10676,6 @@ function maybeSuggestPathExport(globalBin, homeDir) {
     console.log(`      ${cyan}${labelPrefix}${action.command}${reset}`);
   }
   console.log('');
-}
-
-/**
- * Verify the prebuilt SDK dist is present and the ecl-sdk shim is wired up.
- *
- * As of fix/2441-sdk-decouple, sdk/dist/ is shipped prebuilt inside the
- * @evolvconsulting/evolv-coder-lite npm tarball. The parent package declares a bin entry
- * "ecl-sdk": "bin/ecl-sdk.js" so npm chmods the shim correctly when
- * installing from a packed tarball — eliminating the mode-644 failure
- * (issue #2453) and the build-from-source failure modes (#2439, #2441).
- *
- * This function verifies the invariant: sdk/dist/cli.js exists and is
- * executable. If the execute bit is missing (possible in dev/clone setups
- * where sdk/dist was committed without +x), we fix it in-place.
- *
- * --no-sdk skips the check entirely (back-compat).
- * --sdk forces the check even if it would otherwise be skipped.
- */
-/**
- * Classify the install context for the SDK directory.
- *
- * Distinguishes three shapes the installer must handle differently when
- * `sdk/dist/` is missing:
- *
- *   - `tarball` + `npxCache: true`
- *       User ran `npx @evolvconsulting/evolv-coder-lite@latest`. sdk/ lives under
- *       `<npm-cache>/_npx/<hash>/node_modules/@evolvconsulting/evolv-coder-lite/sdk` which
- *       is treated as read-only by npm/npx on Windows (#2649). We MUST
- *       NOT attempt a nested `npm install` there — it will fail with
- *       EACCES/EPERM and produce the misleading "Failed to npm install
- *       in sdk/" error the user reported. Point at the global upgrade.
- *
- *   - `tarball` + `npxCache: false`
- *       User ran a global install (`npm i -g @evolvconsulting/evolv-coder-lite`). sdk/dist
- *       ships in the published tarball; if it's missing, the published
- *       artifact itself is broken (see #2647). Same user-facing fix:
- *       upgrade to latest.
- *
- *   - `dev-clone`
- *       Developer running from a git clone. Keep the existing "cd sdk &&
- *       npm install && npm run build" hint — the user is expected to run
- *       that themselves. The installer itself never shells out to npm.
- *
- * Detection heuristics are path-based and side-effect-free: we look for
- * `_npx` and `node_modules` segments that indicate a packaged install,
- * and for a `.git` directory nearby that indicates a clone. A best-effort
- * write probe detects read-only filesystems (tmpfile create + unlink);
- * probe failures are treated as read-only.
- */
-function classifySdkInstall(sdkDir) {
-  const path = require('path');
-  const fs = require('fs');
-  const segments = sdkDir.split(/[\\/]+/);
-  const npxCache = segments.includes('_npx');
-  const inNodeModules = segments.includes('node_modules');
-  const parent = path.dirname(sdkDir);
-  const hasGitNearby = fs.existsSync(path.join(parent, '.git'));
-
-  let mode;
-  if (hasGitNearby && !npxCache && !inNodeModules) {
-    mode = 'dev-clone';
-  } else if (npxCache || inNodeModules) {
-    mode = 'tarball';
-  } else {
-    mode = 'dev-clone';
-  }
-
-  let readOnly = npxCache; // assume true for npx cache
-  if (!readOnly) {
-    try {
-      const probe = path.join(sdkDir, `.ecl-write-probe-${process.pid}`);
-      fs.writeFileSync(probe, '');
-      fs.unlinkSync(probe);
-    } catch {
-      readOnly = true;
-    }
-  }
-
-  return { mode, npxCache, readOnly };
-}
-
-/**
- * #2974: pure builder for the SDK fail-fast report. Returns a structured IR
- * with everything the renderer needs PLUS everything tests need to assert
- * on. Tests can call `buildSdkFailFastReport(sdkDir, sdkCliPath)` directly
- * and assert on `report.reason`, `report.context`, `report.fix_command`
- * etc. without intercepting console.error or matching against rendered
- * text.
- *
- * Shape (frozen contract — extending requires a new test):
- *   {
- *     ok: false,
- *     reason: 'sdk_fail_fast',                 // ERROR_REASON.SDK_FAIL_FAST
- *     context: 'npx-cache' | 'tarball' | 'dev-clone',
- *     missing_path: '<path>/sdk/dist/cli.js',
- *     missing_artifact: 'sdk/dist',
- *     fix_command: 'npm install -g @evolvconsulting/evolv-coder-lite@latest' | 'cd sdk && npm install && npm run build',
- *     attempted_nested_install: false,         // contract: never true
- *   }
- */
-function buildSdkFailFastReport(sdkDir, sdkCliPath) {
-  const ctx = classifySdkInstall(sdkDir);
-  let context, fix_command;
-  if (ctx.mode === 'tarball') {
-    context = ctx.npxCache ? 'npx-cache' : 'tarball';
-    fix_command = 'npm install -g @evolvconsulting/evolv-coder-lite@latest';
-  } else {
-    context = 'dev-clone';
-    fix_command = 'cd sdk && npm install && npm run build';
-  }
-  return {
-    ok: false,
-    reason: 'sdk_fail_fast',
-    context,
-    missing_path: sdkCliPath,
-    missing_artifact: 'sdk/dist',
-    fix_command,
-    attempted_nested_install: false,
-  };
-}
-
-/**
- * Renderer for the structured fail-fast report. Text formatting only —
- * tests never call this. Splits the IR fields back into the same human-
- * readable lines the previous shape produced.
- */
-function renderSdkFailFastReport(ir) {
-  const bar = '━'.repeat(72);
-  const redBold = `${red}${bold}`;
-  console.error('');
-  console.error(`${redBold}${bar}${reset}`);
-  console.error(`${redBold}  ✗ eCL SDK dist not found — /ecl-* commands will not work${reset}`);
-  console.error(`${redBold}${bar}${reset}`);
-  console.error(`  ${red}Reason:${reset} ${ir.missing_artifact}/cli.js not found at ${ir.missing_path}`);
-  console.error('');
-  if (ir.context === 'npx-cache') {
-    console.error(`  Detected read-only npx cache install (${dim}${path.dirname(ir.missing_path).replace(/\/dist$/, '')}${reset}).`);
-    console.error(`  The installer will ${bold}not${reset} attempt \`npm install\` inside the npx cache.`);
-    console.error('');
-    console.error(`  Fix: install a version that ships sdk/dist/ globally:`);
-    console.error(`    ${cyan}${ir.fix_command}${reset}`);
-    console.error(`  Or, if you prefer a one-shot run, clear the npx cache first:`);
-    console.error(`    ${cyan}npx --yes @evolvconsulting/evolv-coder-lite@latest${reset}`);
-    console.error(`  Or build from source (git clone):`);
-    console.error(`    ${cyan}git clone https://github.com/evolvconsulting/evolv-coder-lite && cd evolv-coder-lite/sdk && npm install && npm run build${reset}`);
-  } else if (ir.context === 'tarball') {
-    console.error(`  The published tarball appears to be missing sdk/dist/ (see #2647).`);
-    console.error('');
-    console.error(`  Fix: install a version that ships sdk/dist/ globally:`);
-    console.error(`    ${cyan}${ir.fix_command}${reset}`);
-    console.error(`  Or build from source (git clone):`);
-    console.error(`    ${cyan}git clone https://github.com/evolvconsulting/evolv-coder-lite && cd evolv-coder-lite/sdk && npm install && npm run build${reset}`);
-  } else {
-    console.error(`  Running from a git clone — build the SDK first:`);
-    console.error(`    ${cyan}${ir.fix_command}${reset}`);
-  }
-  console.error(`${redBold}${bar}${reset}`);
-  console.error('');
-}
-
-function installSdkIfNeeded(opts) {
-  opts = opts || {};
-  if (hasNoSdk && !opts.sdkDir) {
-    console.log(`\n  ${dim}Skipping eCL SDK check (--no-sdk)${reset}`);
-    return;
-  }
-
-  const path = require('path');
-  const fs = require('fs');
-
-  const sdkDir = opts.sdkDir || path.resolve(__dirname, '..', 'sdk');
-  const sdkCliPath = path.join(sdkDir, 'dist', 'cli.js');
-
-  // #2678 / #2829: local installs do not write to global node_modules, so we
-  // cannot fall through to the global-install error path. But the parent
-  // package (which carries bin/ecl-sdk.js and sdk/dist/cli.js) IS available
-  // wherever the installer is running from — npx cache, npm-global, or git
-  // clone. The shim resolves sdk/dist/cli.js relative to its own __dirname,
-  // so a self-link into a user-writable PATH dir makes `ecl-sdk` callable
-  // from local-mode installs too. Only when the dist is genuinely missing
-  // do we bail out with a non-fatal warning.
-  //
-  // #3033: --sdk (opts.forceSdk) overrides the local-install early-return —
-  // the user explicitly requested SDK deployment, so treat the missing-dist
-  // case like a global install (fail fast with an actionable diagnostic)
-  // instead of silently skipping.
-  if (opts.isLocal && !opts.forceSdk && !fs.existsSync(sdkCliPath)) {
-    console.warn(`\n  ${yellow}⚠${reset}  Skipping SDK check for local install — sdk/dist/cli.js not found at ${sdkCliPath}.`);
-    return;
-  }
-
-  if (!fs.existsSync(sdkCliPath)) {
-    const ir = buildSdkFailFastReport(sdkDir, sdkCliPath);
-    renderSdkFailFastReport(ir);
-    if (opts.throwOnFailure) {
-      const error = new Error(`eCL SDK prebuilt artifact missing: ${sdkCliPath}`);
-      error.code = 'ECL_SDK_MISSING_DIST';
-      error.exitCode = 1;
-      throw error;
-    }
-    process.exit(1);
-  }
-
-  // Ensure execute bit is set. tsc emits files at 0o644; git clone preserves
-  // whatever mode was committed. Fix in-place so node-invoked paths work too.
-  try {
-    const stat = fs.statSync(sdkCliPath);
-    const isExecutable = !!(stat.mode & 0o111);
-    if (!isExecutable) {
-      fs.chmodSync(sdkCliPath, stat.mode | 0o111);
-    }
-  } catch {
-    // Non-fatal: if chmod fails (e.g. read-only fs) the shim still works via
-    // `node sdkCliPath` invocation in bin/ecl-sdk.js.
-  }
-
-  // #2775: do not assert "eCL SDK ready" until `ecl-sdk` actually resolves on
-  // PATH. `npx @evolvconsulting/evolv-coder-lite` only links the package's primary bin; the
-  // secondary `ecl-sdk` shim is left dangling under the npx cache and is NOT
-  // callable as a bare command. The previous file-presence-only check was a
-  // strictly weaker invariant than the one workflows depend on
-  // (`command -v ecl-sdk` resolving), and led to a false ✓ in npx-cache
-  // installs (issue #2775).
-  //
-  // #3231: strip transient npx-injected PATH segments before checking. The
-  // installer subprocess PATH includes `~/.npm/_npx/<hash>/node_modules/.bin`
-  // which is ephemeral — it is NOT reachable from the user's interactive
-  // shell. A ecl-sdk found there must NOT count as "on PATH".
-  const shimSrc = path.resolve(__dirname, 'ecl-sdk.js');
-  const persistentPath = filterNpxFromPath(process.env.PATH || '');
-  let resolvedSdkPath = findGsdSdkOnPath(persistentPath);
-  let onPath = !!resolvedSdkPath;
-
-  // Track WHERE we wrote the shim so the diagnostic can be specific even
-  // when isGsdSdkOnPath() returns false because the write target isn't on
-  // PATH (#3011: Windows users hit this when npm's global bin dir is
-  // populated but not on every shell's PATH — Git Bash vs PowerShell vs
-  // cmd.exe each read PATH from different sources).
-  let shimDir = null;
-  if (!onPath) {
-    // Try to materialize the shim into a user-writable PATH location so the
-    // installer can deliver on the success message without requiring the user
-    // to run `npm install -g` separately. Picks the first PATH entry that
-    // looks like a user-owned bin dir; falls back to ~/.local/bin even if
-    // it's not on PATH (then a follow-up suggestion is printed).
-    const linked = trySelfLinkGsdSdk(shimSrc);
-    if (linked) {
-      shimDir = path.dirname(linked);
-      resolvedSdkPath = findGsdSdkOnPath(persistentPath);
-      onPath = !!resolvedSdkPath;
-      if (onPath) {
-        console.log(`  ${dim}↪ linked ecl-sdk → ${linked}${reset}`);
-      }
-    }
-  }
-
-  // #3020: cross-shell PATH verification. Even when the install-time
-  // process.env.PATH walk found the shim, the user's later interactive
-  // shells may have a different PATH — Windows cross-shell .cmd/no-ext
-  // mismatch, POSIX ~/.local/bin missing from login shell, or node-
-  // version-manager PATH shims. Probe the user's login shell PATH and
-  // require the shim to be reachable there too before claiming ✓.
-  //
-  // #3211 (Windows): getUserShellWindowsPersistentPath() reads the user-level
-  // 'Path' registry key via PowerShell — the correct cross-shell source on
-  // Windows (Git Bash, PowerShell, and cmd.exe all inherit it). Returns null
-  // when PowerShell is unavailable or the probe times out.
-  //
-  // #3231: when getUserShellPath() / getUserShellWindowsPersistentPath()
-  // returns null (probe failed or unavailable), we cannot confirm persistent
-  // reachability. Since we already filtered npx dirs from persistentPath above,
-  // onPath=true means a non-transient dir has the shim — that is the best
-  // available invariant and is sufficient to claim ✓.
-  const userShellPath = process.platform === 'win32'
-    ? getUserShellWindowsPersistentPath()
-    : getUserShellPath();
-  if (onPath && userShellPath !== null) {
-    // filterNpxFromPath is applied inside getUserShellWindowsPersistentPath
-    // (Windows) and here for the POSIX case.
-    const persistentUserShellPath = process.platform === 'win32'
-      ? userShellPath  // already filtered by getUserShellWindowsPersistentPath
-      : filterNpxFromPath(userShellPath);
-    const userSdkPath = findGsdSdkOnPath(persistentUserShellPath);
-    if (!userSdkPath) {
-      onPath = false;
-      resolvedSdkPath = null;
-    } else {
-      resolvedSdkPath = userSdkPath;
-    }
-  }
-  // If userShellPath is null (probe failed or unavailable), onPath reflects
-  // the persistent-PATH check — that is the best available invariant.
-
-  if (onPath) {
-    const versionReport = buildGsdSdkVersionMismatchReport(resolvedSdkPath, pkg.version, { isLocal: !!opts.isLocal });
-    if (versionReport) {
-      renderGsdSdkVersionMismatchReport(versionReport);
-    } else {
-      console.log(`  ${green}✓${reset} eCL SDK ready (sdk/dist/cli.js)`);
-    }
-  } else {
-    // #3011: actionable diagnostic. The previous shape printed a generic
-    // "not on your PATH" message that didn't tell the user where to look.
-    // formatSdkPathDiagnostic produces a typed IR that we then render to
-    // stdout; tests assert on the IR (no source-grep, no console capture).
-    const ir = formatSdkPathDiagnostic({
-      shimDir,
-      platform: process.platform,
-      runDir: __dirname,
-    });
-    console.log('');
-    console.log(`  ${yellow}⚠${reset} eCL SDK files are present but ${bold}ecl-sdk${reset} is not on your PATH.`);
-    console.log(`    Workflows that call ${cyan}ecl-sdk query …${reset} will fail with "command not found".`);
-    if (ir.shimLocationLine) console.log(`    ${ir.shimLocationLine}`);
-    for (const line of ir.actionLines) console.log(`    ${line}`);
-    if (ir.npxNoteLines.length > 0) {
-      for (const line of ir.npxNoteLines) console.log(`    ${line}`);
-    }
-    console.log('');
-  }
-
-  // #2620: warn if npm's global bin is not on PATH, suppressing the
-  // absolute-path suggestion when the user's rc already covers it via
-  // a HOME-relative entry (e.g. `export PATH="$HOME/.npm-global/bin:$PATH"`).
-  try {
-    const cp = require('child_process');
-    const npmPrefix = cp.execSync('npm prefix -g', { encoding: 'utf8', stdio: ['ignore', 'pipe', 'ignore'] }).trim();
-    if (npmPrefix) {
-      // On Windows npm prefix IS the bin dir; on POSIX it's `${prefix}/bin`.
-      const globalBin = process.platform === 'win32' ? npmPrefix : path.join(npmPrefix, 'bin');
-      maybeSuggestPathExport(globalBin, os.homedir());
-    }
-  } catch {
-    // npm not available / exec failed — silently skip the PATH advice.
-  }
-}
-
-/**
- * #3406 helper: detect a stale globally-installed `@evolvconsulting/ecl-sdk` package
- * shadowing the `ecl-sdk` shim that `@evolvconsulting/evolv-coder-lite` installs.
- *
- * Background: `@evolvconsulting/ecl-sdk@0.1.0` was published once and never updated
- * (the SDK now ships embedded in `@evolvconsulting/evolv-coder-lite`). When a user has the
- * 0.1.0 standalone package installed globally, its `ecl-sdk` bin shadows
- * the one `@evolvconsulting/evolv-coder-lite` provides — and the 0.1.0 binary only knows
- * `run | auto | init` (no `query`), so every `ecl-sdk query <command>`
- * call from skills/hooks fails until the user runs
- * `npm uninstall -g @evolvconsulting/ecl-sdk`.
- *
- * Pure function: takes an injected `runNpmLs` executor that returns
- * `npm ls -g @evolvconsulting/ecl-sdk --json --depth=0` stdout. Returns:
- *   `{ stale: true, version }` when the package is present.
- *   `{ stale: false }` for every other input — including:
- *     - executor throws (npm missing / EACCES / network),
- *     - executor returns null/undefined/non-string,
- *     - stdout is not parseable JSON,
- *     - the JSON has no `.dependencies['@evolvconsulting/ecl-sdk']` field.
- *
- * Fail-closed conservative: we'd rather miss a detection than fire a
- * false-positive warning that confuses users who have a fine install.
- */
-function detectStaleStandaloneSdk(runNpmLs) {
-  if (typeof runNpmLs !== 'function') return { stale: false };
-  let out;
-  try {
-    out = runNpmLs();
-  } catch {
-    return { stale: false };
-  }
-  if (typeof out !== 'string' || out.length === 0) return { stale: false };
-  let parsed;
-  try {
-    parsed = JSON.parse(out);
-  } catch {
-    return { stale: false };
-  }
-  const deps = parsed && typeof parsed === 'object' ? parsed.dependencies : null;
-  if (!deps || typeof deps !== 'object') return { stale: false };
-  const entry = deps['@evolvconsulting/ecl-sdk'];
-  if (!entry || typeof entry !== 'object') return { stale: false };
-  const version = typeof entry.version === 'string' ? entry.version : '(unknown)';
-  // #3406 CR: scope stale detection to the known-bad version (0.1.0). Any
-  // newer @evolvconsulting/ecl-sdk version is an intentional install (or a future
-  // republish) and should not be flagged as a shim shadow. Without this
-  // narrowing, a maintainer's local-link or a legitimate future publish
-  // would trigger a misleading "stale shadow" warning on every install.
-  if (version !== '0.1.0') return { stale: false };
-  return { stale: true, version };
-}
-
-/**
- * #3406 helper: format the install-time warning emitted when
- * `detectStaleStandaloneSdk` reports a stale shadow. Separated from the
- * detection so the message contract is testable independently of npm.
- */
-function formatStaleStandaloneSdkWarning(info) {
-  const version = info && info.version ? info.version : '(unknown)';
-  return [
-    '⚠  A stale globally-installed @evolvconsulting/ecl-sdk@' + version + ' is shadowing the',
-    '   `ecl-sdk` shim that @evolvconsulting/evolv-coder-lite provides. The standalone package',
-    '   only knows `run | auto | init` — every `ecl-sdk query <cmd>` call from',
-    '   skills and hooks will fail until you remove it.',
-    '',
-    '   Remediation:',
-    '     npm uninstall -g @evolvconsulting/ecl-sdk',
-    '     npx -y @evolvconsulting/evolv-coder-lite@latest --<runtime> --global',
-    '',
-    '   Tracking: #3406 — https://github.com/evolvconsulting/evolv-coder-lite/issues/3406',
-  ].join('\n');
-}
-
-/**
- * #3231 helper: detect whether a `ecl-sdk` binary is the legacy deprecated
- * shim pointing at `ecl-tools.cjs`.
- *
- * Reads the first 512 bytes of the file and looks for the `@deprecated`
- * marker alongside a `ecl-tools.cjs` reference — the fingerprint that
- * distinguishes the old binary from the modern SDK. Treats any I/O error
- * (missing file, EACCES) as "not legacy" so callers do not need to guard.
- *
- * This is intentionally a plain-text sniff of the file header, not a
- * semantic parse — the marker is a stable, human-authored string that we
- * own. Returns false conservatively (prefer false positives to false
- * negatives: a non-legacy binary reported as legacy triggers a harmless
- * replacement; a legacy binary reported as non-legacy would keep the broken
- * shim in place).
- */
-function isLegacyGsdSdkShim(filePath) {
-  const fs = require('fs');
-  try {
-    const fd = fs.openSync(filePath, 'r');
-    let header;
-    try {
-      const buf = Buffer.alloc(512);
-      const bytesRead = fs.readSync(fd, buf, 0, 512, 0);
-      header = buf.slice(0, bytesRead).toString('utf8');
-    } finally {
-      try { fs.closeSync(fd); } catch {}
-    }
-    // The legacy binary contains "@deprecated" AND "ecl-tools.cjs" within
-    // its first 512 bytes.
-    return header.includes('@deprecated') && header.includes('ecl-tools.cjs');
-  } catch {
-    return false;
-  }
-}
-
-/**
- * #3231 helper: strip transient npx-injected PATH segments.
- *
- * npm/npx injects `~/.npm/_npx/<hash>/node_modules/.bin` (and equivalents)
- * into the installer subprocess PATH. Those directories are ephemeral — they
- * exist only for the duration of the `npx` run — and MUST NOT be treated as
- * evidence that `ecl-sdk` is durably reachable.
- *
- * Strips any segment whose absolute form contains `/_npx/` or `\\_npx\\`
- * as a proper path-component boundary.  A user-named directory that merely
- * contains the substring "npx" (e.g. `/home/user/my-npx-scripts/bin`) is
- * preserved: we require the boundary characters (`/` or `\`) on both sides.
- *
- * Returns the filtered PATH string (may be empty if all segments were npx).
- */
-function filterNpxFromPath(pathString) {
-  const path = require('path');
-  const input = typeof pathString === 'string' ? pathString : (process.env.PATH || '');
-  return input
-    .split(path.delimiter)
-    .filter((seg) => {
-      if (!seg) return false;
-      // Normalize to forward-slash form for the pattern check so both
-      // POSIX and Windows paths match a single expression. The sep-anchored
-      // pattern avoids matching "my-npx-scripts" etc.
-      const norm = seg.replace(/\\/g, '/');
-      // Must have /_npx/ as a real path component, not just a substring.
-      return !norm.includes('/_npx/');
-    })
-    .join(path.delimiter);
-}
-
-/**
- * #2775 helper: find a callable `ecl-sdk` on a PATH.
- *
- * Pure PATH walk (no spawn) — we look for a regular file or symlink named
- * `ecl-sdk` (or `ecl-sdk.cmd`/`.exe` on Windows) in any directory on PATH and
- * verify it carries the execute bit on POSIX. Avoids paying spawn cost and
- * avoids the chicken-and-egg of needing to run the not-yet-installed binary.
- *
- * #3020: accepts an optional explicit PATH string. The install subprocess's
- * process.env.PATH is not the same set the user's later interactive shells
- * see (Windows cross-shell, POSIX ~/.local/bin, node-version-manager
- * shims). Callers can pass the user-shell PATH from getUserShellPath() to
- * verify the shim is reachable from the runtime shell, not just the
- * install context. Zero-arg form preserves existing behavior.
- *
- * #3231: a candidate that passes the file/exec check is further tested via
- * isLegacyGsdSdkShim — a symlink pointing at the deprecated ecl-tools.cjs
- * binary must NOT be treated as "on PATH" even if it is executable.
- */
-function findGsdSdkOnPath(pathString) {
-  const path = require('path');
-  const fs = require('fs');
-  // Type-guard the explicit input (#3028 CR): callers may pass null
-  // (getUserShellPath() can return null), and `null.split()` throws.
-  // Only honor pathString when it's a string; fall back otherwise.
-  const pathEnv = typeof pathString === 'string' ? pathString : (process.env.PATH || '');
-  const exts = process.platform === 'win32' ? ['.cmd', '.exe', '.bat', ''] : [''];
-  for (const seg of pathEnv.split(path.delimiter)) {
-    if (!seg) continue;
-    for (const ext of exts) {
-      const candidate = path.join(seg, `ecl-sdk${ext}`);
-      try {
-        const st = fs.statSync(candidate);
-        if (st.isFile()) {
-          if (process.platform === 'win32') {
-            if (!isLegacyGsdSdkShim(candidate)) return candidate;
-          } else if ((st.mode & 0o111) !== 0) {
-            // #3231: resolve symlink before sniffing, so we detect legacy
-            // through any level of indirection.
-            let target = candidate;
-            try { target = fs.realpathSync(candidate); } catch {}
-            if (!isLegacyGsdSdkShim(target)) return candidate;
-          }
-        }
-      } catch {
-        // missing / EACCES on dir — keep scanning.
-      }
-    }
-  }
-  return null;
-}
-
-function isGsdSdkOnPath(pathString) {
-  return !!findGsdSdkOnPath(pathString);
-}
-
-function parseGsdSdkVersion(text) {
-  const match = String(text || '').match(/\bv?(\d+\.\d+\.\d+(?:-[0-9A-Za-z.-]+)?)\b/);
-  return match ? match[1] : null;
-}
-
-function readGsdSdkVersion(sdkPath) {
-  if (!sdkPath) return null;
-  const cp = require('child_process');
-  try {
-    const isWindowsCommandShim = process.platform === 'win32' && /\.(cmd|bat)$/i.test(String(sdkPath));
-    const result = cp.spawnSync(isWindowsCommandShim ? 'cmd.exe' : sdkPath, isWindowsCommandShim ? ['/c', sdkPath, '--version'] : ['--version'], {
-      encoding: 'utf8',
-      stdio: ['ignore', 'pipe', 'pipe'],
-      timeout: 2000,
-      env: process.env,
-    });
-    if (result.error || result.status !== 0) return null;
-    return parseGsdSdkVersion(`${result.stdout || ''}\n${result.stderr || ''}`);
-  } catch {
-    return null;
-  }
-}
-
-function buildGsdSdkVersionMismatchReport(sdkPath, expectedVersion, opts) {
-  const actualVersion = readGsdSdkVersion(sdkPath);
-  if (!actualVersion || !expectedVersion) return null;
-  if (actualVersion === expectedVersion) return null;
-  // #3668: local installs should NOT be told to run `npm install -g` —
-  // that contradicts the intent of --local (self-contained, no global dep).
-  // For local installs the correct remediation is to re-run the local
-  // installer (e.g. `npx evolv-coder-lite-cc@latest --claude --local`).
-  const isLocal = opts && opts.isLocal;
-  const fix_command = isLocal
-    ? 'npx @evolvconsulting/evolv-coder-lite@latest --claude --local'
-    : 'npm install -g @evolvconsulting/evolv-coder-lite@latest';
-  return {
-    ok: false,
-    reason: 'ecl_sdk_version_mismatch',
-    sdk_path: sdkPath,
-    actual_version: actualVersion,
-    expected_version: expectedVersion,
-    fix_command,
-    is_local: !!isLocal,
-  };
-}
-
-function renderGsdSdkVersionMismatchReport(ir) {
-  console.log('');
-  console.log(`  ${yellow}⚠${reset} ${bold}ecl-sdk version mismatch${reset} — PATH resolves a stale SDK.`);
-  console.log(`    Resolved ecl-sdk: ${ir.sdk_path}`);
-  console.log(`    Resolved version: ${ir.actual_version}`);
-  console.log(`    Installer version: ${ir.expected_version}`);
-  console.log(`    Workflows that call ${cyan}ecl-sdk query …${reset} will use the stale executable first.`);
-  console.log(`    Fix: ${cyan}${ir.fix_command}${reset}`);
-  console.log(`    Or remove the stale global install / adjust PATH so the current shim is first.`);
-  console.log('');
-}
-
-/**
- * #3020: probe the user's login shell to learn the PATH that will be
- * visible at workflow runtime.
- *
- * The install subprocess inherits process.env.PATH from npm/npx, which
- * may include directories the user's interactive shells do not (e.g.
- * ~/.local/bin auto-injected by npm-prefix tooling, or nvm-shimmed
- * paths). Asserting `ecl-sdk` is on the install-subprocess PATH is a
- * weaker invariant than the runtime contract — workflows shell out via
- * `bash -c "ecl-sdk …"`, and that bash inherits PATH from the user's
- * login shell.
- *
- * Uses `$SHELL -lc 'printf %s "$PATH"'` on POSIX. Returns null on Windows
- * (the Windows counterpart is getUserShellWindowsPersistentPath, which reads
- * the user-level 'Path' registry key via PowerShell). Returns null
- * when $SHELL is unset, when the spawn fails, or when the result is
- * empty — callers must fall back to process.env.PATH in those cases.
- *
- * Synchronous so it can be called from the existing post-install check
- * without restructuring the whole flow as async.
- */
-function getUserShellPath() {
-  if (process.platform === 'win32') return null;
-  const shellEnv = typeof process.env.SHELL === 'string' ? process.env.SHELL : '';
-  if (!shellEnv) return null;
-  const cp = require('child_process');
-  try {
-    const out = cp.execFileSync(shellEnv, ['-lc', 'printf %s "$PATH"'], {
-      encoding: 'utf8',
-      stdio: ['ignore', 'pipe', 'pipe'],
-      // 2-second cap so a misconfigured rc file (e.g. interactive prompt)
-      // can't hang the install. The probe is best-effort — null on timeout
-      // is the safe fallback.
-      timeout: 2000,
-    });
-    // #3028 CR: login startup scripts can print banners / motd / stale
-    // log lines BEFORE the printf, polluting stdout. Take the LAST
-    // non-empty line as the PATH candidate so noise doesn't flip the
-    // cross-shell check to false. PATH itself is single-line.
-    const lines = String(out || '').split(/\r?\n/).map((s) => s.trim()).filter(Boolean);
-    const candidate = lines.length > 0 ? lines[lines.length - 1] : '';
-    return candidate.length > 0 ? candidate : null;
-  } catch {
-    return null;
-  }
-}
-
-/**
- * #3211: Windows counterpart to getUserShellPath(). Probes the effective
- * persistent Path from the Windows registry via PowerShell by merging
- * Machine-level + User-level entries:
- *
- *   $m=[Environment]::GetEnvironmentVariable('Path','Machine')
- *   $u=[Environment]::GetEnvironmentVariable('Path','User')
- *   ($m + ';' + $u).Trim(';')
- *
- * This is the correct primitive for Windows cross-shell PATH verification —
- * Git Bash, PowerShell, and cmd.exe all inherit the effective (Machine;User)
- * registry Path, while the install-subprocess process.env.PATH is polluted
- * with transient npx entries and may not include directories added by the
- * user post-install. Reading only User-level Path would produce a false
- * warning when ecl-sdk is in a machine-level bin dir (e.g. C:\Program Files\nodejs).
- *
- * Returns the filtered persistent Path string (npx segments stripped) or null
- * on any failure (non-Windows, PowerShell not available, spawn timeout, empty
- * result). Callers must treat null as "check unavailable — trust install-time
- * filtered PATH".
- *
- * Synchronous, 2-second timeout, best-effort — safe to call from
- * installSdkIfNeeded without restructuring to async.
- */
-function getUserShellWindowsPersistentPath() {
-  if (process.platform !== 'win32') return null;
-  const cp = require('child_process');
-  // Use the same execFileSync form as getUserShellPath() above — static
-  // literal args, no user input, no injection vector.
-  const execFile = cp.execFileSync.bind(cp);
-  try {
-    // Read Machine + User Path and merge them — the effective PATH that
-    // PowerShell, cmd.exe, and Git Bash inherit is Machine;User (machine
-    // entries first). Reading only User-level Path would produce a false
-    // warning when ecl-sdk is installed in a machine-level bin dir
-    // (e.g. C:\Program Files\nodejs).
-    const out = execFile(
-      'powershell.exe',
-      [
-        '-NoProfile',
-        '-Command',
-        "$u=[Environment]::GetEnvironmentVariable('Path','User');" +
-        "$m=[Environment]::GetEnvironmentVariable('Path','Machine');" +
-        "[Console]::Out.Write(($m + ';' + $u).Trim(';'))",
-      ],
-      {
-        encoding: 'utf8',
-        stdio: ['ignore', 'pipe', 'ignore'],
-        // 2-second cap — a locked registry or slow profile can't hang the install.
-        timeout: 2000,
-      },
-    );
-    // Take the last non-empty line so any motd/banner noise before the output
-    // doesn't corrupt the result — same defensive pattern as getUserShellPath.
-    const lines = String(out || '').split(/\r?\n/).map((s) => s.trim()).filter(Boolean);
-    const candidate = lines.length > 0 ? lines[lines.length - 1] : '';
-    if (!candidate) return null;
-    // Strip transient npx dirs from the persistent Path before returning —
-    // the registry can accumulate stale _npx entries from prior runs.
-    const filtered = filterNpxFromPath(candidate);
-    return filtered.length > 0 ? filtered : null;
-  } catch {
-    return null;
-  }
-}
-
-/**
- * #2775 helper: attempt to materialize the `ecl-sdk` shim at a user-writable
- * PATH location. Returns the absolute path created on success, or null if no
- * suitable location was usable.
- *
- * Strategy (POSIX): prefer ~/.local/bin (creating it if absent — many distros
- * already have it on PATH via .profile). Fall back to the first PATH entry
- * under HOME we can write to. Skip on Windows (npm install -g is the right
- * primitive there; we don't try to fabricate a .cmd shim).
- */
-function trySelfLinkGsdSdk(shimSrc) {
-  if (process.platform === 'win32') {
-    return trySelfLinkGsdSdkWindows(shimSrc);
-  }
-  const path = require('path');
-  const fs = require('fs');
-  const home = os.homedir();
-  if (!home) return null;
-
-  const localBin = path.join(home, '.local', 'bin');
-  const pathCandidates = [];
-  const pathEnv = process.env.PATH || '';
-  for (const seg of pathEnv.split(path.delimiter)) {
-    if (!seg) continue;
-    const abs = path.resolve(seg);
-    if (abs.startsWith(home + path.sep) && !pathCandidates.includes(abs)) {
-      pathCandidates.push(abs);
-    }
-  }
-  // If ~/.local/bin is already on PATH, keep it first (preserves existing UX
-  // for the common case). Otherwise prefer PATH-backed HOME dirs first so we
-  // self-link somewhere actually on PATH, falling back to ~/.local/bin only
-  // when no on-PATH HOME dir is writable. (#2775 CodeRabbit follow-up)
-  const candidates = pathCandidates.includes(localBin)
-    ? [localBin, ...pathCandidates.filter((dir) => dir !== localBin)]
-    : [...pathCandidates, localBin];
-
-  for (const dir of candidates) {
-    try {
-      fs.mkdirSync(dir, { recursive: true });
-      const target = path.join(dir, 'ecl-sdk');
-      // Replace any existing entry — it may be stale (prior install of an
-      // older version pointing at a now-absent shim).
-      try { fs.unlinkSync(target); } catch {}
-      try {
-        fs.symlinkSync(shimSrc, target);
-      } catch {
-        // Filesystems that don't support symlinks (some FUSE mounts): write a
-        // tiny wrapper that `require()`s the real shim by absolute path. We
-        // cannot copyFileSync(shimSrc, target) — bin/ecl-sdk.js resolves the
-        // CLI via `path.resolve(__dirname, '..', 'sdk', 'dist', 'cli.js')`,
-        // and after a copy `__dirname` would be the link directory (e.g.
-        // ~/.local/bin), causing the resolved CLI path to be broken
-        // (~/.local/sdk/dist/cli.js). Wrapping via require() preserves
-        // __dirname resolution because the require runs against shimSrc's
-        // own location. (#2775 CodeRabbit follow-up)
-        fs.writeFileSync(
-          target,
-          `#!/usr/bin/env node\nrequire(${JSON.stringify(shimSrc)});\n`,
-        );
-        try { fs.chmodSync(target, 0o755); } catch {}
-      }
-      return target;
-    } catch {
-      // permission / EROFS — try next candidate.
-    }
-  }
-  return null;
-}
-
-/**
- * #2962: Windows counterpart to trySelfLinkGsdSdk. Prior to this, the function
- * unconditionally returned null on Windows ("we don't try to fabricate a .cmd
- * shim there"), which left `--sdk --global` installs without a callable
- * `ecl-sdk` on PATH despite the installer reporting success.
- *
- * Strategy: discover npm's global bin directory via `npm prefix -g` (which on
- * Windows IS the bin dir, no `bin/` suffix — see line 8721) and write the same
- * three-file shim set npm itself emits: `ecl-sdk.cmd` (cmd.exe), `ecl-sdk.ps1`
- * (PowerShell), and a Bash wrapper named `ecl-sdk` (for Cygwin/MSYS/Git-Bash).
- * Each shim invokes `node "<absolute path to bin/ecl-sdk.js>"` with passed
- * args so the shim location is decoupled from the SDK location — same logical
- * structure as the POSIX wrapper-via-require() fallback above.
- *
- * Returns the .cmd file path on success (the primary handle the installer's
- * onPath check looks for), null otherwise.
- */
-/**
- * Pure builder: compute the structured Windows shim triple from a shimSrc path.
- * No filesystem I/O, no spawn — produces the IR that `trySelfLinkGsdSdkWindows`
- * then renders to disk. Exposed for tests so assertions can run against typed
- * fields (interpreter, shimAbs, eol, fileNames) instead of substring matches
- * over rendered shim text.
- */
-function buildWindowsShimTriple(shimSrc) {
-  return buildWindowsShimTripleFromProjection(shimSrc);
-}
-
-/**
- * #3011: pure builder for the SDK-not-on-PATH diagnostic. Takes the
- * resolved shim directory (or null if write failed), the current platform,
- * and the install.js __dirname (used to detect npx-cache invocation).
- * Returns a typed IR with:
- *   - shimLocationLine: prose mentioning where the shim is (or empty if no
- *     write happened)
- *   - actionLines: ordered list of commands the user can run to add the
- *     shim dir to their PATH (platform-specific shells), or fallback to
- *     `npm install -g` advice when no shim was written
- *   - npxNoteLines: ordered list of lines warning about npx persistence
- *     when runDir is under an `_npx` cache segment
- *
- * Tests assert on the typed fields (paths/commands), not on rendered
- * console output. Pure function — no fs, no spawn, no console.
- */
-function formatSdkPathDiagnostic({ shimDir, platform, runDir }) {
-  return formatSdkPathDiagnosticFromProjection({ shimDir, platform, runDir });
-}
-
-function trySelfLinkGsdSdkWindows(shimSrc) {
-  const path = require('path');
-  const fs = require('fs');
-  const cp = require('child_process');
-
-  let npmPrefix;
-  try {
-    // On Windows, `npm` is `npm.cmd` — Node's child_process docs explicitly
-    // call out that .cmd/.bat files cannot be spawned via execFile/execFileSync
-    // without a shell ("Spawning .bat and .cmd files on Windows" section).
-    // Match the existing convention at line ~8718 which uses execSync for the
-    // same `npm prefix -g` lookup. Inputs here are static literals, so shell
-    // interpolation is not an injection vector.
-    npmPrefix = cp
-      .execSync('npm prefix -g', {
-        encoding: 'utf8',
-        stdio: ['ignore', 'pipe', 'ignore'],
-      })
-      .trim();
-  } catch {
-    return null;
-  }
-  if (!npmPrefix || !fs.existsSync(npmPrefix)) return null;
-
-  // Verify writability before producing partial shim sets.
-  try {
-    fs.mkdirSync(npmPrefix, { recursive: true });
-    const probe = path.join(npmPrefix, '.ecl-sdk-write-probe');
-    fs.writeFileSync(probe, '');
-    fs.unlinkSync(probe);
-  } catch {
-    return null;
-  }
-
-  const triple = buildWindowsShimTriple(shimSrc);
-  const targets = {
-    cmd: path.join(npmPrefix, triple.fileNames.cmd),
-    ps1: path.join(npmPrefix, triple.fileNames.ps1),
-    sh: path.join(npmPrefix, triple.fileNames.sh),
-  };
-
-  try {
-    // Replace any existing shims — they may be stale (prior install of an
-    // older version pointing at a now-absent shim path).
-    for (const target of Object.values(targets)) {
-      try { fs.unlinkSync(target); } catch {}
-    }
-    fs.writeFileSync(targets.cmd, triple.render.cmd());
-    fs.writeFileSync(targets.ps1, triple.render.ps1());
-    fs.writeFileSync(targets.sh, triple.render.sh());
-    // chmod is a no-op on Windows-native node but harmless; sets exec bit on
-    // WSL-mounted filesystems where Bash users live.
-    try { fs.chmodSync(targets.sh, 0o755); } catch {}
-    return targets.cmd;
-  } catch {
-    // Partial-write on permission flap — best-effort cleanup so the next run
-    // starts from a clean slate.
-    for (const target of Object.values(targets)) {
-      try { fs.unlinkSync(target); } catch {}
-    }
-    return null;
-  }
 }
 
 /**
@@ -11233,13 +10720,6 @@ function installAllRuntimes(runtimes, isGlobal, isInteractive) {
 
   const finalize = (shouldInstallStatusline, shouldInstallBanner) => {
     try {
-      // Verify sdk/dist/cli.js is present and executable. The dist is shipped
-      // prebuilt in the tarball (fix/2441-sdk-decouple); ecl-sdk reaches users via
-      // the parent package's bin/ecl-sdk.js shim, so no sub-install is needed.
-      // Skip with --no-sdk. Skip with isLocal (#2678 — local installs don't own global npm).
-      // #3033: pass forceSdk so --sdk overrides the local-install skip.
-      installSdkIfNeeded({ isLocal: !isGlobal, forceSdk: hasSdk, throwOnFailure: true });
-
       const printSummaries = () => {
         for (const result of results) {
           const useStatusline = statuslineRuntimes.includes(result.runtime) && shouldInstallStatusline;
@@ -11341,18 +10821,14 @@ module.exports = {
     installCodexConfig,
     readGsdRuntimeProfileResolver,
     readGsdEffectiveModelOverrides,
+    readGsdEffectiveEffortConfig,
+    resolveInstallTimeEffort,
+    injectEffortFrontmatter,
+    get _GSD_EFFORT_MANIFEST_TIER_DEFAULTS() { return _getGsdEffortCatalog().EFFORT_MANIFEST_TIER_DEFAULTS; },
+    get _GSD_EFFORT_MANIFEST_DEFAULT() { return _getGsdEffortCatalog().EFFORT_MANIFEST_DEFAULT; },
     install,
     installAllRuntimes,
     uninstall,
-    installSdkIfNeeded,
-    detectStaleStandaloneSdk,
-    formatStaleStandaloneSdkWarning,
-    buildSdkFailFastReport,
-    renderSdkFailFastReport,
-    buildGsdSdkVersionMismatchReport,
-    renderGsdSdkVersionMismatchReport,
-    classifySdkInstall,
-    readGsdSdkVersion,
     convertClaudeCommandToCodexSkill,
     convertClaudeToOpencodeFrontmatter,
     convertClaudeToKiloFrontmatter,
@@ -11403,19 +10879,11 @@ module.exports = {
     populatePristineDir,
     USER_OWNED_ARTIFACTS,
     finishInstall,
-    trySelfLinkGsdSdk,
-    trySelfLinkGsdSdkWindows,
-    buildWindowsShimTriple,
-    formatSdkPathDiagnostic,
-    filterNpxFromPath,
-    isLegacyGsdSdkShim,
-    isGsdSdkOnPath,
-    getUserShellPath,
-    getUserShellWindowsPersistentPath,
     homePathCoveredByRc,
     maybeSuggestPathExport,
     runtimeMap,
     allRuntimes,
+    ECL_UNINSTALL_HOOKS,
     parseRuntimeInput,
     buildRuntimePromptText,
     buildUpdateBannerPromptText,
@@ -11432,10 +10900,11 @@ module.exports = {
     readGsdCommandNames,
     installRuntimeArtifacts,
     uninstallRuntimeArtifacts,
+    parseConfigDirFromArgs,
   };
 
 // Main logic — only run when not loaded as a module for testing
-if (!process.env.ECL_TEST_MODE) {
+if (require.main === module && !process.env.ECL_TEST_MODE) {
   if (hasSkillsRoot) {
     // Print the skills root directory for a given runtime (used by /ecl-sync-skills).
     // Usage: node install.js --skills-root <runtime>

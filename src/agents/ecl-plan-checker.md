@@ -646,7 +646,7 @@ issue:
 
 Load phase operation context:
 ```bash
-INIT=$(ecl-sdk query init.phase-op "${PHASE_ARG}")
+INIT=$(ecl-tools query init.phase-op "${PHASE_ARG}")
 if [[ "$INIT" == @file:* ]]; then INIT=$(cat "${INIT#@file:}"); fi
 ```
 
@@ -655,23 +655,23 @@ Extract from init JSON: `phase_dir`, `phase_number`, `has_plans`, `plan_count`.
 Orchestrator provides CONTEXT.md content in the verification prompt. If provided, parse for locked decisions, discretion areas, deferred ideas.
 
 ```bash
-ecl-sdk query phase.list-plans "$phase_number"
+ecl-tools query phase.list-plans "$phase_number"
 # Research / brief artifacts (deterministic listing)
-ecl-sdk query phase.list-artifacts "$phase_number" --type research
-ecl-sdk query roadmap.get-phase "$phase_number"
-ecl-sdk query phase.list-artifacts "$phase_number" --type summary
+ecl-tools query phase.list-artifacts "$phase_number" --type research
+ecl-tools query roadmap.get-phase "$phase_number"
+ecl-tools query phase.list-artifacts "$phase_number" --type summary
 ```
 
 **Extract:** Phase goal, requirements (decompose goal), locked decisions, deferred ideas.
 
 ## Step 2: Load All Plans
 
-Use `ecl-sdk query` to validate plan structure:
+Use `ecl-tools query` to validate plan structure:
 
 ```bash
 for plan in "$PHASE_DIR"/*-PLAN.md; do
   echo "=== $plan ==="
-  PLAN_STRUCTURE=$(ecl-sdk query verify.plan-structure "$plan")
+  PLAN_STRUCTURE=$(ecl-tools query verify.plan-structure "$plan")
   echo "$PLAN_STRUCTURE"
 done
 ```
@@ -686,10 +686,10 @@ Map errors/warnings to verification dimensions:
 
 ## Step 3: Parse must_haves
 
-Extract must_haves from each plan using `ecl-sdk query`:
+Extract must_haves from each plan using `ecl-tools query`:
 
 ```bash
-MUST_HAVES=$(ecl-sdk query frontmatter.get "$PLAN_PATH" must_haves)
+MUST_HAVES=$(ecl-tools query frontmatter.get "$PLAN_PATH" must_haves)
 ```
 
 Returns JSON: `{ truths: [...], artifacts: [...], key_links: [...] }`
@@ -734,7 +734,7 @@ For each requirement: find covering task(s), verify action is specific, flag gap
 Use `verify.plan-structure` (already run in Step 2):
 
 ```bash
-PLAN_STRUCTURE=$(ecl-sdk query verify.plan-structure "$PLAN_PATH")
+PLAN_STRUCTURE=$(ecl-tools query verify.plan-structure "$PLAN_PATH")
 ```
 
 The `tasks` array in the result shows each task's completeness:
@@ -747,7 +747,7 @@ The `tasks` array in the result shows each task's completeness:
 
 **For manual validation of specificity** (`verify.plan-structure` checks structure, not content quality), use structured extraction instead of grepping raw XML:
 ```bash
-ecl-sdk query plan.task-structure "$PLAN_PATH"
+ecl-tools query plan.task-structure "$PLAN_PATH"
 ```
 Inspect `tasks` in the JSON; open the PLAN in the editor for prose-level review.
 
@@ -774,8 +774,8 @@ Missing: No mention of fetch/API call → Issue: Key link not planned
 ## Step 8: Assess Scope
 
 ```bash
-ecl-sdk query plan.task-structure "$PHASE_DIR/$PHASE-01-PLAN.md"
-ecl-sdk query frontmatter.get "$PHASE_DIR/$PHASE-01-PLAN.md" files_modified
+ecl-tools query plan.task-structure "$PHASE_DIR/$PHASE-01-PLAN.md"
+ecl-tools query frontmatter.get "$PHASE_DIR/$PHASE-01-PLAN.md" files_modified
 ```
 
 Thresholds: 2-3 tasks/plan good, 4 warning, 5+ blocker (split required).

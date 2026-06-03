@@ -1,6 +1,7 @@
-// allow-test-rule: pending-migration-to-typed-ir [#2974]
-// Tracked in #2974 for migration to typed-IR assertions per CONTRIBUTING.md
-// "Prohibited: Raw Text Matching on Test Outputs". Do not copy this pattern.
+// allow-test-rule: source-text-is-the-product
+// Tests measure line counts of workflow files — the workflow file text IS the
+// product loaded by agents at runtime. No command output is parsed.
+// Migrated from pending-migration-to-typed-ir per #455.
 
 /**
  * Workflow size budget.
@@ -21,8 +22,8 @@
  * pattern introduced by #2551).
  *
  * See:
- *   - https://github.com/open-gsd/get-shit-done-redux/issues/2551 (this test)
- *   - https://github.com/open-gsd/get-shit-done-redux/issues/2361 (agent budget)
+ *   - https://github.com/open-gsd/gsd-core/issues/2551 (this test)
+ *   - https://github.com/open-gsd/gsd-core/issues/2361 (agent budget)
  */
 
 const { test, describe } = require('node:test');

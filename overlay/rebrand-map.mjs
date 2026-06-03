@@ -66,6 +66,15 @@ const RULES = [
   { track: 'auth:bare-taches', find: /TÂCHES/g,                      repl: 'evolv Consulting' },
 
   // --- product/repo names ---
+  // v1.2.0 renamed the upstream package get-shit-done-redux → gsd-core
+  // (npm @opengsd/gsd-core, repo open-gsd/gsd-core, primary bin `gsd-core`).
+  // Map it to the eCL package id, exactly as the redux name does. MUST precede
+  // the generic `\bgsd-` rule below, which would otherwise yield the bogus
+  // "ecl-core" (a package/repo that does not exist). The scope/org rules
+  // (@opengsd→@evolvconsulting, open-gsd→evolvconsulting) compose with this to
+  // produce @evolvconsulting/evolv-coder-lite and evolvconsulting/evolv-coder-lite.
+  { track: 'name:gsd-core',  find: /gsd-core/g,                      repl: 'evolv-coder-lite' },
+  { track: 'name:gsd-core:U', find: /GSD-core/g,                     repl: 'evolv-coder-lite' },
   { track: 'name:redux',    find: /get-shit-done-redux/g,           repl: 'evolv-coder-lite' },
   { track: 'name:redux:c',  find: /Get Shit Done Redux/g,           repl: 'evolv Coder Lite' },
   { track: 'name:gsd:upper', find: /GET SHIT DONE/g,                repl: 'EVOLV CODER LITE' },
@@ -78,7 +87,22 @@ const RULES = [
 
   // --- bin / tool names ---
   { track: 'bin:sdk',       find: /\bgsd-sdk\b/g,                   repl: 'ecl-sdk' },
-  { track: 'bin:tools',     find: /\bgsd-tools\b/g,                 repl: 'ecl-tools' },
+  // Trailing boundary only (no leading `\b`): v1.2.0's ecl-tools.cjs emits an
+  // error string `...flag}\ngsd-tools does not accept...` where the `\n` puts a
+  // word char before `gsd`, defeating a leading-boundary rule and shipping a
+  // visible `gsd-tools` leak (verify-rebrand's own detector shares that blind
+  // spot and misses it). Leading boundary is unnecessary — `gsd-tools` cannot
+  // be a suffix of a larger identifier (the hyphen breaks camelCase).
+  { track: 'bin:tools',     find: /gsd-tools\b/g,                   repl: 'ecl-tools' },
+  // v1.2.0 (#373) ships a space-safe workflow launcher: a shell function
+  // `gsd_run`. It appears not just as a bare identifier (handled by id:gsd-snake)
+  // but inside regex literals (`/\bgsd_run\b/`) and after escape sequences
+  // (`\ngsd_run query`), where the preceding `\` / word-char defeats the narrower
+  // `\bgsd_` snake rule and leaves a leak. Match it with only a trailing boundary
+  // so every form rebrands consistently — the parity test scans real workflows
+  // that emit `ecl_run`, so a stale `gsd_run` regex would make the guard vacuous.
+  // Trailing `\b` (not leading) avoids eating tokens like `gsd_runner`.
+  { track: 'bin:gsd_run',   find: /gsd_run\b/g,                     repl: 'ecl_run' },
 
   // --- slash-command prefixes ---
   { track: 'cmd:dash',      find: /\/gsd-/g,                        repl: '/ecl-' },

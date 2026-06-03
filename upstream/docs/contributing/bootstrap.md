@@ -36,8 +36,8 @@ will read it.
 
 ```bash
 # 1. Clone
-git clone https://github.com/open-gsd/get-shit-done-redux.git
-cd get-shit-done-redux
+git clone https://github.com/open-gsd/gsd-core.git
+cd gsd-core
 
 # 2. Activate the pinned Node version
 nvm use          # nvm
@@ -67,7 +67,7 @@ See https://docs.npmjs.com/cli/v10/commands/npm-ci
 | `npm run test:integration` | Integration tests |
 | `npm run build:sdk` | Rebuild the SDK dist (required before first test run) |
 
-> `npm run check:integrity` — available once [#114](https://github.com/open-gsd/get-shit-done-redux/issues/114) merges.
+> `npm run check:integrity` — available once [#114](https://github.com/open-gsd/gsd-core/issues/114) merges.
 
 ---
 
@@ -79,7 +79,7 @@ Run the environment validator before any test or audit run:
 npm run check:env
 ```
 
-This runs `scripts/check-env.sh` and reports pass/fail for each check:
+This runs `scripts/check-env.cjs` and reports pass/fail for each check:
 
 | Check | What it verifies |
 |---|---|
@@ -217,5 +217,10 @@ gsd-test-summary
 ```
 
 `gsd-test-summary` runs the full suite in a Docker container and emits a concise
-`Mac: N failed / Docker: N failed` summary. Both lines must show `0 failed` before
-a PR is opened. See [CLAUDE.md](../../CLAUDE.md) for the required PR-flow ordering.
+`Mac: N failed / Docker: N failed` summary.
+
+- **Default rule (code changes):** both lines must show `0 failed` before a PR is opened.
+- **Exception (ADR/doc-only PRs):** if the diff is documentation-only (for example `docs/adr/*.md`, `docs/**/*.md`, `README*.md`) and contains no executable-code or test changes, `gsd-test-summary` is optional.
+
+When using the doc-only exception, note it explicitly in the PR body (for example:
+"Doc-only PR; gsd-test-summary not required by docs-only exception in `docs/contributing/bootstrap.md`").

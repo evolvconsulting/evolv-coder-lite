@@ -20,18 +20,8 @@ This prevents the two most common AI development failures: choosing the wrong fr
 ## 1. Initialize
 
 ```bash
-# SDK resolution: prefer local ecl-tools.cjs, fall back to global ecl-sdk (#3668)
-ECL_TOOLS="${RUNTIME_DIR:-$(git rev-parse --show-toplevel 2>/dev/null || pwd)}/evolv-coder-lite/bin/ecl-tools.cjs"
-if [ -f "$ECL_TOOLS" ]; then
-  ECL_SDK="node $ECL_TOOLS"
-elif command -v ecl-sdk >/dev/null 2>&1; then
-  ECL_SDK="ecl-sdk"
-else
-  echo "ERROR: ecl-sdk not found on PATH and $ECL_TOOLS does not exist." >&2
-  echo "Run: npx evolv-coder-lite-cc@latest --claude --local" >&2
-  exit 1
-fi
-INIT=$($ECL_SDK query init.plan-phase "$PHASE")
+_GSD_SHIM_NAME="ecl-tools.cjs"; _GSD_RUNTIME_ROOT="${RUNTIME_DIR:-$(git rev-parse --show-toplevel 2>/dev/null || pwd)}"; ECL_TOOLS="${_GSD_RUNTIME_ROOT}/evolv-coder-lite/bin/${_GSD_SHIM_NAME}"; if [ -f "$ECL_TOOLS" ]; then ecl_run() { node "$ECL_TOOLS" "$@"; }; elif [ -f "${_GSD_RUNTIME_ROOT}/.claude/evolv-coder-lite/bin/${_GSD_SHIM_NAME}" ]; then ECL_TOOLS="${_GSD_RUNTIME_ROOT}/.claude/evolv-coder-lite/bin/${_GSD_SHIM_NAME}"; ecl_run() { node "$ECL_TOOLS" "$@"; }; elif command -v ecl-tools >/dev/null 2>&1; then ECL_TOOLS="$(command -v ecl-tools)"; ecl_run() { "$ECL_TOOLS" "$@"; }; elif [ -f "$HOME/.claude/evolv-coder-lite/bin/${_GSD_SHIM_NAME}" ]; then ECL_TOOLS="$HOME/.claude/evolv-coder-lite/bin/${_GSD_SHIM_NAME}"; ecl_run() { node "$ECL_TOOLS" "$@"; }; else echo "ERROR: ecl-tools.cjs not found at $ECL_TOOLS and ecl-tools is not on PATH. Run: npx -y @evolvconsulting/evolv-coder-lite@latest --claude --local" >&2; exit 1; fi
+INIT=$(ecl_run query init.plan-phase "$PHASE")
 if [[ "$INIT" == @file:* ]]; then INIT=$(cat "${INIT#@file:}"); fi
 ```
 
@@ -41,15 +31,15 @@ Parse JSON for: `phase_dir`, `phase_number`, `phase_name`, `phase_slug`, `padded
 
 Resolve agent models:
 ```bash
-SELECTOR_MODEL=$($ECL_SDK query resolve-model ecl-framework-selector 2>/dev/null | jq -r '.model' 2>/dev/null || true)
-RESEARCHER_MODEL=$($ECL_SDK query resolve-model ecl-ai-researcher 2>/dev/null | jq -r '.model' 2>/dev/null || true)
-DOMAIN_MODEL=$($ECL_SDK query resolve-model ecl-domain-researcher 2>/dev/null | jq -r '.model' 2>/dev/null || true)
-PLANNER_MODEL=$($ECL_SDK query resolve-model ecl-eval-planner 2>/dev/null | jq -r '.model' 2>/dev/null || true)
+SELECTOR_MODEL=$(ecl_run query resolve-model ecl-framework-selector 2>/dev/null | jq -r '.model' 2>/dev/null || true)
+RESEARCHER_MODEL=$(ecl_run query resolve-model ecl-ai-researcher 2>/dev/null | jq -r '.model' 2>/dev/null || true)
+DOMAIN_MODEL=$(ecl_run query resolve-model ecl-domain-researcher 2>/dev/null | jq -r '.model' 2>/dev/null || true)
+PLANNER_MODEL=$(ecl_run query resolve-model ecl-eval-planner 2>/dev/null | jq -r '.model' 2>/dev/null || true)
 ```
 
 Check config:
 ```bash
-AI_PHASE_ENABLED=$($ECL_SDK query config-get workflow.ai_integration_phase 2>/dev/null || echo "true")
+AI_PHASE_ENABLED=$(ecl_run query config-get workflow.ai_integration_phase 2>/dev/null || echo "true")
 ```
 
 **If `AI_PHASE_ENABLED` is `false`:**
@@ -65,7 +55,7 @@ Exit workflow.
 Extract phase number from $ARGUMENTS. If not provided, detect next unplanned phase.
 
 ```bash
-PHASE_INFO=$($ECL_SDK query roadmap.get-phase "${PHASE}")
+PHASE_INFO=$(ecl_run query roadmap.get-phase "${PHASE}")
 ```
 
 **If `found` is false:** Error with available phases.
