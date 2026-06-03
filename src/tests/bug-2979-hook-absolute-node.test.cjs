@@ -166,7 +166,7 @@ describe('Bug #2979: buildHookCommand for .sh hooks still uses bare "bash" (POSI
     });
     assert.equal(
       cmd,
-      '"C:/Program Files/Git/bin/bash.exe" "C:/Users/me/.codex/hooks/ecl-validate-commit.sh"',
+      `"C:/Program Files/Git/bin/bash.exe" -lc 'C:/Users/me/.codex/hooks/ecl-validate-commit.sh'`,
     );
   });
 

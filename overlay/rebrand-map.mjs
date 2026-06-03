@@ -216,7 +216,18 @@ export function looksLikeText(buf) {
     if (b < 9) weird++;
     else if (b > 13 && b < 32) weird++;
   }
-  return (weird / sample.length) < 0.01;
+  if ((weird / sample.length) >= 0.01) return false;
+  // Invalid UTF-8 → treat as binary. The bake transforms text files via
+  // buf.toString('utf8'), which silently rewrites invalid byte sequences to
+  // U+FFFD — corrupting files whose bytes don't round-trip (e.g. the
+  // intentionally non-UTF8 security-scan fixtures under
+  // tests/fixtures/base64-locale/). Such files must be copied verbatim.
+  try {
+    new TextDecoder('utf-8', { fatal: true }).decode(buf);
+  } catch (_) {
+    return false;
+  }
+  return true;
 }
 
 export const RULE_KEYS = RULES.map((r) => r.track);
