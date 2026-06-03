@@ -19,18 +19,8 @@ cat .planning/ROADMAP.md
 ## Step 2: Find next backlog number
 
 ```bash
-# SDK resolution: prefer local ecl-tools.cjs, fall back to global ecl-sdk (#3668)
-ECL_TOOLS="${RUNTIME_DIR:-$(git rev-parse --show-toplevel 2>/dev/null || pwd)}/evolv-coder-lite/bin/ecl-tools.cjs"
-if [ -f "$ECL_TOOLS" ]; then
-  ECL_SDK="node $ECL_TOOLS"
-elif command -v ecl-sdk >/dev/null 2>&1; then
-  ECL_SDK="ecl-sdk"
-else
-  echo "ERROR: ecl-sdk not found on PATH and $ECL_TOOLS does not exist." >&2
-  echo "Run: npx evolv-coder-lite-cc@latest --claude --local" >&2
-  exit 1
-fi
-NEXT=$($ECL_SDK query phase.next-decimal 999 --raw)
+_GSD_SHIM_NAME="ecl-tools.cjs"; _GSD_RUNTIME_ROOT="${RUNTIME_DIR:-$(git rev-parse --show-toplevel 2>/dev/null || pwd)}"; ECL_TOOLS="${_GSD_RUNTIME_ROOT}/evolv-coder-lite/bin/${_GSD_SHIM_NAME}"; if [ -f "$ECL_TOOLS" ]; then ecl_run() { node "$ECL_TOOLS" "$@"; }; elif [ -f "${_GSD_RUNTIME_ROOT}/.claude/evolv-coder-lite/bin/${_GSD_SHIM_NAME}" ]; then ECL_TOOLS="${_GSD_RUNTIME_ROOT}/.claude/evolv-coder-lite/bin/${_GSD_SHIM_NAME}"; ecl_run() { node "$ECL_TOOLS" "$@"; }; elif command -v ecl-tools >/dev/null 2>&1; then ECL_TOOLS="$(command -v ecl-tools)"; ecl_run() { "$ECL_TOOLS" "$@"; }; elif [ -f "$HOME/.claude/evolv-coder-lite/bin/${_GSD_SHIM_NAME}" ]; then ECL_TOOLS="$HOME/.claude/evolv-coder-lite/bin/${_GSD_SHIM_NAME}"; ecl_run() { node "$ECL_TOOLS" "$@"; }; else echo "ERROR: ecl-tools.cjs not found at $ECL_TOOLS and ecl-tools is not on PATH. Run: npx -y @evolvconsulting/evolv-coder-lite@latest --claude --local" >&2; exit 1; fi
+NEXT=$(ecl_run query phase.next-decimal 999 --raw)
 ```
 
 If no 999.x phases exist yet, `phase.next-decimal` returns `999.1`. Sparse numbering
@@ -63,8 +53,8 @@ Plans:
 Apply the `project_code` prefix (if set in `.planning/config.json`) so the backlog directory name is consistent with all other phase-creation paths:
 
 ```bash
-SLUG=$($ECL_SDK query generate-slug "$ARGUMENTS" --raw)
-PROJECT_CODE=$($ECL_SDK query config-get project_code --raw 2>/dev/null || echo "")
+SLUG=$(ecl_run query generate-slug "$ARGUMENTS" --raw)
+PROJECT_CODE=$(ecl_run query config-get project_code --raw 2>/dev/null || echo "")
 PREFIX=$([ -n "$PROJECT_CODE" ] && echo "${PROJECT_CODE}-" || echo "")
 PHASE_DIR=".planning/phases/${PREFIX}${NEXT}-${SLUG}"
 mkdir -p "${PHASE_DIR}"
@@ -74,7 +64,7 @@ touch "${PHASE_DIR}/.gitkeep"
 ## Step 5: Commit
 
 ```bash
-$ECL_SDK query commit "docs: add backlog item ${NEXT} — ${ARGUMENTS}" --files .planning/ROADMAP.md "${PHASE_DIR}/.gitkeep"
+ecl_run query commit "docs: add backlog item ${NEXT} — ${ARGUMENTS}" --files .planning/ROADMAP.md "${PHASE_DIR}/.gitkeep"
 ```
 
 ## Step 6: Report

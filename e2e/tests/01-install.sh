@@ -45,8 +45,9 @@ else
 fi
 rm -f "$INSTALL_LOG"
 
-# All three bins declared in package.json#bin must resolve on PATH
-for bin in evolv-coder-lite ecl-sdk ecl-tools; do
+# Both bins declared in package.json#bin must resolve on PATH.
+# (ecl-sdk was dropped when upstream v1.2.0 retired gsd-sdk in favour of gsd-tools.)
+for bin in evolv-coder-lite ecl-tools; do
   test_start "bin on PATH: $bin"
   if command -v "$bin" >/dev/null 2>&1; then
     echo -e "    ${YELLOW}$(command -v "$bin")${NC}"

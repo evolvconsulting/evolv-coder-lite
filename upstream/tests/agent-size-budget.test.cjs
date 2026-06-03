@@ -1,7 +1,7 @@
-// allow-test-rule: pending-migration-to-typed-ir [#2974]
-// Tracked in #2974 for migration to typed-IR assertions per CONTRIBUTING.md
-// "Prohibited: Raw Text Matching on Test Outputs". Per-file review may
-// reclassify some entries as source-text-is-the-product during migration.
+// allow-test-rule: source-text-is-the-product
+// Workflow .md / agent .md / command .md / reference .md files — their text
+// IS what the runtime loads. Testing text content tests the deployed contract.
+// Per CONTRIBUTING.md exception matrix.
 
 /**
  * Agent size budget.
@@ -19,7 +19,7 @@
  * rationale in the PR, and make sure the bloat is not duplicated content
  * that belongs in `get-shit-done/references/`.
  *
- * See: https://github.com/open-gsd/get-shit-done-redux/issues/2361
+ * See: https://github.com/open-gsd/gsd-core/issues/2361
  */
 
 const { test, describe } = require('node:test');

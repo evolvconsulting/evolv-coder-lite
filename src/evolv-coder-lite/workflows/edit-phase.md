@@ -34,18 +34,8 @@ Exit.
 Load phase operation context:
 
 ```bash
-# SDK resolution: prefer local ecl-tools.cjs, fall back to global ecl-sdk (#3668)
-ECL_TOOLS="${RUNTIME_DIR:-$(git rev-parse --show-toplevel 2>/dev/null || pwd)}/evolv-coder-lite/bin/ecl-tools.cjs"
-if [ -f "$ECL_TOOLS" ]; then
-  ECL_SDK="node $ECL_TOOLS"
-elif command -v ecl-sdk >/dev/null 2>&1; then
-  ECL_SDK="ecl-sdk"
-else
-  echo "ERROR: ecl-sdk not found on PATH and $ECL_TOOLS does not exist." >&2
-  echo "Run: npx evolv-coder-lite-cc@latest --claude --local" >&2
-  exit 1
-fi
-INIT=$($ECL_SDK query init.phase-op "${target}")
+_GSD_SHIM_NAME="ecl-tools.cjs"; _GSD_RUNTIME_ROOT="${RUNTIME_DIR:-$(git rev-parse --show-toplevel 2>/dev/null || pwd)}"; ECL_TOOLS="${_GSD_RUNTIME_ROOT}/evolv-coder-lite/bin/${_GSD_SHIM_NAME}"; if [ -f "$ECL_TOOLS" ]; then ecl_run() { node "$ECL_TOOLS" "$@"; }; elif [ -f "${_GSD_RUNTIME_ROOT}/.claude/evolv-coder-lite/bin/${_GSD_SHIM_NAME}" ]; then ECL_TOOLS="${_GSD_RUNTIME_ROOT}/.claude/evolv-coder-lite/bin/${_GSD_SHIM_NAME}"; ecl_run() { node "$ECL_TOOLS" "$@"; }; elif command -v ecl-tools >/dev/null 2>&1; then ECL_TOOLS="$(command -v ecl-tools)"; ecl_run() { "$ECL_TOOLS" "$@"; }; elif [ -f "$HOME/.claude/evolv-coder-lite/bin/${_GSD_SHIM_NAME}" ]; then ECL_TOOLS="$HOME/.claude/evolv-coder-lite/bin/${_GSD_SHIM_NAME}"; ecl_run() { node "$ECL_TOOLS" "$@"; }; else echo "ERROR: ecl-tools.cjs not found at $ECL_TOOLS and ecl-tools is not on PATH. Run: npx -y @evolvconsulting/evolv-coder-lite@latest --claude --local" >&2; exit 1; fi
+INIT=$(ecl_run query init.phase-op "${target}")
 if [[ "$INIT" == @file:* ]]; then INIT=$(cat "${INIT#@file:}"); fi
 ```
 
@@ -61,7 +51,7 @@ Exit.
 Read the current phase section from ROADMAP.md:
 
 ```bash
-PHASE_DATA=$($ECL_SDK query roadmap get-phase "${target}")
+PHASE_DATA=$(ecl_run query roadmap get-phase "${target}")
 ```
 
 Parse the JSON result. If `found` is false:
@@ -89,7 +79,7 @@ Also parse the full section text to extract additional fields not in the SDK res
 Determine the phase status from disk. Compare against STATE.md current phase:
 
 ```bash
-ANALYZE=$($ECL_SDK query roadmap analyze)
+ANALYZE=$(ecl_run query roadmap analyze)
 ```
 
 Find the phase entry in the `phases` array. Extract `disk_status`.
@@ -191,7 +181,7 @@ Wait for user input. Use the clarified intent to rewrite all fields:
 If `depends_on` is being updated (or preserved as non-empty), validate that every referenced phase number exists in ROADMAP.md:
 
 ```bash
-ALL_PHASES=$($ECL_SDK query roadmap analyze)
+ALL_PHASES=$(ecl_run query roadmap analyze)
 ```
 
 Parse the `phases` array to get all valid phase numbers.
@@ -250,7 +240,7 @@ Read the full ROADMAP.md content, locate the phase section by its header (`## Ph
 After writing ROADMAP.md, update STATE.md Roadmap Evolution:
 
 ```bash
-$ECL_SDK query state.add-roadmap-evolution \
+ecl_run query state.add-roadmap-evolution \
   --phase {target} \
   --action edited \
   --note "edited fields: {changed_field_list}"

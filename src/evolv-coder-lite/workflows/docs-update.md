@@ -14,20 +14,10 @@ Valid eCL subagent types (use exact names — do not fall back to 'general-purpo
 Load docs-update context:
 
 ```bash
-# SDK resolution: prefer local ecl-tools.cjs, fall back to global ecl-sdk (#3668)
-ECL_TOOLS="${RUNTIME_DIR:-$(git rev-parse --show-toplevel 2>/dev/null || pwd)}/evolv-coder-lite/bin/ecl-tools.cjs"
-if [ -f "$ECL_TOOLS" ]; then
-  ECL_SDK="node $ECL_TOOLS"
-elif command -v ecl-sdk >/dev/null 2>&1; then
-  ECL_SDK="ecl-sdk"
-else
-  echo "ERROR: ecl-sdk not found on PATH and $ECL_TOOLS does not exist." >&2
-  echo "Run: npx evolv-coder-lite-cc@latest --claude --local" >&2
-  exit 1
-fi
-INIT=$($ECL_SDK query docs-init)
+_GSD_SHIM_NAME="ecl-tools.cjs"; _GSD_RUNTIME_ROOT="${RUNTIME_DIR:-$(git rev-parse --show-toplevel 2>/dev/null || pwd)}"; ECL_TOOLS="${_GSD_RUNTIME_ROOT}/evolv-coder-lite/bin/${_GSD_SHIM_NAME}"; if [ -f "$ECL_TOOLS" ]; then ecl_run() { node "$ECL_TOOLS" "$@"; }; elif [ -f "${_GSD_RUNTIME_ROOT}/.claude/evolv-coder-lite/bin/${_GSD_SHIM_NAME}" ]; then ECL_TOOLS="${_GSD_RUNTIME_ROOT}/.claude/evolv-coder-lite/bin/${_GSD_SHIM_NAME}"; ecl_run() { node "$ECL_TOOLS" "$@"; }; elif command -v ecl-tools >/dev/null 2>&1; then ECL_TOOLS="$(command -v ecl-tools)"; ecl_run() { "$ECL_TOOLS" "$@"; }; elif [ -f "$HOME/.claude/evolv-coder-lite/bin/${_GSD_SHIM_NAME}" ]; then ECL_TOOLS="$HOME/.claude/evolv-coder-lite/bin/${_GSD_SHIM_NAME}"; ecl_run() { node "$ECL_TOOLS" "$@"; }; else echo "ERROR: ecl-tools.cjs not found at $ECL_TOOLS and ecl-tools is not on PATH. Run: npx -y @evolvconsulting/evolv-coder-lite@latest --claude --local" >&2; exit 1; fi
+INIT=$(ecl_run query docs-init)
 if [[ "$INIT" == @file:* ]]; then INIT=$(cat "${INIT#@file:}"); fi
-AGENT_SKILLS=$($ECL_SDK query agent-skills ecl-doc-writer)
+AGENT_SKILLS=$(ecl_run query agent-skills ecl-doc-writer)
 ```
 
 Extract from init JSON:
@@ -1071,7 +1061,7 @@ Only run this step if `commit_docs` is `true` from the init JSON. If `commit_doc
 Assemble the list of files that were actually generated (do not include files that failed or were skipped):
 
 ```bash
-$ECL_SDK query commit "docs: generate project documentation" \
+ecl_run query commit "docs: generate project documentation" \
   --files README.md docs/ARCHITECTURE.md docs/CONFIGURATION.md docs/GETTING-STARTED.md docs/DEVELOPMENT.md docs/TESTING.md
 # Append any conditional docs that were generated:
 # --files ... docs/API.md docs/DEPLOYMENT.md CONTRIBUTING.md

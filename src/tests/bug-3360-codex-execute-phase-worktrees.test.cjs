@@ -26,8 +26,8 @@ function parseWorkflowSteps(content) {
       const body = match[2];
       return {
         name: match[1],
-        // After #3797 architectural fix, callsites use $ECL_SDK — accept either form
-        readsRuntimeConfig: body.includes('RUNTIME=$($ECL_SDK query config-get runtime --default claude') || body.includes('RUNTIME=$(ecl-sdk query config-get runtime --default claude'),
+        // After #3797 architectural fix, callsites use ecl_run
+        readsRuntimeConfig: body.includes('RUNTIME=$(ecl_run query config-get runtime --default claude'),
         codexWorktreeGuard: body.includes('Codex execute-phase worktree isolation is unsupported'),
         worktreeDispatchGuidance: body.includes('isolation="worktree"'),
       };

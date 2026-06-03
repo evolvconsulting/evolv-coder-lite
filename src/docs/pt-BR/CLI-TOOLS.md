@@ -1,7 +1,7 @@
 # Referência de Ferramentas CLI
 
 Resumo em Português das ferramentas CLI do eCL.  
-Para API completa (assinaturas, argumentos e comportamento detalhado), consulte [CLI-TOOLS.md em inglês](../CLI-TOOLS.md) — inclui a secção **SDK and programmatic access** (`ecl-sdk query`, `@evolvconsulting/ecl-sdk`).
+Para API completa (assinaturas, argumentos e comportamento detalhado), consulte [CLI-TOOLS.md em inglês](../CLI-TOOLS.md) — inclui a secção de uso de `ecl-tools.cjs query`.
 
 ---
 

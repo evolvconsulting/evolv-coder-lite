@@ -30,25 +30,15 @@ No Pass/Fail buttons. No severity questions. Just: "Here's what should happen. D
 If $ARGUMENTS contains a phase number, load context:
 
 ```bash
+_GSD_SHIM_NAME="ecl-tools.cjs"; _GSD_RUNTIME_ROOT="${RUNTIME_DIR:-$(git rev-parse --show-toplevel 2>/dev/null || pwd)}"; ECL_TOOLS="${_GSD_RUNTIME_ROOT}/evolv-coder-lite/bin/${_GSD_SHIM_NAME}"; if [ -f "$ECL_TOOLS" ]; then ecl_run() { node "$ECL_TOOLS" "$@"; }; elif [ -f "${_GSD_RUNTIME_ROOT}/.claude/evolv-coder-lite/bin/${_GSD_SHIM_NAME}" ]; then ECL_TOOLS="${_GSD_RUNTIME_ROOT}/.claude/evolv-coder-lite/bin/${_GSD_SHIM_NAME}"; ecl_run() { node "$ECL_TOOLS" "$@"; }; elif command -v ecl-tools >/dev/null 2>&1; then ECL_TOOLS="$(command -v ecl-tools)"; ecl_run() { "$ECL_TOOLS" "$@"; }; elif [ -f "$HOME/.claude/evolv-coder-lite/bin/${_GSD_SHIM_NAME}" ]; then ECL_TOOLS="$HOME/.claude/evolv-coder-lite/bin/${_GSD_SHIM_NAME}"; ecl_run() { node "$ECL_TOOLS" "$@"; }; else echo "ERROR: ecl-tools.cjs not found at $ECL_TOOLS and ecl-tools is not on PATH. Run: npx -y @evolvconsulting/evolv-coder-lite@latest --claude --local" >&2; exit 1; fi
 ECL_WS=""
 echo "$ARGUMENTS" | grep -qE -- '--ws[[:space:]]+[^[:space:]]+' && ECL_WS=$(echo "$ARGUMENTS" | grep -oE -- '--ws[[:space:]]+[^[:space:]]+')
 PHASE_ARG=$(echo "$ARGUMENTS" | sed -E 's/--ws[[:space:]]+[^[:space:]]+//g' | xargs)
 
-# SDK resolution: prefer local ecl-tools.cjs, fall back to global ecl-sdk (#3668)
-ECL_TOOLS="${RUNTIME_DIR:-$(git rev-parse --show-toplevel 2>/dev/null || pwd)}/evolv-coder-lite/bin/ecl-tools.cjs"
-if [ -f "$ECL_TOOLS" ]; then
-  ECL_SDK="node $ECL_TOOLS"
-elif command -v ecl-sdk >/dev/null 2>&1; then
-  ECL_SDK="ecl-sdk"
-else
-  echo "ERROR: ecl-sdk not found on PATH and $ECL_TOOLS does not exist." >&2
-  echo "Run: npx evolv-coder-lite-cc@latest --claude --local" >&2
-  exit 1
-fi
-INIT=$($ECL_SDK query init.verify-work "${PHASE_ARG}" ${ECL_WS})
+INIT=$(ecl_run query init.verify-work "${PHASE_ARG}" ${ECL_WS})
 if [[ "$INIT" == @file:* ]]; then INIT=$(cat "${INIT#@file:}"); fi
-AGENT_SKILLS_PLANNER=$($ECL_SDK query agent-skills ecl-planner)
-AGENT_SKILLS_CHECKER=$($ECL_SDK query agent-skills ecl-plan-checker)
+AGENT_SKILLS_PLANNER=$(ecl_run query agent-skills ecl-planner)
+AGENT_SKILLS_CHECKER=$(ecl_run query agent-skills ecl-plan-checker)
 ```
 
 Parse JSON for: `planner_model`, `checker_model`, `commit_docs`, `phase_found`, `phase_dir`, `phase_number`, `phase_name`, `has_verification`, `uat_path`.
@@ -57,7 +47,7 @@ Parse JSON for: `planner_model`, `checker_model`, `commit_docs`, `phase_found`, 
 # MVP mode detection via the centralized phase.mvp-mode resolver.
 # verify-work has no --mvp CLI flag (mode is inherited from the planned phase),
 # so we omit --cli-flag — the verb falls through roadmap → config → false.
-MVP_MODE=$($ECL_SDK query phase.mvp-mode "${phase_number}" ${ECL_WS} --pick active)
+MVP_MODE=$(ecl_run query phase.mvp-mode "${phase_number}" ${ECL_WS} --pick active)
 ```
 </step>
 
@@ -115,7 +105,7 @@ Before running manual UAT, check whether this phase has a UI component and wheth
 `mcp__playwright__*` or `mcp__puppeteer__*` tools are available in the current session.
 
 ```bash
-UI_PHASE_FLAG=$($ECL_SDK query config-get workflow.ui_phase --raw 2>/dev/null || echo "true")
+UI_PHASE_FLAG=$(ecl_run query config-get workflow.ui_phase --raw 2>/dev/null || echo "true")
 UI_SPEC_FILE=$(ls "${PHASE_DIR}"/*-UI-SPEC.md 2>/dev/null | head -1)
 ```
 
@@ -169,8 +159,8 @@ When `MVP_MODE=false` (mode is null, absent, or the phase has no `**Mode:**` lin
 **User-story format guard.** When `MVP_MODE=true`, also verify the phase's goal is in User Story format via the centralized validator:
 
 ```bash
-PHASE_GOAL=$($ECL_SDK query roadmap.get-phase "${phase_number}" ${ECL_WS} --pick goal)
-USER_STORY_VALID=$($ECL_SDK query user-story.validate --story "$PHASE_GOAL" --pick valid)
+PHASE_GOAL=$(ecl_run query roadmap.get-phase "${phase_number}" ${ECL_WS} --pick goal)
+USER_STORY_VALID=$(ecl_run query user-story.validate --story "$PHASE_GOAL" --pick valid)
 if [ "$USER_STORY_VALID" != "true" ]; then
   echo "Phase ${phase_number} has '**Mode:** mvp' in ROADMAP.md but the **Goal:** is not in user-story format."
   echo "Run /ecl mvp-phase ${phase_number} to set a user-story goal before verifying."
@@ -278,7 +268,7 @@ Proceed to `present_test`.
 Render the checkpoint from the structured UAT file instead of composing it freehand:
 
 ```bash
-CHECKPOINT=$($ECL_SDK query uat.render-checkpoint --file "$uat_path" --raw)
+CHECKPOINT=$(ecl_run query uat.render-checkpoint --file "$uat_path" --raw)
 if [[ "$CHECKPOINT" == @file:* ]]; then CHECKPOINT=$(cat "${CHECKPOINT#@file:}"); fi
 ```
 
@@ -436,7 +426,7 @@ Clear Current Test section:
 
 Commit the UAT file:
 ```bash
-$ECL_SDK query commit "test({phase_num}): complete UAT - {passed} passed, {issues} issues" --files ".planning/phases/XX-name/{phase_num}-UAT.md"
+ecl_run query commit "test({phase_num}): complete UAT - {passed} passed, {issues} issues" --files ".planning/phases/XX-name/{phase_num}-UAT.md"
 ```
 
 Present summary:
@@ -460,7 +450,7 @@ Present summary:
 **If issues == 0:**
 
 ```bash
-SECURITY_CFG=$($ECL_SDK query config-get workflow.security_enforcement --raw 2>/dev/null || echo "true")
+SECURITY_CFG=$(ecl_run query config-get workflow.security_enforcement --raw 2>/dev/null || echo "true")
 SECURITY_FILE=$(ls "${PHASE_DIR}"/*-SECURITY.md 2>/dev/null | head -1)
 ```
 
@@ -506,10 +496,10 @@ All tests passed. Phase {phase} marked complete.
 <step name="scan_phase_artifacts">
 Run phase artifact scan to surface any open items before marking phase verified:
 
-`audit-open` is CJS-only until registered on `ecl-sdk query`:
+`audit-open` is CJS-only until registered on `ecl-tools.cjs query`:
 
 ```bash
-$ECL_SDK query audit-open --json
+ecl_run query audit-open --json
 ```
 
 Parse the JSON output. For the CURRENT PHASE ONLY, surface:

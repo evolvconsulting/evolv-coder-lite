@@ -25,20 +25,21 @@
    interrupted `--auto` chain. This does NOT touch `workflow.auto_advance`
    (the user's persistent settings preference):
    ```bash
+_GSD_SHIM_NAME="ecl-tools.cjs"; _GSD_RUNTIME_ROOT="${RUNTIME_DIR:-$(git rev-parse --show-toplevel 2>/dev/null || pwd)}"; ECL_TOOLS="${_GSD_RUNTIME_ROOT}/evolv-coder-lite/bin/${_GSD_SHIM_NAME}"; if [ -f "$ECL_TOOLS" ]; then ecl_run() { node "$ECL_TOOLS" "$@"; }; elif [ -f "${_GSD_RUNTIME_ROOT}/.claude/evolv-coder-lite/bin/${_GSD_SHIM_NAME}" ]; then ECL_TOOLS="${_GSD_RUNTIME_ROOT}/.claude/evolv-coder-lite/bin/${_GSD_SHIM_NAME}"; ecl_run() { node "$ECL_TOOLS" "$@"; }; elif command -v ecl-tools >/dev/null 2>&1; then ECL_TOOLS="$(command -v ecl-tools)"; ecl_run() { "$ECL_TOOLS" "$@"; }; elif [ -f "$HOME/.claude/evolv-coder-lite/bin/${_GSD_SHIM_NAME}" ]; then ECL_TOOLS="$HOME/.claude/evolv-coder-lite/bin/${_GSD_SHIM_NAME}"; ecl_run() { node "$ECL_TOOLS" "$@"; }; else echo "ERROR: ecl-tools.cjs not found at $ECL_TOOLS and ecl-tools is not on PATH. Run: npx -y @evolvconsulting/evolv-coder-lite@latest --claude --local" >&2; exit 1; fi
    if [[ ! "$ARGUMENTS" =~ --auto ]] && [[ ! "$ARGUMENTS" =~ --chain ]]; then
-     $ECL_SDK query config-set workflow._auto_chain_active false || true
+     ecl_run query config-set workflow._auto_chain_active false || true
    fi
    ```
 
 3. Read consolidated auto-mode (`active` = chain flag OR user preference):
    ```bash
-   AUTO_MODE=$($ECL_SDK query check auto-mode --pick active 2>/dev/null || echo "false")
+   AUTO_MODE=$(ecl_run query check auto-mode --pick active 2>/dev/null || echo "false")
    ```
 
 4. **If `--auto` or `--chain` flag present AND `AUTO_MODE` is not true:**
    Persist chain flag to config (handles direct usage without new-project):
    ```bash
-   $ECL_SDK query config-set workflow._auto_chain_active true
+   ecl_run query config-set workflow._auto_chain_active true
    ```
 
 5. **If `--auto` flag present OR `--chain` flag present OR `AUTO_MODE` is
