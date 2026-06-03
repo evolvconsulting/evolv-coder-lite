@@ -138,9 +138,14 @@ async function main() {
   await mkdir(join(upstreamOld, 'commands/gsd'), { recursive: true });
   await mkdir(join(upstreamOld, 'agents'), { recursive: true });
   await mkdir(join(upstreamOld, 'hooks'), { recursive: true });
+  // Mirror the v1.2.0 upstream identity: package renamed get-shit-done-redux →
+  // gsd-core, and the standalone gsd-sdk bin was retired in favour of gsd-tools
+  // shipping inside the main package (ADR-0174). This exercises the v1.2.0
+  // rebrand rules (name:gsd-core, bin:tools) rather than the legacy redux/sdk
+  // ones (which smoke-rebrand-map.mjs still covers directly).
   await writeFile(join(upstreamOld, 'package.json'), JSON.stringify({
-    name: '@opengsd/get-shit-done-redux', version: '1.0.0',
-    bin: { 'get-shit-done-redux': 'bin/install.js', 'gsd-sdk': 'bin/gsd-sdk.js' },
+    name: '@opengsd/gsd-core', version: '1.0.0',
+    bin: { 'gsd-core': 'bin/install.js', 'gsd-tools': 'bin/gsd-tools.cjs' },
   }, null, 2));
   await writeFile(join(upstreamOld, 'commands/gsd/discuss-phase.md'), '# /gsd-discuss-phase\n\nUse GSD to discuss this phase.\n');
   await writeFile(join(upstreamOld, 'commands/gsd/plan-phase.md'), '# /gsd-plan-phase\n\nUse GSD to plan.\n');
@@ -220,7 +225,14 @@ async function main() {
   assert(pkgFinal.name === '@evolvconsulting/evolv-coder-lite', `package name wrong: ${pkgFinal.name}`);
   assert(pkgFinal.version === '1.1.0', `version not bumped: ${pkgFinal.version}`);
   assert(pkgFinal.bin['evolv-coder-lite'] === 'bin/install.js', 'bin name not rebranded');
-  assert(pkgFinal.bin['ecl-sdk'] === 'bin/ecl-sdk.js', 'sdk bin not rebranded');
+  // v1.2.0 (ADR-0174): upstream gsd-tools → ecl-tools, and the gsd-sdk/ecl-sdk
+  // bin is retired entirely. rebrandContent must yield the ecl-tools bin and no
+  // ecl-sdk. (The shipped tools-bin PATH — evolv-coder-lite/bin/ecl-tools.cjs —
+  // is injected by overlay/package.patch.json, which this synthetic bake
+  // intentionally does NOT apply; that path is asserted by the bake drift check
+  // in ci.yml + src/tests/ecl-tools-path-refs.test.cjs.)
+  assert(pkgFinal.bin['ecl-tools'] === 'bin/ecl-tools.cjs', 'tools bin not rebranded');
+  assert(!('ecl-sdk' in pkgFinal.bin), 'ecl-sdk bin must be absent (retired in v1.2.0)');
 
   // -- Assert executable mode bits are propagated --
   const hookStat = await stat(join(srcDir, 'hooks/ecl-new-hook.sh'));

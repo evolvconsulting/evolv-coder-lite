@@ -4,6 +4,7 @@ const cp = require('node:child_process');
 const path = require('node:path');
 
 const { parseFragment } = require('./parse.cjs');
+const { packageName, repoSlug: defaultRepoSlug } = require('../../evolv-coder-lite/bin/lib/package-identity.cjs');
 
 const SECTION_ORDER = ['Fixed', 'Added', 'Changed', 'Deprecated', 'Removed', 'Security'];
 
@@ -145,8 +146,8 @@ function serializeGithubReleaseNotes({
   ir,
   fromRef,
   toRef,
-  repoSlug = 'evolvconsulting/evolv-coder-lite',
-  installCommand = 'npx @evolvconsulting/evolv-coder-lite@latest',
+  repoSlug = defaultRepoSlug,
+  installCommand = `npx ${packageName}@latest`,
 }) {
   if (installCommand.includes('`')) {
     throw new Error('installCommand cannot contain backtick characters');

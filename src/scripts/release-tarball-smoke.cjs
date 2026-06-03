@@ -7,8 +7,6 @@
  * Guards against the class of bugs that can't be caught by working-tree tests:
  *   - #3684: maskIfSecret import/export mismatch shipped in v1.42.3 (runtime
  *     crash on installed package, invisible to unit tests)
- *   - #3668: 75/78 workflows call bare `ecl-sdk` without fallback; --local users
- *     see `command not found`
  *
  * Strategy: pack the working tree, install into a temp prefix, invoke the
  * installed binary, assert the version matches package.json. Exercises the
@@ -34,9 +32,11 @@
  *   in fixtureDir to verify the installer is callable (INIT_FAILED on crash).
  *   Non-interactive: --local --claude flags skip all prompts.
  *
- * SDK binary check (Cycle 3):
- *   - Calls `ecl-sdk "query" state.json --project-dir <fixtureDir>` to verify
- *     the SDK binary is callable and produces parseable JSON (SDK_BINARY_NOT_CALLABLE).
+ * Workflow-body checks (Cycle 3 — informational):
+ *   - Scans all installed evolv-coder-lite/workflows/*.md for /ecl:<known-cmd>
+ *     colon-namespace leaks (WORKFLOW_BODY_COLON_LEAK).
+ *   This check populates result.details with counters but does NOT return a
+ *   failure code by default; it is informational until enforcement is enabled.
  */
 
 'use strict';
@@ -45,7 +45,17 @@ const { execFileSync, spawnSync } = require('child_process');
 const fs = require('fs');
 const os = require('os');
 const path = require('path');
-const CHILD_TIMEOUT_MS = 120000;
+const { PACKAGE_NAME } = require('../evolv-coder-lite/bin/lib/package-identity.cjs');
+// 120 s proved too tight on Windows GitHub-hosted runners: cold-cache
+// `npm install -g` with a 1499-file tarball took ~120 s exactly, causing
+// spawnSync to fire SIGTERM and return { status: null, stdout: '', stderr: '' }
+// (Node docs: status is null when subprocess terminated due to a signal).
+// The INSTALL_FAILED branch checks `status !== 0`, which null satisfies, so the
+// test saw empty stdout/stderr and a spurious INSTALL_FAILED. Windows runners
+// are slower than Linux/macOS for filesystem-heavy operations (
+// https://docs.github.com/en/actions/using-github-hosted-runners/about-github-hosted-runners/about-github-hosted-runners#standard-github-hosted-runners-for-public-repositories
+// ). Raise to 600 s (the same ceiling the before() helper uses for pack+install).
+const CHILD_TIMEOUT_MS = process.platform === 'win32' ? 600_000 : 120_000;
 
 // ---------------------------------------------------------------------------
 // Frozen result-code enum
@@ -61,9 +71,47 @@ const SMOKE = Object.freeze({
   COMMAND_FILE_MISSING: 'command_file_missing',
   WORKFLOW_FILE_MISSING: 'workflow_file_missing',
   INIT_FAILED: 'init_failed',
-  // Cycle 3 codes
-  SDK_BINARY_NOT_CALLABLE: 'sdk_binary_not_callable',
+  // Cycle 3 code
+  WORKFLOW_BODY_COLON_LEAK: 'workflow_body_colon_leak',
 });
+
+// ---------------------------------------------------------------------------
+// Exported helper: binInvocation
+// ---------------------------------------------------------------------------
+
+/**
+ * Build the { command, args, shell } descriptor needed to spawn an installed
+ * npm bin correctly on both Windows and POSIX.
+ *
+ * On Windows, npm installs a `.cmd` (or `.bat`) shim in .bin/.  Node ≥18.20.2
+ * / ≥20.12.2 throws EINVAL when you try to spawnSync a .cmd/.bat without
+ * shell:true (CVE-2024-27980 mitigation).  With shell:true, Node does NOT
+ * auto-quote argv, so a bin path that contains spaces must be wrapped in
+ * double-quotes to arrive at the shell as one token.
+ *
+ * On POSIX the bin is a regular shebang JS file; we invoke it directly via
+ * process.execPath (the same Node binary) without a shell.
+ *
+ * @param {string}   binPath  - Absolute path to the resolved bin file.
+ * @param {string[]} [args]   - Additional arguments (e.g. ['--help']).
+ * @returns {{ command: string, args: string[], shell: boolean }}
+ */
+function binInvocation(binPath, args = []) {
+  const lower = binPath.toLowerCase();
+  // Note: .ps1 shims are intentionally NOT handled here.  The bin-resolution
+  // helpers (findGsdToolsBin / findInstallerBin) only ever surface a .cmd path
+  // on Windows — npm does not write .ps1 shims into .bin/ by default — so a
+  // .ps1 path never reaches this function in practice.
+  if (lower.endsWith('.cmd') || lower.endsWith('.bat')) {
+    // Quote the path if it contains a space so the Windows shell treats it as
+    // a single token.  Simple double-quote wrap is sufficient because npm-
+    // generated shim paths don't contain embedded double-quotes.
+    const command = binPath.includes(' ') ? `"${binPath}"` : binPath;
+    return { command, args: [...args], shell: true };
+  }
+  // POSIX: invoke via node, no shell needed.
+  return { command: process.execPath, args: [binPath, ...args], shell: false };
+}
 
 // ---------------------------------------------------------------------------
 // Internal helpers
@@ -74,26 +122,45 @@ const SMOKE = Object.freeze({
  * an npm --prefix install directory.
  */
 function pkgRoot(installPrefix) {
-  // POSIX: <prefix>/lib/node_modules/@evolvconsulting/evolv-coder-lite
-  // Windows: <prefix>/node_modules/@evolvconsulting/evolv-coder-lite
-  const posix = path.join(installPrefix, 'lib', 'node_modules', '@evolvconsulting', 'evolv-coder-lite');
-  const win = path.join(installPrefix, 'node_modules', '@evolvconsulting', 'evolv-coder-lite');
+  // POSIX: <prefix>/lib/node_modules/<scope>/<pkg>
+  // Windows: <prefix>/node_modules/<scope>/<pkg>
+  // PACKAGE_NAME is scoped (@scope/pkg), so split('/') yields the two path segments.
+  const pkgSegments = PACKAGE_NAME.split('/');
+  const posix = path.join(installPrefix, 'lib', 'node_modules', ...pkgSegments);
+  const win = path.join(installPrefix, 'node_modules', ...pkgSegments);
   return fs.existsSync(posix) ? posix : win;
 }
 
 /**
- * Locate the installed ecl-sdk binary (symlink in <prefix>/bin/).
+ * Return the ordered list of candidate paths to check when locating an npm
+ * global bin named `name` under `installPrefix`.
+ *
+ * On Windows, `npm install -g --prefix X` writes shims (*.cmd, *.ps1, bare)
+ * to the PREFIX ROOT (X\), NOT to X\node_modules\.bin\.  We therefore probe
+ * the prefix root first, then fall back to node_modules\.bin in case a
+ * non-standard layout puts them there.
+ *
+ * On POSIX the shim lands in <prefix>/bin/ as a symlink; only one candidate.
  */
-function findGsdSdkBin(installPrefix) {
-  const binDir = process.platform === 'win32'
-    ? path.join(installPrefix, 'node_modules', '.bin')
-    : path.join(installPrefix, 'bin');
+function binCandidates(installPrefix, name) {
+  if (process.platform === 'win32') {
+    return [
+      // npm global --prefix on Windows writes shims to the prefix ROOT
+      path.join(installPrefix, `${name}.cmd`),
+      path.join(installPrefix, name),
+      // fallback: some layouts use node_modules/.bin
+      path.join(installPrefix, 'node_modules', '.bin', `${name}.cmd`),
+      path.join(installPrefix, 'node_modules', '.bin', name),
+    ];
+  }
+  return [path.join(installPrefix, 'bin', name)];
+}
 
-  const candidates = process.platform === 'win32'
-    ? [path.join(binDir, 'ecl-sdk.cmd'), path.join(binDir, 'ecl-sdk')]
-    : [path.join(binDir, 'ecl-sdk')];
-
-  for (const c of candidates) {
+/**
+ * Locate the installed ecl-tools binary (symlink in <prefix>/bin/).
+ */
+function findGsdToolsBin(installPrefix) {
+  for (const c of binCandidates(installPrefix, 'ecl-tools')) {
     if (fs.existsSync(c)) return c;
   }
   return null;
@@ -103,15 +170,7 @@ function findGsdSdkBin(installPrefix) {
  * Locate the evolv-coder-lite installer binary (the symlink in <prefix>/bin/).
  */
 function findInstallerBin(installPrefix) {
-  const binDir = process.platform === 'win32'
-    ? path.join(installPrefix, 'node_modules', '.bin')
-    : path.join(installPrefix, 'bin');
-
-  const candidates = process.platform === 'win32'
-    ? [path.join(binDir, 'evolv-coder-lite.cmd'), path.join(binDir, 'evolv-coder-lite')]
-    : [path.join(binDir, 'evolv-coder-lite')];
-
-  for (const c of candidates) {
+  for (const c of binCandidates(installPrefix, 'evolv-coder-lite')) {
     if (fs.existsSync(c)) return c;
   }
   return null;
@@ -163,6 +222,43 @@ function parseWorkflowRef(mdContent) {
   }
 
   return atImportResult !== null ? atImportResult : lastInlineResult;
+}
+
+/**
+ * Read the list of known eCL command names from the installed package.
+ * Returns an array of strings like `['init', 'discuss-phase', ...]`.
+ */
+function readInstalledCmdNames(pkg) {
+  const commandsDir = path.join(pkg, 'commands', 'ecl');
+  if (!fs.existsSync(commandsDir)) return [];
+  return fs.readdirSync(commandsDir)
+    .filter((f) => f.endsWith('.md'))
+    .map((f) => f.slice(0, -3)); // strip .md
+}
+
+/**
+ * Scan a single workflow .md file for /ecl:<cmd> colon-namespace leaks.
+ *
+ * Uses the word-boundary-safe regex shape from scripts/fix-slash-commands.cjs:
+ *   /ecl-(<cmd1>|<cmd2>|...)(?=[^a-zA-Z0-9_-]|$)/g  — forward
+ * We check the colon form: /ecl:<cmd> leaking in installed workflow bodies.
+ *
+ * Returns the first leaking { line, lineNumber } or null.
+ */
+function scanWorkflowColonLeak(filePath, cmdNames) {
+  if (!cmdNames || cmdNames.length === 0) return null;
+  const sorted = [...cmdNames].sort((a, b) => b.length - a.length);
+  const pattern = new RegExp(`/ecl:(${sorted.join('|')})(?=[^a-zA-Z0-9_-]|$)`, 'g');
+
+  const content = fs.readFileSync(filePath, 'utf-8');
+  const lines = content.split(/\r?\n/);
+  for (let i = 0; i < lines.length; i++) {
+    pattern.lastIndex = 0;
+    if (pattern.test(lines[i])) {
+      return { line: i + 1, content: lines[i].trim() };
+    }
+  }
+  return null;
 }
 
 // ---------------------------------------------------------------------------
@@ -221,30 +317,33 @@ function runSmoke({
         ...details,
         stderr: installResult.stderr,
         stdout: installResult.stdout,
+        // Expose signal + error so a timeout (status=null, signal='SIGTERM',
+        // stdout='', stderr='') is immediately diagnosable in CI logs.
+        signal: installResult.signal ?? null,
+        installError: installResult.error ? String(installResult.error) : null,
       },
     };
   }
 
-  // --- Locate the installed ecl-sdk binary ---------------------------------
-  const actualBin = findGsdSdkBin(installPrefix);
+  // --- Locate the installed ecl-tools binary --------------------------------
+  const actualBin = findGsdToolsBin(installPrefix);
 
   if (!actualBin) {
-    const binDir = process.platform === 'win32'
-      ? path.join(installPrefix, 'node_modules', '.bin')
-      : path.join(installPrefix, 'bin');
+    const searched = binCandidates(installPrefix, 'ecl-tools');
     return {
       code: SMOKE.BIN_NOT_CALLABLE,
-      details: { ...details, binDir, searched: [] },
+      details: { ...details, searched },
     };
   }
 
-  // --- Invoke `ecl-sdk --version` ------------------------------------------
+  // --- Invoke `ecl-tools --help` to assert the shipped binary is callable ---
   // Use effectiveNpmEnv so the installed binary sees an isolated HOME on Docker
   // hosts where HOME may be unwritable (same isolation as the npm install). (#131)
+  const versionInvocation = binInvocation(actualBin, ['--help']);
   const versionResult = spawnSync(
-    process.execPath,
-    [actualBin, '--version'],
-    { encoding: 'utf-8', timeout: CHILD_TIMEOUT_MS, env: effectiveNpmEnv },
+    versionInvocation.command,
+    versionInvocation.args,
+    { encoding: 'utf-8', timeout: CHILD_TIMEOUT_MS, env: effectiveNpmEnv, shell: versionInvocation.shell },
   );
 
   if (versionResult.status !== 0) {
@@ -259,14 +358,14 @@ function runSmoke({
     };
   }
 
-  // Output format: "ecl-sdk v1.50.0-canary.0\n"
-  const rawOutput = (versionResult.stdout || '').trim();
-  const versionMatch = rawOutput.match(/v(.+)$/);
-  const installedVersion = versionMatch ? versionMatch[1] : rawOutput;
+  // Source of truth for shipped version is the installed package.json.
+  const installedPkgPath = path.join(pkgRoot(installPrefix), 'package.json');
+  const installedPkg = JSON.parse(fs.readFileSync(installedPkgPath, 'utf-8'));
+  const installedVersion = String(installedPkg.version || '').trim();
 
   details.version = installedVersion;
-  details.rawVersionOutput = rawOutput;
   details.bin = actualBin;
+  details.installedPackageJson = installedPkgPath;
 
   if (installedVersion !== expectedVersion) {
     return {
@@ -286,7 +385,6 @@ function runSmoke({
   // --- Run init if requested -----------------------------------------------
   if (shouldRunInit && fixtureDir) {
     const installerBin = findInstallerBin(installPrefix);
-
     if (!installerBin) {
       return {
         code: SMOKE.INIT_FAILED,
@@ -305,9 +403,10 @@ function runSmoke({
     const initEnv = { ...process.env };
     delete initEnv.ECL_TEST_MODE;
 
+    const initInvocation = binInvocation(installerBin, ['--local', '--claude']);
     const initResult = spawnSync(
-      process.execPath,
-      [installerBin, '--local', '--claude'],
+      initInvocation.command,
+      initInvocation.args,
       {
         encoding: 'utf-8',
         cwd: fixtureDir,
@@ -315,6 +414,7 @@ function runSmoke({
         stdio: ['pipe', 'pipe', 'pipe'],
         env: initEnv,
         timeout: CHILD_TIMEOUT_MS,
+        shell: initInvocation.shell,
       },
     );
 
@@ -399,53 +499,44 @@ function runSmoke({
   details.lifecycleResolved = lifecycleResolved;
 
   // ─────────────────────────────────────────────────────────────────────────
-  // Cycle 3: SDK binary callable
+  // Cycle 3: workflow-body validation (informational)
   // ─────────────────────────────────────────────────────────────────────────
 
-  // --- Verify `ecl-sdk` query is callable and returns parseable JSON -------
-  // Use effectiveNpmEnv so the installed binary sees an isolated HOME on Docker
-  // hosts where HOME may be unwritable (same isolation as the npm install). (#131)
-  const sdkQueryDir = fixtureDir || os.tmpdir();
-  const sdkQueryResult = spawnSync(
-    process.execPath,
-    [actualBin, 'query', 'state.json', '--project-dir', sdkQueryDir],
-    { encoding: 'utf-8', timeout: CHILD_TIMEOUT_MS, env: effectiveNpmEnv },
-  );
+  // --- Workflow-body checks (informational — #3668 not yet fixed) ----------
+  const workflowsDir = path.join(pkg, 'evolv-coder-lite', 'workflows');
+  const installedCmdNames = readInstalledCmdNames(pkg);
 
-  if (sdkQueryResult.status !== 0) {
-    return {
-      code: SMOKE.SDK_BINARY_NOT_CALLABLE,
-      details: {
-        ...details,
-        sdkBin: actualBin,
-        sdkQueryStderr: sdkQueryResult.stderr,
-        sdkQueryStdout: sdkQueryResult.stdout,
-      },
-    };
+  let workflowsScanned = 0;
+  let colonLeakCount = 0;
+  // Store first finding for potential future enforcement mode.
+  let firstColonLeak = null;
+
+  if (fs.existsSync(workflowsDir)) {
+    // Collect all .md files (flat only — subdirs contain sub-workflows that
+    // follow the same contract, but the top-level .md files are the primary surface)
+    const entries = fs.readdirSync(workflowsDir, { withFileTypes: true });
+    for (const entry of entries) {
+      if (!entry.isFile() || !entry.name.endsWith('.md')) continue;
+      const filePath = path.join(workflowsDir, entry.name);
+      workflowsScanned++;
+
+      const leak = scanWorkflowColonLeak(filePath, installedCmdNames);
+      if (leak) {
+        colonLeakCount++;
+        if (!firstColonLeak) {
+          firstColonLeak = { file: filePath, line: leak.line };
+        }
+      }
+
+    }
   }
 
-  let sdkQueryParsed = false;
-  try {
-    JSON.parse(sdkQueryResult.stdout);
-    sdkQueryParsed = true;
-  } catch {
-    // leave sdkQueryParsed = false
-  }
+  details.workflowsScanned = workflowsScanned;
+  details.colonLeakCount = colonLeakCount;
+  if (firstColonLeak) details.firstColonLeak = firstColonLeak;
 
-  if (!sdkQueryParsed) {
-    return {
-      code: SMOKE.SDK_BINARY_NOT_CALLABLE,
-      details: {
-        ...details,
-        sdkBin: actualBin,
-        reason: 'ecl-sdk query-state output is not valid JSON',
-        sdkQueryStdout: sdkQueryResult.stdout,
-      },
-    };
-  }
-
-  details.sdkQueryResult = sdkQueryResult.stdout;
-  details.sdkQueryParsed = true;
+  // NOTE: colonLeakCount is informational here. Once the backlog is fixed,
+  // a future enforcement mode can fail on non-zero counts.
 
   return { code: SMOKE.OK, details };
 }
@@ -529,7 +620,7 @@ function cleanup(...dirs) {
 // Exports
 // ---------------------------------------------------------------------------
 
-module.exports = { SMOKE, runSmoke };
+module.exports = { SMOKE, runSmoke, binInvocation };
 
 if (require.main === module) {
   cliMain();

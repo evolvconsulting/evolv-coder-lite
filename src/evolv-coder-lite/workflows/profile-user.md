@@ -1,7 +1,7 @@
 <purpose>
 Orchestrate the full developer profiling flow: consent, session analysis (or questionnaire fallback), profile generation, result display, and artifact creation.
 
-This workflow wires Phase 1 (session pipeline) and Phase 2 (profiling engine) into a cohesive user-facing experience. All heavy lifting is done by existing `ecl-sdk query` handlers (with legacy `ecl-tools.cjs` parity where needed) and the ecl-user-profiler agent -- this workflow orchestrates the sequence, handles branching, and provides the UX.
+This workflow wires Phase 1 (session pipeline) and Phase 2 (profiling engine) into a cohesive user-facing experience. All heavy lifting is done by existing `ecl-tools.cjs query` handlers (with legacy `ecl-tools.cjs` parity where needed) and the ecl-user-profiler agent -- this workflow orchestrates the sequence, handles branching, and provides the UX.
 </purpose>
 
 <required_reading>
@@ -130,18 +130,8 @@ Display: "◆ Scanning sessions..."
 
 Run session scan:
 ```bash
-# SDK resolution: prefer local ecl-tools.cjs, fall back to global ecl-sdk (#3668)
-ECL_TOOLS="${RUNTIME_DIR:-$(git rev-parse --show-toplevel 2>/dev/null || pwd)}/evolv-coder-lite/bin/ecl-tools.cjs"
-if [ -f "$ECL_TOOLS" ]; then
-  ECL_SDK="node $ECL_TOOLS"
-elif command -v ecl-sdk >/dev/null 2>&1; then
-  ECL_SDK="ecl-sdk"
-else
-  echo "ERROR: ecl-sdk not found on PATH and $ECL_TOOLS does not exist." >&2
-  echo "Run: npx evolv-coder-lite-cc@latest --claude --local" >&2
-  exit 1
-fi
-SCAN_RESULT=$($ECL_SDK query scan-sessions --json 2>/dev/null)
+_GSD_SHIM_NAME="ecl-tools.cjs"; _GSD_RUNTIME_ROOT="${RUNTIME_DIR:-$(git rev-parse --show-toplevel 2>/dev/null || pwd)}"; ECL_TOOLS="${_GSD_RUNTIME_ROOT}/evolv-coder-lite/bin/${_GSD_SHIM_NAME}"; if [ -f "$ECL_TOOLS" ]; then ecl_run() { node "$ECL_TOOLS" "$@"; }; elif [ -f "${_GSD_RUNTIME_ROOT}/.claude/evolv-coder-lite/bin/${_GSD_SHIM_NAME}" ]; then ECL_TOOLS="${_GSD_RUNTIME_ROOT}/.claude/evolv-coder-lite/bin/${_GSD_SHIM_NAME}"; ecl_run() { node "$ECL_TOOLS" "$@"; }; elif command -v ecl-tools >/dev/null 2>&1; then ECL_TOOLS="$(command -v ecl-tools)"; ecl_run() { "$ECL_TOOLS" "$@"; }; elif [ -f "$HOME/.claude/evolv-coder-lite/bin/${_GSD_SHIM_NAME}" ]; then ECL_TOOLS="$HOME/.claude/evolv-coder-lite/bin/${_GSD_SHIM_NAME}"; ecl_run() { node "$ECL_TOOLS" "$@"; }; else echo "ERROR: ecl-tools.cjs not found at $ECL_TOOLS and ecl-tools is not on PATH. Run: npx -y @evolvconsulting/evolv-coder-lite@latest --claude --local" >&2; exit 1; fi
+SCAN_RESULT=$(ecl_run query scan-sessions --json 2>/dev/null)
 ```
 
 Parse the JSON output to get session count and project count.
@@ -161,7 +151,7 @@ Display: "◆ Sampling messages..."
 
 Run profile sampling:
 ```bash
-SAMPLE_RESULT=$($ECL_SDK query profile-sample --json 2>/dev/null)
+SAMPLE_RESULT=$(ecl_run query profile-sample --json 2>/dev/null)
 ```
 
 Parse the JSON output to get the temp directory path and message count.
@@ -212,7 +202,7 @@ Display: "Using questionnaire to build your profile."
 
 **Get questions:**
 ```bash
-QUESTIONS=$($ECL_SDK query profile-questionnaire --json 2>/dev/null)
+QUESTIONS=$(ecl_run query profile-questionnaire --json 2>/dev/null)
 ```
 
 Parse the questions JSON. It contains 8 questions, one per dimension.
@@ -235,7 +225,7 @@ Write the answers JSON to `$ANSWERS_PATH`.
 
 **Convert answers to analysis:**
 ```bash
-ANALYSIS_RESULT=$($ECL_SDK query profile-questionnaire --answers "$ANSWERS_PATH" --json 2>/dev/null)
+ANALYSIS_RESULT=$(ecl_run query profile-questionnaire --answers "$ANSWERS_PATH" --json 2>/dev/null)
 ```
 
 Parse the analysis JSON from the result.
@@ -282,7 +272,7 @@ Write updated analysis JSON back to `$ANALYSIS_PATH`.
 Display: "◆ Writing profile..."
 
 ```bash
-$ECL_SDK query write-profile --input "$ANALYSIS_PATH" --json
+ecl_run query write-profile --input "$ANALYSIS_PATH" --json
 ```
 
 Display: "✓ Profile written to $HOME/.claude/evolv-coder-lite/USER-PROFILE.md"
@@ -361,7 +351,7 @@ Generate selected artifacts sequentially (file I/O is fast, no benefit from para
 **For /ecl-dev-preferences (if selected):**
 
 ```bash
-$ECL_SDK query generate-dev-preferences --analysis "$ANALYSIS_PATH" --json
+ecl_run query generate-dev-preferences --analysis "$ANALYSIS_PATH" --json
 ```
 
 Display: "✓ Generated /ecl-dev-preferences at $HOME/.claude/skills/ecl-dev-preferences/SKILL.md"
@@ -369,7 +359,7 @@ Display: "✓ Generated /ecl-dev-preferences at $HOME/.claude/skills/ecl-dev-pre
 **For CLAUDE.md profile section (if selected):**
 
 ```bash
-$ECL_SDK query generate-claude-profile --analysis "$ANALYSIS_PATH" --json
+ecl_run query generate-claude-profile --analysis "$ANALYSIS_PATH" --json
 ```
 
 Display: "✓ Added profile section to CLAUDE.md"
@@ -377,12 +367,12 @@ Display: "✓ Added profile section to CLAUDE.md"
 **For Global CLAUDE.md (if selected):**
 
 ```bash
-$ECL_SDK query generate-claude-profile --analysis "$ANALYSIS_PATH" --global --json
+ecl_run query generate-claude-profile --analysis "$ANALYSIS_PATH" --global --json
 ```
 
 Display: "✓ Added profile section to $HOME/.claude/CLAUDE.md"
 
-**Error handling:** If any `ecl-sdk query` or ecl-tools.cjs call fails, display the error message and use AskUserQuestion to offer "Retry" or "Skip this artifact". On retry, re-run the command. On skip, continue to next artifact.
+**Error handling:** If any `ecl-tools.cjs query` or ecl-tools.cjs call fails, display the error message and use AskUserQuestion to offer "Retry" or "Skip this artifact". On retry, re-run the command. On skip, continue to next artifact.
 
 ---
 
@@ -457,7 +447,7 @@ rm -f "$ANALYSIS_PATH" 2>/dev/null
 - [ ] Profile written to USER-PROFILE.md via write-profile subcommand
 - [ ] Result display shows report card table and highlight reel with evidence
 - [ ] Artifact selection uses multiSelect with all options pre-selected
-- [ ] Artifacts generated sequentially via ecl-sdk query (or ecl-tools.cjs) subcommands
+- [ ] Artifacts generated sequentially via ecl-tools.cjs query (or ecl-tools.cjs) subcommands
 - [ ] Refresh diff shows changed dimensions when --refresh was used
 - [ ] Temp files cleaned up on completion
 </success_criteria>

@@ -1,7 +1,7 @@
 #!/bin/bash
 # Test 03: File inventory
 # Asserts: every entry in package.json#files exists in the installed package
-# and is non-empty. Spot-checks high-value assets (sdk/dist build output, hook
+# and is non-empty. Spot-checks high-value assets (in-package tools binary, hook
 # scripts, install bin).
 set -uo pipefail
 
@@ -45,9 +45,9 @@ done <<< "$EXPECTED_ENTRIES"
 
 # Spot checks
 assert_file_exists "$PKG_DIR/bin/install.js" "bin/install.js"
-assert_file_exists "$PKG_DIR/bin/ecl-sdk.js" "bin/ecl-sdk.js"
-assert_dir_exists "$PKG_DIR/sdk/dist" "sdk/dist (build output)"
-assert_count_gte "$PKG_DIR/sdk/dist" "*.js" 1 "sdk/dist has at least one .js"
+# v1.2.0 (ADR-0174) retired the separate sdk/ package boundary; the tools binary
+# now ships inside the main package tree.
+assert_file_exists "$PKG_DIR/evolv-coder-lite/bin/ecl-tools.cjs" "evolv-coder-lite/bin/ecl-tools.cjs"
 assert_count_gte "$PKG_DIR/hooks" "*.sh" 1 "hooks/ has at least one .sh"
 assert_dir_exists "$PKG_DIR/evolv-coder-lite" "evolv-coder-lite/ (project assets)"
 

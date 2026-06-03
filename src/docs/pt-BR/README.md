@@ -12,7 +12,7 @@ Documentação abrangente do framework evolv Coder Lite (eCL) — um sistema de 
 | [Referência de configuração](CONFIGURATION.md) | Todos os usuários | Schema completo de configuração, toggles e perfis |
 | [Referência de recursos](FEATURES.md) | Todos os usuários | Recursos e requisitos detalhados |
 | [Referência de agentes](AGENTS.md) | Contribuidores, usuários avançados | Agentes especializados, papéis e padrões de orquestração |
-| [Ferramentas CLI](CLI-TOOLS.md) | Contribuidores, autores de agentes | Superfície CJS `ecl-tools.cjs` + guia **`ecl-sdk query`/SDK** |
+| [Ferramentas CLI](CLI-TOOLS.md) | Contribuidores, autores de agentes | Superfície CJS `ecl-tools.cjs` + guia guia de `ecl-tools.cjs query` |
 | [Monitor de contexto](context-monitor.md) | Todos os usuários | Arquitetura de monitoramento da janela de contexto |
 | [Discuss Mode](workflow-discuss-mode.md) | Todos os usuários | Modo suposições vs entrevista no `discuss-phase` |
 | [Referências](references/) | Todos os usuários | Guias complementares de decisão, verificação e padrões |

@@ -15,6 +15,9 @@ const path = require('node:path');
 const { cleanup, createTempDir, runNpm, isolatedNpmEnv } = require('./helpers.cjs');
 const { SMOKE, runSmoke } = require('../scripts/release-tarball-smoke.cjs');
 
+const smokeMsg = (label, result) =>
+  `${label}: code=${result.code} details=${JSON.stringify(result.details)}`;
+
 const PKG_PATH = path.join(__dirname, '..', 'package.json');
 const pkg = JSON.parse(fs.readFileSync(PKG_PATH, 'utf-8'));
 
@@ -74,8 +77,8 @@ describe('release-tarball-smoke', () => {
       npmEnv: isolatedNpmEnv(),
     });
 
-    assert.equal(result.code, SMOKE.OK);
-    assert.equal(result.details.version, pkg.version);
+    assert.equal(result.code, SMOKE.OK, smokeMsg('A', result));
+    assert.equal(result.details.version, pkg.version, smokeMsg('A', result));
   });
 
   // ── Test B — version mismatch detected ────────────────────────────────────
@@ -88,7 +91,7 @@ describe('release-tarball-smoke', () => {
       npmEnv: isolatedNpmEnv(),
     });
 
-    assert.equal(result.code, SMOKE.VERSION_MISMATCH);
+    assert.equal(result.code, SMOKE.VERSION_MISMATCH, smokeMsg('B', result));
   });
 
   // ── Test C — happy lifecycle ───────────────────────────────────────────────
@@ -106,7 +109,7 @@ describe('release-tarball-smoke', () => {
       npmEnv: isolatedNpmEnv(),
     });
 
-    assert.equal(result.code, SMOKE.OK);
+    assert.equal(result.code, SMOKE.OK, smokeMsg('C', result));
 
     // Each non-init command must be in lifecycleResolved with both paths populated
     const resolved = result.details.lifecycleResolved;
@@ -145,27 +148,33 @@ describe('release-tarball-smoke', () => {
       npmEnv: isolatedNpmEnv(),
     });
 
-    assert.equal(result.code, SMOKE.COMMAND_FILE_MISSING);
-    assert.equal(result.details.command, 'nonexistent-phase-xyz');
-    assert.ok(typeof result.details.path === 'string' && result.details.path.length > 0);
+    assert.equal(result.code, SMOKE.COMMAND_FILE_MISSING, smokeMsg('D', result));
+    assert.equal(result.details.command, 'nonexistent-phase-xyz', smokeMsg('D', result));
+    assert.ok(typeof result.details.path === 'string' && result.details.path.length > 0, smokeMsg('D', result));
   });
 
-  // ── Test E — SDK binary callable ──────────────────────────────────────────
-  // Verifies that `ecl-sdk query state.json` exits 0 and returns parseable JSON.
-  // This is the primary guard for SDK_BINARY_NOT_CALLABLE regressions.
-  test('E: sdk binary callable — ecl-sdk query produces parseable JSON', () => {
+  // ── Test E — workflow-body checks run (informational) ─────────────────────
+  // Asserts that the workflow-body scanning machinery ran (structural assertion).
+  // Does NOT assert colonLeakCount is zero — when those issues are fixed, this
+  // test continues to pass unchanged.
+  test('E: workflow-body checks run — scan counts are present integers', () => {
     const result = runSmoke({
       tarballPath,
       installPrefix,
       expectedVersion: pkg.version,
       fixtureDir,
-      lifecycleCommands: [], // skip lifecycle checks; isolate SDK check
+      lifecycleCommands: [],
       npmEnv: isolatedNpmEnv(),
     });
 
-    // If the binary can't be called, code would be SDK_BINARY_NOT_CALLABLE
-    assert.notEqual(result.code, SMOKE.SDK_BINARY_NOT_CALLABLE);
-    assert.equal(result.details.sdkQueryParsed, true);
+    // Structural: the scan ran and populated the counters
+    assert.ok(
+      Number.isInteger(result.details.workflowsScanned) && result.details.workflowsScanned >= 1,
+      smokeMsg('E', result),
+    );
+    assert.ok(
+      Number.isInteger(result.details.colonLeakCount),
+      smokeMsg('E', result),
+    );
   });
-
 });

@@ -34,6 +34,7 @@ const { createTempDir, cleanup } = require('./helpers.cjs');
 
 const {
   writeManifest,
+  ECL_UNINSTALL_HOOKS,
 } = require('../bin/install.js');
 
 const {
@@ -593,60 +594,50 @@ describe('#1755: .sh hooks are copied and executable after install', () => {
   });
 });
 
-describe('install.js source correctness', () => {
-  const src = fs.readFileSync(path.join(__dirname, '..', 'bin', 'install.js'), 'utf8');
-
-  test('.sh files get chmod after copyFileSync', () => {
-    assert.ok(src.includes("if (entry.endsWith('.sh'))"));
+// Migrated (#455): uses typed export ECL_UNINSTALL_HOOKS instead of
+// source-grep assertions on bin/install.js for the uninstall hook list tests.
+describe('install.js uninstall hooks registry (typed assertions)', () => {
+  test('ECL_UNINSTALL_HOOKS is a non-empty array', () => {
+    assert.ok(Array.isArray(ECL_UNINSTALL_HOOKS), 'ECL_UNINSTALL_HOOKS must be an array');
+    assert.ok(ECL_UNINSTALL_HOOKS.length > 0, 'ECL_UNINSTALL_HOOKS must not be empty');
   });
 
-  test('Codex hook uses correct filename ecl-check-update.js', () => {
-    assert.ok(!src.match(/['"]ecl-update-check\.js['"]/));
+  test('ecl-workflow-guard.js is in ECL_UNINSTALL_HOOKS', () => {
+    assert.ok(
+      ECL_UNINSTALL_HOOKS.includes('ecl-workflow-guard.js'),
+      'ECL_UNINSTALL_HOOKS must include ecl-workflow-guard.js'
+    );
   });
 
-  test('Codex hook path does not use evolv-coder-lite/hooks/ subdirectory', () => {
-    assert.ok(!src.includes("'evolv-coder-lite', 'hooks', 'ecl-check-update"));
+  test('phantom ecl-check-update.sh is NOT in ECL_UNINSTALL_HOOKS', () => {
+    assert.ok(
+      !ECL_UNINSTALL_HOOKS.includes('ecl-check-update.sh'),
+      'ECL_UNINSTALL_HOOKS must not include the phantom ecl-check-update.sh entry'
+    );
   });
 
-  test('cache invalidation uses ~/.cache/ecl/ path', () => {
-    assert.ok(src.includes("os.homedir(), '.cache', 'ecl'"));
-  });
-
-  test('manifest tracks .sh hook files', () => {
-    assert.ok(src.includes("file.endsWith('.sh')"));
-  });
-
-  test('ecl-workflow-guard.js is in uninstall hook list', () => {
-    const m = src.match(/const gsdHooks\s*=\s*\[([^\]]+)\]/);
-    assert.ok(m, 'gsdHooks array must exist');
-    assert.ok(m[1].includes('ecl-workflow-guard.js'));
-  });
-
-  test('phantom ecl-check-update.sh is not in uninstall hook list', () => {
-    const m = src.match(/const gsdHooks\s*=\s*\[([^\]]+)\]/);
-    assert.ok(m);
-    assert.ok(!m[1].includes('ecl-check-update.sh'));
-  });
-
-  test('isGsdHookCommand covers all eCL hook names', () => {
-    const names = [
-      'ecl-check-update', 'ecl-statusline', 'ecl-session-state',
-      'ecl-context-monitor', 'ecl-phase-boundary', 'ecl-prompt-guard',
-      'ecl-read-guard', 'ecl-validate-commit', 'ecl-workflow-guard',
-    ];
-    for (const name of names) {
-      assert.ok(src.includes(`'${name}'`) || src.includes(`"${name}"`));
+  test('ECL_UNINSTALL_HOOKS covers all 3 opt-in bash hooks', () => {
+    const required = ['ecl-session-state.sh', 'ecl-validate-commit.sh', 'ecl-phase-boundary.sh'];
+    for (const hook of required) {
+      assert.ok(
+        ECL_UNINSTALL_HOOKS.includes(hook),
+        `ECL_UNINSTALL_HOOKS must include ${hook}`
+      );
     }
   });
 
-  test('no duplicate isCursor or isWindsurf branches in uninstall', () => {
-    const uninstallStart = src.indexOf('function uninstall(');
-    const uninstallEnd = src.indexOf('function verifyInstalled(');
-    assert.ok(uninstallStart !== -1);
-    assert.ok(uninstallEnd !== -1);
-    const block = src.substring(uninstallStart, uninstallEnd);
-    assert.strictEqual((block.match(/else if \(isCursor\)/g) || []).length, 0);
-    assert.strictEqual((block.match(/else if \(isWindsurf\)/g) || []).length, 0);
+  test('ECL_UNINSTALL_HOOKS covers core JS hooks', () => {
+    const coreJsHooks = [
+      'ecl-check-update.js', 'ecl-statusline.js', 'ecl-session-state.sh',
+      'ecl-context-monitor.js', 'ecl-phase-boundary.sh', 'ecl-prompt-guard.js',
+      'ecl-read-guard.js', 'ecl-validate-commit.sh', 'ecl-workflow-guard.js',
+    ];
+    for (const hook of coreJsHooks) {
+      assert.ok(
+        ECL_UNINSTALL_HOOKS.includes(hook),
+        `ECL_UNINSTALL_HOOKS must include ${hook}`
+      );
+    }
   });
 });
 

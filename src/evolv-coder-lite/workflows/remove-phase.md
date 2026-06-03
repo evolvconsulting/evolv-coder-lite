@@ -29,18 +29,8 @@ Exit.
 Load phase operation context:
 
 ```bash
-# SDK resolution: prefer local ecl-tools.cjs, fall back to global ecl-sdk (#3668)
-ECL_TOOLS="${RUNTIME_DIR:-$(git rev-parse --show-toplevel 2>/dev/null || pwd)}/evolv-coder-lite/bin/ecl-tools.cjs"
-if [ -f "$ECL_TOOLS" ]; then
-  ECL_SDK="node $ECL_TOOLS"
-elif command -v ecl-sdk >/dev/null 2>&1; then
-  ECL_SDK="ecl-sdk"
-else
-  echo "ERROR: ecl-sdk not found on PATH and $ECL_TOOLS does not exist." >&2
-  echo "Run: npx evolv-coder-lite-cc@latest --claude --local" >&2
-  exit 1
-fi
-INIT=$($ECL_SDK query init.phase-op "${target}")
+_GSD_SHIM_NAME="ecl-tools.cjs"; _GSD_RUNTIME_ROOT="${RUNTIME_DIR:-$(git rev-parse --show-toplevel 2>/dev/null || pwd)}"; ECL_TOOLS="${_GSD_RUNTIME_ROOT}/evolv-coder-lite/bin/${_GSD_SHIM_NAME}"; if [ -f "$ECL_TOOLS" ]; then ecl_run() { node "$ECL_TOOLS" "$@"; }; elif [ -f "${_GSD_RUNTIME_ROOT}/.claude/evolv-coder-lite/bin/${_GSD_SHIM_NAME}" ]; then ECL_TOOLS="${_GSD_RUNTIME_ROOT}/.claude/evolv-coder-lite/bin/${_GSD_SHIM_NAME}"; ecl_run() { node "$ECL_TOOLS" "$@"; }; elif command -v ecl-tools >/dev/null 2>&1; then ECL_TOOLS="$(command -v ecl-tools)"; ecl_run() { "$ECL_TOOLS" "$@"; }; elif [ -f "$HOME/.claude/evolv-coder-lite/bin/${_GSD_SHIM_NAME}" ]; then ECL_TOOLS="$HOME/.claude/evolv-coder-lite/bin/${_GSD_SHIM_NAME}"; ecl_run() { node "$ECL_TOOLS" "$@"; }; else echo "ERROR: ecl-tools.cjs not found at $ECL_TOOLS and ecl-tools is not on PATH. Run: npx -y @evolvconsulting/evolv-coder-lite@latest --claude --local" >&2; exit 1; fi
+INIT=$(ecl_run query init.phase-op "${target}")
 if [[ "$INIT" == @file:* ]]; then INIT=$(cat "${INIT#@file:}"); fi
 ```
 
@@ -88,16 +78,16 @@ Wait for confirmation.
 </step>
 
 <step name="execute_removal">
-**Delegate the entire removal operation to `ecl-sdk query phase.remove`:**
+**Delegate the entire removal operation to `ecl-tools.cjs query phase.remove`:**
 
 ```bash
-RESULT=$($ECL_SDK query phase.remove "${target}")
+RESULT=$(ecl_run query phase.remove "${target}")
 ```
 
 If the phase has executed plans (SUMMARY.md files), the CLI will error. Use `--force` only if the user confirms:
 
 ```bash
-RESULT=$($ECL_SDK query phase.remove "${target}" --force)
+RESULT=$(ecl_run query phase.remove "${target}" --force)
 ```
 
 The CLI handles:
@@ -114,7 +104,7 @@ Extract from result: `removed`, `directory_deleted`, `renamed_directories`, `ren
 Stage and commit the removal:
 
 ```bash
-$ECL_SDK query commit "chore: remove phase {target} ({original-phase-name})" --files .planning/
+ecl_run query commit "chore: remove phase {target} ({original-phase-name})" --files .planning/
 ```
 
 The commit message preserves the historical record of what was removed.
@@ -151,7 +141,7 @@ Would you like to:
 
 - Don't remove completed phases (have SUMMARY.md files) without --force
 - Don't remove current or past phases
-- Don't manually renumber — use `ecl-sdk query phase.remove` which handles all renumbering
+- Don't manually renumber — use `ecl-tools.cjs query phase.remove` which handles all renumbering
 - Don't add "removed phase" notes to STATE.md — git commit is the record
 - Don't modify completed phase directories
 </anti_patterns>
@@ -160,7 +150,7 @@ Would you like to:
 Phase removal is complete when:
 
 - [ ] Target phase validated as future/unstarted
-- [ ] `ecl-sdk query phase.remove` executed successfully
+- [ ] `ecl-tools.cjs query phase.remove` executed successfully
 - [ ] Changes committed with descriptive message
 - [ ] User informed of changes
 </success_criteria>

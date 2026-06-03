@@ -560,7 +560,7 @@ When files are written and returning to orchestrator:
 
 ### Files Ready for Review
 
-User can review actual files in the editor or via SDK queries (e.g. `ecl-sdk query roadmap.analyze` and `ecl-sdk query state.load`) instead of ad-hoc shell `cat`.
+User can review actual files in the editor or via SDK queries (e.g. `ecl-tools query roadmap.analyze` and `ecl-tools query state.load`) instead of ad-hoc shell `cat`.
 
 {If gaps found during creation:}
 

@@ -1,6 +1,6 @@
 # eCL CLI Tools Reference
 
-> Surface-area reference for `evolv-coder-lite/bin/ecl-tools.cjs` (legacy Node CLI). Workflows and agents should prefer `ecl-sdk query` or `@evolvconsulting/ecl-sdk` where a handler exists — see [SDK and programmatic access](#sdk-and-programmatic-access). For slash commands and user flows, see [Command Reference](COMMANDS.md).
+> Surface-area reference for `evolv-coder-lite/bin/ecl-tools.cjs` (Node CLI). For slash commands and user flows, see [Command Reference](COMMANDS.md).
 
 ---
 
@@ -13,7 +13,7 @@
 | ------------------ | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
 | **Shipped path**   | `evolv-coder-lite/bin/ecl-tools.cjs`                                                                                                                                                                      |
 | **Implementation** | 20 domain modules under `evolv-coder-lite/bin/lib/` (the directory is authoritative)                                                                                                                        |
-| **Status**         | Maintained for parity tests and CJS-only entrypoints; `ecl-sdk query` / SDK registry are the supported path for new orchestration (see [QUERY-HANDLERS.md](../sdk/src/query/QUERY-HANDLERS.md)). |
+| **Status**         | Primary runtime command surface for orchestration, workflows, and automation. |
 
 
 **Usage (CJS):**
@@ -29,46 +29,8 @@ node ecl-tools.cjs <command> [args] [--raw] [--cwd <path>]
 | -------------- | ---------------------------------------------------------------------------- |
 | `--raw`        | Machine-readable output (JSON or plain text, no formatting)                  |
 | `--cwd <path>` | Override working directory (for sandboxed subagents)                         |
-| `--ws <name>`  | Workstream context (also honored when the SDK spawns this binary; see below) |
+| `--ws <name>`  | Workstream context for `.planning/workstreams/<name>` paths |
 
-
----
-
-## SDK and programmatic access
-
-Use this when authoring workflows, not when you only need the command list below.
-
-**1. CLI — `ecl-sdk query <argv…>`**
-
-- Resolves argv with the same **longest-prefix** rules as the typed registry (`resolveQueryArgv` in `sdk/src/query/registry.ts`). Unregistered commands **fail fast** — use `node …/ecl-tools.cjs` only for handlers not in the registry.
-- Full matrix (CJS command → registry key, CLI-only tools, aliases, golden tiers): [sdk/src/query/QUERY-HANDLERS.md](../sdk/src/query/QUERY-HANDLERS.md).
-
-**2. TypeScript — `@evolvconsulting/ecl-sdk` (`GSDTools`, `createRegistry`)**
-
-- `GSDTools` now routes through the **SDK Runtime Bridge Module** (`sdk/src/query-runtime-bridge.ts`). Native registry dispatch is preferred; subprocess fallback is explicit policy (`allowFallbackToSubprocess`) and can be disabled for strict SDK-only execution.
-- `strictSdk` mode fails fast when a command has no native adapter, making SDK publish/readiness checks deterministic.
-- Structured bridge observability is available via `onDispatchEvent` (dispatch mode, fallback reason, duration, outcome, error kind).
-- For direct typed dispatch without `GSDTools`, use `createRegistry()` from `sdk/src/query/index.ts`, or invoke `ecl-sdk query` (see [QUERY-HANDLERS.md](../sdk/src/query/QUERY-HANDLERS.md)).
-- Conventions: mutation event wiring, `GSDError` vs `{ data: { error } }`, locks, and stubs — [QUERY-HANDLERS.md](../sdk/src/query/QUERY-HANDLERS.md).
-
-**CJS → SDK examples (same project directory):**
-
-
-| Legacy CJS                               | Preferred `ecl-sdk query` (examples) |
-| ---------------------------------------- | ------------------------------------ |
-| `node ecl-tools.cjs init phase-op 12`    | `ecl-sdk query init phase-op 12`     |
-| `node ecl-tools.cjs phase-plan-index 12` | `ecl-sdk query phase-plan-index 12`  |
-| `node ecl-tools.cjs state json`          | `ecl-sdk query state json`           |
-| `node ecl-tools.cjs roadmap analyze`     | `ecl-sdk query roadmap analyze`      |
-
-
-**SDK state reads:** `state.json` and `state.load` are both registered query handlers with parity coverage. You can invoke them through `ecl-sdk query …` and through the SDK Runtime Bridge (`GSDTools` → `sdk/src/query-runtime-bridge.ts`), honoring `allowFallbackToSubprocess` / `strictSdk` and emitting `onDispatchEvent` observability. For direct typed dispatch, use `createRegistry()` from `sdk/src/query/index.ts`. Full routing and golden rules: [QUERY-HANDLERS.md](../sdk/src/query/QUERY-HANDLERS.md).
-
-**CLI-only (not in registry):** e.g. **graphify**, **from-ecl2** / **ecl2-import** — call `ecl-tools.cjs` until registered.
-
-**Mutation events (SDK):** `QUERY_MUTATION_COMMANDS` in `sdk/src/query/index.ts` lists commands that may emit structured events after a successful dispatch. Exceptions called out in QUERY-HANDLERS: `state validate` (read-only), `skill-manifest` (writes only with `--write`), `intel update` (stub).
-
-**Golden parity:** Policy and CJS↔SDK test categories are documented under **Golden parity** in [QUERY-HANDLERS.md](../sdk/src/query/QUERY-HANDLERS.md).
 
 ---
 
@@ -258,11 +220,15 @@ node ecl-tools.cjs validate health [--repair]
 
 # Probe context-window utilization for status-line / hook callers (v1.40.0)
 node ecl-tools.cjs validate context
+
+# Context utilization as typed JSON surface (#455)
+node ecl-tools.cjs validate context --json
 ```
 
 `validate context` emits a structured envelope with `utilization`, `status`
 (`ok` / `warn` / `critical` at the 60 % / 70 % thresholds), and a
 `suggestion` string. The same data backs `/ecl-health --context`.
+Pass `--json` to receive the typed IR directly (useful in scripts and test assertions).
 
 ---
 
@@ -340,7 +306,7 @@ node ecl-tools.cjs init milestone-op
 node ecl-tools.cjs init map-codebase
 node ecl-tools.cjs init progress
 
-# Workstream-scoped init (SDK --ws flag)
+# Workstream-scoped init (`--ws` flag)
 node ecl-tools.cjs init execute-phase <phase> --ws <name>
 node ecl-tools.cjs init plan-phase <phase> --ws <name>
 ```
@@ -364,6 +330,22 @@ node ecl-tools.cjs milestone complete <version> [--name <name>] [--archive-phase
 node ecl-tools.cjs requirements mark-complete <ids>
 # Accepts: REQ-01,REQ-02 or REQ-01 REQ-02 or [REQ-01, REQ-02]
 ```
+
+---
+
+## Agent Skills
+
+Emit the skill block for a given agent type.
+
+```bash
+# Emit raw XML skill block (default — safe for shell expansion)
+node ecl-tools.cjs agent-skills <agent-type>
+
+# Emit typed JSON surface (#455) — { agent_type, block, skills_count }
+node ecl-tools.cjs agent-skills <agent-type> --json
+```
+
+The `--json` flag returns a typed IR object suitable for structured consumption and test assertions, while the default (no flag) preserves the raw XML output that workflow shell expansions rely on.
 
 ---
 
@@ -408,8 +390,11 @@ node ecl-tools.cjs summary-extract <path> [--fields field1,field2]
 # Project statistics
 node ecl-tools.cjs stats [json|table]
 
-# Progress rendering
+# Progress rendering (human-readable)
 node ecl-tools.cjs progress [json|table|bar]
+
+# Progress as typed JSON surface (#455)
+node ecl-tools.cjs progress --json
 
 # Complete a todo
 node ecl-tools.cjs todo complete <filename>
@@ -438,7 +423,7 @@ node ecl-tools.cjs websearch <query> [--limit N] [--freshness day|week|month]
 
 ## Graphify
 
-Build, query, and inspect the project knowledge graph in `.planning/graphs/`. Requires `graphify.enabled: true` in `config.json` (see [Configuration Reference](CONFIGURATION.md#graphify-settings)). Graphify is **CJS-only**: `ecl-sdk query` does not yet register graphify handlers — always use `node ecl-tools.cjs graphify …`.
+Build, query, and inspect the project knowledge graph in `.planning/graphs/`. Requires `graphify.enabled: true` in `config.json` (see [Configuration Reference](CONFIGURATION.md#graphify-settings)).
 
 ```bash
 # Build or rebuild the knowledge graph
@@ -494,10 +479,10 @@ User-facing entry point: `/ecl-graphify` (see [Command Reference](COMMANDS.md#ec
 `review.models.<cli>` maps a reviewer flavor to a shell command invoked by the code-review workflow. Set via [`/ecl-config --integrations`](COMMANDS.md#ecl-config) or directly:
 
 ```bash
-ecl-sdk query config-set review.models.codex    "codex exec --model gpt-5"
-ecl-sdk query config-set review.models.gemini   "gemini -m gemini-2.5-pro"
-ecl-sdk query config-set review.models.opencode "opencode run --model claude-sonnet-4"
-ecl-sdk query config-set review.models.claude   ""   # clear — fall back to session model
+node ecl-tools.cjs config-set review.models.codex    "codex exec --model gpt-5"
+node ecl-tools.cjs config-set review.models.gemini   "gemini -m gemini-2.5-pro"
+node ecl-tools.cjs config-set review.models.opencode "opencode run --model claude-sonnet-4"
+node ecl-tools.cjs config-set review.models.claude   ""   # clear — fall back to session model
 ```
 
 Slugs are validated against `[a-zA-Z0-9_-]+`; empty or path-containing slugs are rejected. See [`docs/CONFIGURATION.md`](CONFIGURATION.md#code-review-cli-routing) for the full field reference.
@@ -510,6 +495,5 @@ API keys configured via `/ecl-settings` (`brave_search`, `firecrawl`, `exa_searc
 
 ## See also
 
-- [sdk/src/query/QUERY-HANDLERS.md](../sdk/src/query/QUERY-HANDLERS.md) — registry matrix, routing, golden parity, intentional CJS differences
-- [Architecture](ARCHITECTURE.md) — where `ecl-sdk query` fits in orchestration
+- [Architecture](ARCHITECTURE.md) — orchestration and runtime layering
 - [Command Reference](COMMANDS.md) — user-facing `/ecl-` commands
