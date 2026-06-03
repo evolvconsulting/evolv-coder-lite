@@ -1,17 +1,17 @@
 {
-  "bakedAt": "2026-06-03T14:01:34.079Z",
+  "bakedAt": "2026-06-03T14:32:23.169Z",
   "upstream": {
     "repo": "open-gsd/get-shit-done-redux",
     "ref": "v1.2.0",
     "tarball_sha256": "64f747166a2117424b8e9005fb9afb3afe102d8d9205c35a5b3fa269240ea17d"
   },
   "counts": {
-    "textFiles": 1723,
-    "binaryFiles": 5,
+    "textFiles": 1720,
+    "binaryFiles": 8,
     "contentPreserved": 406,
     "overlayOverrides": 4,
     "packagePatched": true,
-    "textPatchesApplied": 27
+    "textPatchesApplied": 29
   },
   "ruleHits": {
     "name:gsd:c": 13,

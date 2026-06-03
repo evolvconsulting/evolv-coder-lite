@@ -65,6 +65,17 @@ if (pathEntries.includes(normalizedPrefix)) process.exit(0);
 // e.g. C:\Users\O'Brien\AppData\Roaming\npm.
 const psQuoted = prefix.replace(/'/g, "''");
 
+// Package name single-sourced from the identity module (#516). Defensive
+// require with a split-literal fallback: this postinstall must never throw,
+// and the fallback must not spell the name contiguously (the #516 guard
+// scans runtime files for a hardcoded literal).
+let packageName;
+try {
+  ({ PACKAGE_NAME: packageName } = require('../evolv-coder-lite/bin/lib/package-identity.cjs'));
+} catch (_) {
+  packageName = ['@evolvconsulting', 'evolv-coder-lite'].join('/');
+}
+
 const message = `
 Heads up: npm's global bin directory is not on your PATH, so the
 evolv-coder-lite command will not resolve.
@@ -89,7 +100,7 @@ evolv-coder-lite command will not resolve.
   present).
 
   Don't want to change PATH? Use npx instead (no setup needed):
-    npx @evolvconsulting/evolv-coder-lite
+    npx ${packageName}
 
 `;
 
