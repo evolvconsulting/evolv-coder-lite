@@ -105,10 +105,9 @@ const INTERNAL_COMPONENT_SLUGS = new Set([
   // a real command token.
   'init-',
 
-  // evolvconsulting — GitHub organization name: "github.com/evolvconsulting/evolv-coder-lite".
-  // Every occurrence of "/evolvconsulting" in docs is the path component of a GitHub URL
-  // (e.g., "[#2792](https://github.com/evolvconsulting/evolv-coder-lite/issues/2792)").
-  // The regex captures "/evolvconsulting" from the URL path. Not a slash command.
+  // Compatibility guard for legacy doc links that may include
+  // legacy org path segments in migrated historical URLs.
+  // This is not a user-typable slash command.
   'build',
 
   // ~/ecl-workspaces/ — filesystem directory path used by /ecl-workspace.
@@ -160,6 +159,13 @@ const INTERNAL_COMPONENT_SLUGS = new Set([
   // The regex captures "/ecl-test-runner" from the URL path component. This is
   // an external tool repo, not a user-typable slash command in this product.
   'test-runner',
+
+  // evolv-coder-lite — GitHub repository name: "evolvconsulting/evolv-coder-lite".
+  // docs/adr/22-plan-drift-guard.md references it as an issue tracker link:
+  //   evolvconsulting/evolv-coder-lite#22
+  // The regex captures "/evolv-coder-lite" from the org/repo path separator. This is
+  // the canonical repo name, not a user-typable slash command in this product.
+  'core',
 ]);
 
 /**
@@ -198,9 +204,14 @@ function extractCommandTokens(content) {
     return false;
   }
 
-  const allSlash = (stripped.match(/\/ecl-[a-z0-9][a-z0-9-]*/g) || []);
-  const allColon = (stripped.match(/\/ecl:[a-z0-9][a-z0-9-]*/g) || []);
-  const allDollar = (stripped.match(/\$ecl-[a-z0-9][a-z0-9-]*/g) || []);
+  // Negative lookbehind: only match tokens NOT preceded by a letter, digit,
+  // `/`, `_`, or `-`. This prevents matching the `/evolv-coder-lite` substring inside
+  // the org/repo path `evolvconsulting/evolv-coder-lite` (and similar path-embedded segments)
+  // while still matching real invocations preceded by BOL, space, backtick, or
+  // `(`. Fixes false-positive class identified in #489.
+  const allSlash = (stripped.match(/(?<![A-Za-z0-9/_-])\/ecl-[a-z0-9][a-z0-9-]*/g) || []);
+  const allColon = (stripped.match(/(?<![A-Za-z0-9/_-])\/ecl:[a-z0-9][a-z0-9-]*/g) || []);
+  const allDollar = (stripped.match(/(?<![A-Za-z0-9/_-])\$ecl-[a-z0-9][a-z0-9-]*/g) || []);
 
   const slash = new Set(allSlash.filter(t => !isInternal(t)));
   const colon = new Set(allColon.filter(t => !isInternal(t)));
@@ -482,5 +493,46 @@ describe('adversarial: polarity inversion catches drift deny-list misses', () =>
   test('freshly-deleted command /ecl-research-phase is absent from registry', () => {
     const registry = getLiveCommandTokens();
     assert.ok(!registry.has('/ecl-research-phase'), '/ecl-research-phase must not be in the live registry');
+  });
+});
+
+// ─── Tokenizer regression tests (#489) ───────────────────────────────────────
+
+describe('extractCommandTokens() — repo-path false-positive regression (#489)', () => {
+  test('evolvconsulting/evolv-coder-lite#22 repo path does NOT produce a /evolv-coder-lite token', () => {
+    // Before the lookbehind fix, /evolv-coder-lite inside `evolvconsulting/evolv-coder-lite#22`
+    // would be matched by the slash regex — a false positive.
+    const { slash, colon, dollar } = extractCommandTokens(
+      'see evolvconsulting/evolv-coder-lite#22 for details'
+    );
+    const all = [...slash, ...colon, ...dollar];
+    assert.ok(
+      !all.includes('/evolv-coder-lite'),
+      'repo path evolvconsulting/evolv-coder-lite#22 must not produce a /evolv-coder-lite token; got: ' + all.join(', ')
+    );
+    assert.strictEqual(all.length, 0, 'expected zero tokens from a bare repo-path string; got: ' + all.join(', '));
+  });
+
+  test('space-preceded /ecl-totally-not-a-real-command is still extracted (real invocation)', () => {
+    // A genuine (but unregistered) command reference after whitespace must be
+    // captured so the live-registry check can flag it as unknown.
+    const { slash } = extractCommandTokens(
+      'run /ecl-totally-not-a-real-command here'
+    );
+    assert.ok(
+      slash.has('/ecl-totally-not-a-real-command'),
+      'invocation after whitespace must be extracted; slash set: ' + [...slash].join(', ')
+    );
+  });
+
+  test('backtick-wrapped `/ecl-plan` is still extracted (real invocation)', () => {
+    // Backtick-wrapped commands (common in markdown) must still be captured.
+    const { slash } = extractCommandTokens(
+      'use `/ecl-plan` to plan'
+    );
+    assert.ok(
+      slash.has('/ecl-plan'),
+      'backtick-wrapped invocation must be extracted; slash set: ' + [...slash].join(', ')
+    );
   });
 });

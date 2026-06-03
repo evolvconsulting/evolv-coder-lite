@@ -22,9 +22,11 @@
 
 const { execNpm } = require('./lib/shell-command-projection.cjs');
 
-// Hardcoded. Do not parameterise — the whole point of this script is that
-// the package name is not a runtime choice for the caller.
-const PACKAGE_NAME = '@evolvconsulting/evolv-coder-lite';
+// Sourced from the single Package Identity seam (#498), not re-typed. The seam
+// bakes the value from package.json at build time, so it is a code constant —
+// still NOT a runtime choice for the caller (#2992) — and a rename propagates
+// from one place (#378). The drift-guard lint forbids re-introducing a literal.
+const { packageName: PACKAGE_NAME } = require('./lib/package-identity.cjs');
 
 const CHECK_REASON = Object.freeze({
   OK: 'ok',

@@ -771,7 +771,7 @@ start of execution when `--reviews` flag is present or reviews mode is active.
 Load planning context:
 
 ```bash
-INIT=$(ecl-sdk query init.plan-phase "${PHASE}")
+INIT=$(ecl-tools query init.plan-phase "${PHASE}")
 if [[ "$INIT" == @file:* ]]; then INIT=$(cat "${INIT#@file:}"); fi
 ```
 
@@ -779,10 +779,8 @@ Extract from init JSON: `planner_model`, `researcher_model`, `checker_model`, `c
 
 Also load planning state (position, decisions, blockers) via the SDK — **use `node` to invoke the CLI** (not `npx`):
 ```bash
-ecl-sdk query state.load 2>/dev/null
+ecl-tools query state.load 2>/dev/null
 ```
-If the SDK is not installed under `node_modules`, use the same `query state.load` argv with your local `ecl-sdk` CLI on `PATH`.
-
 If STATE.md missing but .planning/ exists, offer to reconstruct or continue without.
 </step>
 
@@ -840,7 +838,7 @@ Query the graph for phase-relevant dependency context (single query per D-06):
 node "$HOME/.claude/evolv-coder-lite/bin/ecl-tools.cjs" graphify query "<phase-goal-keyword>" --budget 2000
 ```
 
-(graphify is not exposed on `ecl-sdk query` yet; use `ecl-tools.cjs` for graphify only.)
+(graphify is not exposed on `ecl-tools query` yet; use `ecl-tools.cjs` for graphify only.)
 
 Use the keyword that best captures the phase goal. Examples:
 - Phase "User Authentication" -> query term "auth"
@@ -877,7 +875,7 @@ Apply discovery level protocol (see discovery_levels section).
 
 **Step 1 — Generate digest index:**
 ```bash
-ecl-sdk query history-digest
+ecl-tools query history-digest
 ```
 
 **Step 2 — Select relevant phases (typically 2-4):**
@@ -922,7 +920,7 @@ Read the most recent milestone retrospective and cross-milestone trends. Extract
 </step>
 
 <step name="inject_global_learnings">
-If `features.global_learnings` is `true`: run `ecl-sdk query learnings.query --tag <tag> --limit 5` once per tag from PLAN.md frontmatter `tags` (or use the single most specific keyword). The handler matches one `--tag` at a time. Prefix matches with `[Prior learning from <project>]` as weak priors. Project-local decisions take precedence. Skip silently if disabled or no matches.
+If `features.global_learnings` is `true`: run `ecl-tools query learnings.query --tag <tag> --limit 5` once per tag from PLAN.md frontmatter `tags` (or use the single most specific keyword). The handler matches one `--tag` at a time. Prefix matches with `[Prior learning from <project>]` as weak priors. Project-local decisions take precedence. Skip silently if disabled or no matches.
 </step>
 
 <step name="gather_phase_context">
@@ -1048,10 +1046,10 @@ Include all frontmatter fields.
 </step>
 
 <step name="validate_plan">
-Validate each created PLAN.md using `ecl-sdk query`:
+Validate each created PLAN.md using `ecl-tools query`:
 
 ```bash
-VALID=$(ecl-sdk query frontmatter.validate "$PLAN_PATH" --schema plan)
+VALID=$(ecl-tools query frontmatter.validate "$PLAN_PATH" --schema plan)
 ```
 
 Returns JSON: `{ valid, missing, present, schema }`
@@ -1064,7 +1062,7 @@ Required plan frontmatter fields:
 Also validate plan structure:
 
 ```bash
-STRUCTURE=$(ecl-sdk query verify.plan-structure "$PLAN_PATH")
+STRUCTURE=$(ecl-tools query verify.plan-structure "$PLAN_PATH")
 ```
 
 Returns JSON: `{ valid, errors, warnings, task_count, tasks }`
@@ -1101,7 +1099,7 @@ Plans:
 
 <step name="git_commit">
 ```bash
-ecl-sdk query commit "docs($PHASE): create phase plan" --files \
+ecl-tools query commit "docs($PHASE): create phase plan" --files \
   .planning/phases/$PHASE-*/$PHASE-*-PLAN.md .planning/ROADMAP.md
 ```
 </step>

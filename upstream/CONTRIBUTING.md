@@ -4,7 +4,7 @@
 
 ```bash
 # Clone the repo
-git clone https://github.com/open-gsd/get-shit-done-redux.git
+git clone https://github.com/open-gsd/gsd-core.git
 cd get-shit-done
 
 # Install dependencies
@@ -42,7 +42,7 @@ GSD accepts three types of contributions. Each type has a different process and 
 A fix corrects something that is broken, crashes, produces wrong output, or behaves contrary to documented behavior.
 
 **Process:**
-1. Open a [Bug Report issue](https://github.com/open-gsd/get-shit-done-redux/issues/new?template=bug_report.yml) — fill it out completely.
+1. Open a [Bug Report issue](https://github.com/open-gsd/gsd-core/issues/new?template=bug_report.yml) — fill it out completely.
 2. Wait for a maintainer to confirm it is a bug (label: `confirmed-bug`). For obvious, reproducible bugs this is typically fast.
 3. Fix it. Write a test that would have caught the bug.
 4. Open a PR using the [Fix PR template](.github/PULL_REQUEST_TEMPLATE/fix.md) — link the confirmed issue.
@@ -58,7 +58,7 @@ An enhancement improves an existing feature — better output, faster execution,
 **The bar:** Enhancements must have a scoped written proposal approved by a maintainer before any code is written. A PR for an enhancement will be closed without review if the linked issue does not carry the `approved-enhancement` label.
 
 **Process:**
-1. Open an [Enhancement issue](https://github.com/open-gsd/get-shit-done-redux/issues/new?template=enhancement.yml) with the full proposal.  The issue template requires: the problem being solved, the concrete benefit, the scope of changes, and alternatives considered.
+1. Open an [Enhancement issue](https://github.com/open-gsd/gsd-core/issues/new?template=enhancement.yml) with the full proposal.  The issue template requires: the problem being solved, the concrete benefit, the scope of changes, and alternatives considered.
 2. **Wait for maintainer approval.** A maintainer must label the issue `approved-enhancement` before you write a single line of code. Do not open a PR against an unapproved enhancement issue — it will be closed.
 3. Write the code. Keep the scope exactly as approved. If scope creep occurs, comment on the issue and get re-approval before continuing.
 4. Open a PR using the [Enhancement PR template](.github/PULL_REQUEST_TEMPLATE/enhancement.md) — link the approved issue.
@@ -74,8 +74,8 @@ A feature adds something new — a new command, a new workflow, a new concept, a
 **The bar:** Features require a complete written specification approved by a maintainer before any code is written. A PR for a feature will be closed without review if the linked issue does not carry the `approved-feature` label. Incomplete specs are closed, not revised by maintainers.
 
 **Process:**
-1. **Discuss first** — check [Discussions](https://github.com/open-gsd/get-shit-done-redux/discussions) to see if the idea has been raised. If it has and was declined, don't open a new issue.
-2. Open a [Feature Request issue](https://github.com/open-gsd/get-shit-done-redux/issues/new?template=feature_request.yml) with the complete spec. The template requires: the solo-developer problem being solved, what is being added, full scope of affected files and systems, user stories, acceptance criteria, and assessment of maintenance burden.
+1. **Discuss first** — check [Discussions](https://github.com/open-gsd/gsd-core/discussions) to see if the idea has been raised. If it has and was declined, don't open a new issue.
+2. Open a [Feature Request issue](https://github.com/open-gsd/gsd-core/issues/new?template=feature_request.yml) with the complete spec. The template requires: the solo-developer problem being solved, what is being added, full scope of affected files and systems, user stories, acceptance criteria, and assessment of maintenance burden.
 3. **Wait for maintainer approval.** A maintainer must label the issue `approved-feature` before you write a single line of code. Approval is not guaranteed — GSD is intentionally lean and many valid ideas are declined because they conflict with the project's design philosophy.
 4. Write the code. Implement exactly the approved spec. Changes to scope require re-approval.
 5. Open a PR using the [Feature PR template](.github/PULL_REQUEST_TEMPLATE/feature.md) — link the approved issue.
@@ -117,6 +117,46 @@ For **enhancements**: open the issue, get `approved-enhancement`, then code.
 For **features**: open the issue, get `approved-feature`, then code.
 
 PRs that arrive without a properly-labeled linked issue are closed automatically. This is not a bureaucratic hurdle — it protects you from spending time on work that will be rejected, and it protects maintainers from reviewing code for changes that were never agreed to.
+
+---
+
+## Where Do I Open My PR? (Branching Model)
+
+GSD uses two long-lived branches: `main` (production, what's on npm `@latest`)
+and `next` (integration for the upcoming release). **Almost every PR targets
+`next`.** Full guide: [`docs/branching.md`](docs/branching.md).
+
+| Your branch | PR target | Notes |
+|---|---|---|
+| `feat/NNN-slug` | `next` | Default for all new features |
+| `fix/NNN-slug` | `next` | Default for all bug fixes; ships in next minor or via hotfix cherry-pick |
+| `chore/`, `docs/`, `refactor/`, `test/`, `perf/`, `ci/`, `revert/` | `next` | All routine work |
+| `fix/critical-NNN-slug` | `main` | Production-down emergencies only; auto-back-merges to `next` |
+| `release/X.Y.0` | `main` | Created by `release.yml` — don't make these by hand |
+| `hotfix/X.Y.Z` | `main` | Created by `hotfix.yml` — don't make these by hand |
+| Stabilization PR for an in-flight release | `release/X.Y.0` | Fix a regression found during the RC cycle |
+
+**Day-to-day commands:**
+
+```bash
+git fetch origin
+git checkout next
+git pull --ff-only origin next
+git checkout -b fix/3187-config-corruption
+# ... commit, push
+gh pr create --base next --repo open-gsd/gsd-core
+```
+
+If you target the wrong branch by accident, the `PR Target Validator`
+workflow will post a comment with the one-line fix (click "Edit" by the PR
+title and change the base branch — no need to recreate the PR).
+
+**Why this matters:** Under the old single-branch model, every PR required
+rebasing onto `main` because branch protection required "up-to-date before
+merging" and `main` moved on every merge. With `next` as the integration
+branch and that flag disabled on `next`, concurrent PRs can merge in any
+order as long as they don't conflict on the same lines. The rebase
+treadmill is gone for the 95% case.
 
 ---
 
@@ -163,7 +203,7 @@ npm run changeset -- --type Fixed --pr <YOUR_PR_NUMBER> \
 
 This writes `.changeset/<adjective>-<noun>-<noun>.md`. Three random words → concurrent PRs never collide. Allowed `type:` values follow [Keep a Changelog](https://keepachangelog.com/): `Added`, `Changed`, `Deprecated`, `Removed`, `Fixed`, `Security`.
 
-Fragments are consolidated into `CHANGELOG.md` at release time by the release workflow. See [`.changeset/README.md`](.changeset/README.md) for the format spec and [#2975](https://github.com/open-gsd/get-shit-done-redux/issues/2975) for the rationale.
+Fragments are consolidated into `CHANGELOG.md` at release time by the release workflow. See [`.changeset/README.md`](.changeset/README.md) for the format spec and [#2975](https://github.com/open-gsd/gsd-core/issues/2975) for the rationale.
 
 **CI enforcement:** the `Changeset Required` workflow (`scripts/changeset/lint.cjs`) fails any PR that touches `bin/`, `get-shit-done/`, `agents/`, `commands/`, `hooks/`, or `sdk/src/` without a `.changeset/*.md` fragment.
 
@@ -171,7 +211,7 @@ Fragments are consolidated into `CHANGELOG.md` at release time by the release wo
 
 ## Documentation Updates — Update the Relevant Docs
 
-If your PR adds, changes, deprecates, or removes user-visible behavior, you **must** update the relevant documentation in `docs/`. CI will fail any PR whose changeset fragment is typed `Added`, `Changed`, `Deprecated`, or `Removed` without also modifying at least one file under `docs/` ([#3213](https://github.com/open-gsd/get-shit-done-redux/issues/3213)).
+If your PR adds, changes, deprecates, or removes user-visible behavior, you **must** update the relevant documentation in `docs/`. CI will fail any PR whose changeset fragment is typed `Added`, `Changed`, `Deprecated`, or `Removed` without also modifying at least one file under `docs/` ([#3213](https://github.com/open-gsd/gsd-core/issues/3213)).
 
 `Fixed` and `Security` fragments do not trigger this lint — bug fixes restore documented behavior, they do not introduce new behavior to document. (Edit the docs anyway if a fix corrects something the docs got wrong.)
 
@@ -648,7 +688,16 @@ node --test tests/core.test.cjs
 npm run test:coverage
 ```
 
-For examples of required negative matrices, parser fixtures, filesystem fault injection, security abuse tests, generated-file checks, and runtime/SDK parity tests, see [`TEST-EXAMPLES.md`](TEST-EXAMPLES.md).
+For examples of required negative matrices, parser fixtures, filesystem fault injection, security abuse tests, generated-file checks, and runtime/SDK parity tests, see [`TEST-EXAMPLES.md`](./TEST-EXAMPLES.md).
+
+### Preferred local benchmark runner (before PR)
+
+When you can, run the local test bench harness before opening a PR — especially for Windows-sensitive changes.
+
+- Setup guide: [gsd-test-runner getting started](https://github.com/open-gsd/gsd-test-runner/blob/main/docs/getting-started.md)
+- Preferred PR evidence: include the bench results summary (or artifact link) in your PR body.
+
+This gives maintainers a faster, higher-confidence signal than CI-only validation.
 
 ### Pre-PR Seam Checks (Manifest/Alias Routing)
 
@@ -757,6 +806,12 @@ Reviewers do not rely solely on CI to verify correctness. Before approving a PR,
 - Validate that the implementation matches what the linked issue described — green CI on the wrong implementation is not an approval signal
 
 **"Tests pass in CI" is not sufficient for merge.** The implementation must correctly solve the problem described in the linked issue.
+
+## Code Review Lessons
+
+### Input validation: check shape, not just type
+
+Defensive normalization at trust boundaries must validate both the value's type and its semantic shape. A `typeof === 'string'` check is necessary but insufficient when the field's contract requires a specific format (UUID v4, semver, file path, etc.). See [ADR 227](docs/adr/227-input-validation-shape-not-just-type.md) for the architectural standard and concrete cases.
 
 ## Code Style
 

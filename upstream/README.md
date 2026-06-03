@@ -1,30 +1,25 @@
-> # ⚠️ This is the active fork
+> # Project Continuity Notice
 >
-> 📢 **Read the announcement: [why the fork, what changed, what's next →](https://github.com/gsd-redux/get-shit-done-redux/discussions/109)**
+> GSD is maintained by the **open-gsd** team at:
+> **`open-gsd/gsd-core`**
 >
-> The original repo at [gsd-build/get-shit-done](https://github.com/gsd-build/get-shit-done) appears compromised or abandoned. The maintainer (TÂCHES) has not been reachable since **2026-04-01**. TÂCHES social accounts appear deleted, and a **`$GSD` token associated with the project has been linked publicly to a rug-pull**.
+> Use only these package names:
 >
-> I have **no inside information** beyond what is publicly visible. I am stating absence-of-information deliberately — absence of news is not the same as evidence.
+> - npm (main): `@opengsd/gsd-core`
+> - npm (sdk): `@opengsd/gsd-sdk`
 >
-> ### What I can confirm
+> The legacy upstream is outside open-gsd control. Based on public transition announcements and repository ownership reality, we strongly recommend removing legacy packages and migrating to `@opengsd/*`.
 >
-> - No contact with the original maintainer since 2026-04-01.
-> - TÂCHES social accounts appear deleted or unreachable.
-> - The `$GSD` token has been linked publicly to a rug-pull.
-> - The repo at `gsd-build/get-shit-done` continues to exist but I cannot vouch for any changes pushed there from this point forward.
+> Security status:
 >
-> ### What changed
+> - maintainers completed an internal security audit
+> - maintainers report an independent review pass
+> - no known active exploit was found in tracked source during those passes
 >
-> | | Before | After |
-> |---|---|---|
-> | GitHub | `gsd-build/get-shit-done` | `open-gsd/get-shit-done-redux` |
-> | npm (main) | `get-shit-done-cc` → `get-shit-done-redux` | `@opengsd/get-shit-done-redux` |
-> | npm (sdk) | `@gsd-build/sdk` → `@gsd-redux/sdk` | `@opengsd/gsd-sdk` |
-> | Issue numbers | per source | renumbered; original is in body as `[from gsd-build/get-shit-done#N]` |
+> See:
 >
-> If you can reach the original maintainer, please open an issue here and CC them. If you have technical evidence that materially changes the picture above, please share it in an issue.
->
-> — trek-e, fork maintainer
+> - continuity announcement: https://github.com/open-gsd/gsd-core/discussions/109
+> - audit transparency report: https://github.com/open-gsd/gsd-core/discussions/119
 >
 > ---
 
@@ -38,17 +33,17 @@
 
 **Solves context rot — the quality degradation that happens as your AI fills its context window.**
 
-[![npm version](https://img.shields.io/npm/v/%40opengsd%2Fget-shit-done-redux?style=for-the-badge&logo=npm&logoColor=white&color=CB3837)](https://www.npmjs.com/package/@opengsd/get-shit-done-redux)
-[![npm downloads](https://img.shields.io/npm/dm/%40opengsd%2Fget-shit-done-redux?style=for-the-badge&logo=npm&logoColor=white&color=CB3837)](https://www.npmjs.com/package/@opengsd/get-shit-done-redux)
-[![Tests](https://img.shields.io/github/actions/workflow/status/open-gsd/get-shit-done-redux/test.yml?branch=main&style=for-the-badge&logo=github&label=Tests)](https://github.com/open-gsd/get-shit-done-redux/actions/workflows/test.yml)
+[![npm version](https://img.shields.io/npm/v/%40opengsd%2Fgsd-core?style=for-the-badge&logo=npm&logoColor=white&color=CB3837)](https://www.npmjs.com/package/@opengsd/gsd-core)
+[![npm downloads](https://img.shields.io/npm/dm/%40opengsd%2Fgsd-core?style=for-the-badge&logo=npm&logoColor=white&color=CB3837)](https://www.npmjs.com/package/@opengsd/gsd-core)
+[![Tests](https://img.shields.io/github/actions/workflow/status/open-gsd/gsd-core/test.yml?branch=main&style=for-the-badge&logo=github&label=Tests)](https://github.com/open-gsd/gsd-core/actions/workflows/test.yml)
 [![Discord](https://img.shields.io/badge/Discord-Join-5865F2?style=for-the-badge&logo=discord&logoColor=white)](https://discord.gg/mYgfVNfA2r)
-[![GitHub stars](https://img.shields.io/github/stars/open-gsd/get-shit-done-redux?style=for-the-badge&logo=github&color=181717)](https://github.com/open-gsd/get-shit-done-redux)
+[![GitHub stars](https://img.shields.io/github/stars/open-gsd/gsd-core?style=for-the-badge&logo=github&color=181717)](https://github.com/open-gsd/gsd-core)
 [![License](https://img.shields.io/badge/license-MIT-blue?style=for-the-badge)](LICENSE)
 
 <br>
 
 ```bash
-npx @opengsd/get-shit-done-redux@latest
+npx @opengsd/gsd-core@latest
 ```
 
 **Works on Mac, Windows, and Linux.**
@@ -80,17 +75,15 @@ npx @opengsd/get-shit-done-redux@latest
 
 ---
 
-## Why I Built This
+## Why We Continue Building GSD
 
-I'm a solo developer. I don't write code — Claude Code does.
+GSD exists to help solo builders and small teams ship reliably with AI: clear specs, controlled context, and verification before release.
 
-Other spec-driven tools exist, but they're all built for 50-person engineering orgs — sprint ceremonies, story points, stakeholder syncs, Jira workflows. I'm not that. I'm a creative person trying to build great things consistently.
+In May 2026, maintainers published a continuity announcement and migrated active development to `open-gsd/gsd-core` after trust and ownership concerns around the former upstream, including a meme-coin rug-pull incident publicly associated with that ecosystem.
 
-So I built GSD. The complexity is in the system, not in your workflow. Behind the scenes: context engineering, XML prompt formatting, subagent orchestration, state management. What you see: a few commands that just work.
+The former creator and legacy lineage are no longer part of this program. This repository is the maintained continuation under open-gsd governance.
 
-The system gives Claude everything it needs to do the work *and* verify it. I trust the workflow. It just does a good job.
-
-— **TÂCHES**
+The current team continues release operations, triage, and security hardening in public. Audit status and follow-up security work are documented in Discussion #119 and linked issues.
 
 ---
 
@@ -159,7 +152,7 @@ Loop discuss → plan → execute → verify → ship until the milestone is don
 ## Getting Started
 
 ```bash
-npx @opengsd/get-shit-done-redux@latest
+npx @opengsd/gsd-core@latest
 ```
 
 The installer prompts for your runtime (Claude Code, OpenCode, Gemini CLI, Kilo, Codex, Copilot, Cursor, Windsurf, and more) and whether to install globally or locally.
@@ -176,7 +169,7 @@ Current release highlights are in [docs/RELEASE-v1.42.1.md](docs/RELEASE-v1.42.1
 
 ### Cross-runtime compatibility: installer required
 
-The `agents/` and `commands/` directories in this repository are Claude Code-format source files. The installer (`npx @opengsd/get-shit-done-redux@latest`) transforms them per target runtime — stripping or converting frontmatter fields that Claude Code uses but other runtimes reject. For example, OpenCode requires `color` as a hex or semantic value from a fixed set, and does not accept a `tools:` frontmatter field; the installer function `convertClaudeToOpencodeFrontmatter` (`bin/install.js`) handles this automatically.
+The `agents/` and `commands/` directories in this repository are Claude Code-format source files. The installer (`npx @opengsd/gsd-core@latest`) transforms them per target runtime — stripping or converting frontmatter fields that Claude Code uses but other runtimes reject. For example, OpenCode requires `color` as a hex or semantic value from a fixed set, and does not accept a `tools:` frontmatter field; the installer function `convertClaudeToOpencodeFrontmatter` (`bin/install.js`) handles this automatically.
 
 **Manually copying files** from `agents/` or `commands/` directly into a non-Claude-Code runtime config directory (e.g., `~/.config/opencode/agents`) skips the conversion step and will produce schema validation errors in that runtime.
 
@@ -262,12 +255,12 @@ For the full configuration reference — all settings, git branching strategies,
 
 **Something broken?** Re-run the installer — it's idempotent:
 ```bash
-npx @opengsd/get-shit-done-redux@latest
+npx @opengsd/gsd-core@latest
 ```
 
 **Containers or Docker?** Set `CLAUDE_CONFIG_DIR` before installing to avoid tilde-expansion issues:
 ```bash
-CLAUDE_CONFIG_DIR=/home/youruser/.claude npx @opengsd/get-shit-done-redux --global
+CLAUDE_CONFIG_DIR=/home/youruser/.claude npx @opengsd/gsd-core --global
 ```
 
 Full troubleshooting and uninstall instructions in **[docs/USER-GUIDE.md](docs/USER-GUIDE.md#troubleshooting)**.
@@ -285,11 +278,11 @@ Full troubleshooting and uninstall instructions in **[docs/USER-GUIDE.md](docs/U
 
 ## Star History
 
-<a href="https://star-history.com/#open-gsd/get-shit-done-redux&Date">
+<a href="https://star-history.com/#open-gsd/gsd-core&Date">
  <picture>
-   <source media="(prefers-color-scheme: dark)" srcset="https://api.star-history.com/svg?repos=open-gsd/get-shit-done-redux&type=Date&theme=dark" />
-   <source media="(prefers-color-scheme: light)" srcset="https://api.star-history.com/svg?repos=open-gsd/get-shit-done-redux&type=Date" />
-   <img alt="Star History Chart" src="https://api.star-history.com/svg?repos=open-gsd/get-shit-done-redux&type=Date" />
+   <source media="(prefers-color-scheme: dark)" srcset="https://api.star-history.com/svg?repos=open-gsd/gsd-core&type=Date&theme=dark" />
+   <source media="(prefers-color-scheme: light)" srcset="https://api.star-history.com/svg?repos=open-gsd/gsd-core&type=Date" />
+   <img alt="Star History Chart" src="https://api.star-history.com/svg?repos=open-gsd/gsd-core&type=Date" />
  </picture>
 </a>
 

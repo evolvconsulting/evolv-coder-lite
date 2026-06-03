@@ -53,18 +53,8 @@ Read all files that exist. Missing files are fine — the summary adapts to what
 Find all phase directories:
 
 ```bash
-# SDK resolution: prefer local ecl-tools.cjs, fall back to global ecl-sdk (#3668)
-ECL_TOOLS="${RUNTIME_DIR:-$(git rev-parse --show-toplevel 2>/dev/null || pwd)}/evolv-coder-lite/bin/ecl-tools.cjs"
-if [ -f "$ECL_TOOLS" ]; then
-  ECL_SDK="node $ECL_TOOLS"
-elif command -v ecl-sdk >/dev/null 2>&1; then
-  ECL_SDK="ecl-sdk"
-else
-  echo "ERROR: ecl-sdk not found on PATH and $ECL_TOOLS does not exist." >&2
-  echo "Run: npx evolv-coder-lite-cc@latest --claude --local" >&2
-  exit 1
-fi
-$ECL_SDK query init.progress
+_GSD_SHIM_NAME="ecl-tools.cjs"; _GSD_RUNTIME_ROOT="${RUNTIME_DIR:-$(git rev-parse --show-toplevel 2>/dev/null || pwd)}"; ECL_TOOLS="${_GSD_RUNTIME_ROOT}/evolv-coder-lite/bin/${_GSD_SHIM_NAME}"; if [ -f "$ECL_TOOLS" ]; then ecl_run() { node "$ECL_TOOLS" "$@"; }; elif [ -f "${_GSD_RUNTIME_ROOT}/.claude/evolv-coder-lite/bin/${_GSD_SHIM_NAME}" ]; then ECL_TOOLS="${_GSD_RUNTIME_ROOT}/.claude/evolv-coder-lite/bin/${_GSD_SHIM_NAME}"; ecl_run() { node "$ECL_TOOLS" "$@"; }; elif command -v ecl-tools >/dev/null 2>&1; then ECL_TOOLS="$(command -v ecl-tools)"; ecl_run() { "$ECL_TOOLS" "$@"; }; elif [ -f "$HOME/.claude/evolv-coder-lite/bin/${_GSD_SHIM_NAME}" ]; then ECL_TOOLS="$HOME/.claude/evolv-coder-lite/bin/${_GSD_SHIM_NAME}"; ecl_run() { node "$ECL_TOOLS" "$@"; }; else echo "ERROR: ecl-tools.cjs not found at $ECL_TOOLS and ecl-tools is not on PATH. Run: npx -y @evolvconsulting/evolv-coder-lite@latest --claude --local" >&2; exit 1; fi
+ecl_run query init.progress
 ```
 
 This returns phase metadata. For each phase in the milestone scope:
@@ -200,7 +190,7 @@ mkdir -p .planning/reports
 
 Write the summary, then commit:
 ```bash
-$ECL_SDK query commit "docs(v${VERSION}): generate milestone summary for onboarding" --files \
+ecl_run query commit "docs(v${VERSION}): generate milestone summary for onboarding" --files \
   ".planning/reports/MILESTONE_SUMMARY-v${VERSION}.md"
 ```
 
@@ -228,7 +218,7 @@ If the user is done:
 ## Step 9: Update STATE.md
 
 ```bash
-$ECL_SDK query state.record-session "" \
+ecl_run query state.record-session "" \
   "Milestone v${VERSION} summary generated" \
   ".planning/reports/MILESTONE_SUMMARY-v${VERSION}.md"
 ```

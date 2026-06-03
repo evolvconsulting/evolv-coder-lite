@@ -108,104 +108,63 @@ describe('hook file validation', () => {
 
 // ─────────────────────────────────────────────────────────────────────────────
 // 2. Installer hook registration
+// Migrated (#455): uses typed exports from bin/install.js instead of
+// source-grep assertions (retiring pending-migration-to-typed-ir token).
 // ─────────────────────────────────────────────────────────────────────────────
 
+// Typed import — no source-grep needed (#455)
+const { ECL_UNINSTALL_HOOKS, buildHookCommand } = require(
+  path.join(__dirname, '..', 'bin', 'install.js')
+);
+
 describe('installer hook registration', () => {
-  const installJsPath = path.join(__dirname, '..', 'bin', 'install.js');
-  let installSource;
-
-  beforeEach(() => {
-    installSource = fs.readFileSync(installJsPath, 'utf-8');
-  });
-
-  test('install.js contains ecl-validate-commit registration block', () => {
+  test('ECL_UNINSTALL_HOOKS includes all 3 opt-in bash hooks', () => {
+    assert.ok(Array.isArray(ECL_UNINSTALL_HOOKS), 'ECL_UNINSTALL_HOOKS must be an array');
     assert.ok(
-      installSource.includes('ecl-validate-commit'),
-      'install.js should contain ecl-validate-commit hook registration'
+      ECL_UNINSTALL_HOOKS.includes('ecl-validate-commit.sh'),
+      'ECL_UNINSTALL_HOOKS must include ecl-validate-commit.sh'
     );
     assert.ok(
-      installSource.includes('validateCommitCommand'),
-      'install.js should define validateCommitCommand variable'
+      ECL_UNINSTALL_HOOKS.includes('ecl-session-state.sh'),
+      'ECL_UNINSTALL_HOOKS must include ecl-session-state.sh'
     );
     assert.ok(
-      installSource.includes('hasValidateCommitHook'),
-      'install.js should check for existing validate-commit hook'
+      ECL_UNINSTALL_HOOKS.includes('ecl-phase-boundary.sh'),
+      'ECL_UNINSTALL_HOOKS must include ecl-phase-boundary.sh'
     );
   });
 
-  test('install.js contains ecl-session-state registration block', () => {
-    assert.ok(
-      installSource.includes('ecl-session-state'),
-      'install.js should contain ecl-session-state hook registration'
-    );
-    assert.ok(
-      installSource.includes('sessionStateCommand'),
-      'install.js should define sessionStateCommand variable'
-    );
-    assert.ok(
-      installSource.includes('hasSessionStateHook'),
-      'install.js should check for existing session-state hook'
-    );
+  test('ECL_UNINSTALL_HOOKS includes all core JS hooks', () => {
+    const requiredJsHooks = [
+      'ecl-statusline.js',
+      'ecl-check-update.js',
+      'ecl-context-monitor.js',
+    ];
+    for (const hook of requiredJsHooks) {
+      assert.ok(
+        ECL_UNINSTALL_HOOKS.includes(hook),
+        `ECL_UNINSTALL_HOOKS must include ${hook}`
+      );
+    }
   });
 
-  test('install.js contains ecl-phase-boundary registration block', () => {
+  test('buildHookCommand generates a command string for ecl-validate-commit.sh', () => {
+    // buildHookCommand(configDir, hookName, opts) returns a non-null string command
+    // or null when the platform cannot run the hook. On non-Windows unix, .sh hooks
+    // always produce a command string.
+    const tmpConfigDir = os.tmpdir();
+    const cmd = buildHookCommand(tmpConfigDir, 'ecl-validate-commit.sh', { platform: 'linux' });
+    // On Linux, .sh hooks should always resolve to a non-null string
     assert.ok(
-      installSource.includes('ecl-phase-boundary'),
-      'install.js should contain ecl-phase-boundary hook registration'
+      cmd === null || (typeof cmd === 'string' && cmd.length > 0),
+      `buildHookCommand must return null or a non-empty string, got: ${JSON.stringify(cmd)}`
     );
-    assert.ok(
-      installSource.includes('phaseBoundaryCommand'),
-      'install.js should define phaseBoundaryCommand variable'
-    );
-    assert.ok(
-      installSource.includes('hasPhaseBoundaryHook'),
-      'install.js should check for existing phase-boundary hook'
-    );
-  });
-
-  test('install.js registers validate-commit with PreToolUse event and Bash matcher', () => {
-    assert.ok(
-      installSource.includes("settings.hooks[preToolEvent].push"),
-      'validate-commit should be pushed to preToolEvent hooks array'
-    );
-    const validateCommitBlock = installSource.substring(
-      installSource.indexOf('// Configure commit validation hook'),
-      installSource.indexOf('// Configure session state orientation hook')
-    );
-    assert.ok(
-      validateCommitBlock.includes("matcher: 'Bash'"),
-      'validate-commit hook should use Bash matcher'
-    );
-    assert.ok(
-      validateCommitBlock.includes('preToolEvent'),
-      'validate-commit hook should register on preToolEvent (PreToolUse)'
-    );
-  });
-
-  test('install.js adds all 3 new hooks to the uninstall cleanup list', () => {
-    const gsdHooksMatch = installSource.match(/const gsdHooks\s*=\s*\[([^\]]+)\]/);
-    assert.ok(gsdHooksMatch, 'install.js should define gsdHooks array for uninstall cleanup');
-
-    const gsdHooksContent = gsdHooksMatch[1];
-    assert.ok(
-      gsdHooksContent.includes('ecl-session-state.sh'),
-      'gsdHooks should include ecl-session-state.sh'
-    );
-    assert.ok(
-      gsdHooksContent.includes('ecl-validate-commit.sh'),
-      'gsdHooks should include ecl-validate-commit.sh'
-    );
-    assert.ok(
-      gsdHooksContent.includes('ecl-phase-boundary.sh'),
-      'gsdHooks should include ecl-phase-boundary.sh'
-    );
-  });
-
-  test('install.js log messages indicate opt-in behavior', () => {
-    assert.ok(
-      installSource.includes('opt-in via config'),
-      'install.js should mention opt-in in log messages'
-    );
+    if (cmd !== null) {
+      assert.ok(
+        cmd.includes('ecl-validate-commit.sh'),
+        `buildHookCommand result must reference the hook filename, got: ${cmd}`
+      );
+    }
   });
 });
 

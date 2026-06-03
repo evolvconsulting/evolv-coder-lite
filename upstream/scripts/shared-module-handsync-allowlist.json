@@ -33,6 +33,12 @@
       "justification": "CJS phase.cjs implements sync mutation handlers (phaseAdd, phaseInsert, phaseRemove, phaseComplete) and query handlers with sync I/O; SDK phase.ts provides the native async query handler. The async mutation handlers (phase-lifecycle.ts) and pure policy helpers (phase-lifecycle-policy.ts) are I/O-bound or pure and remain per-side (ADR-3524 §4). Issue #4 fix: phase.cjs cmdPhaseComplete now consumes pure helpers from phase-lifecycle.generated.cjs (generated from sdk/src/query/phase-lifecycle.ts) for idempotent Completed Phases counting and clamped percent. *.generated.cjs files are excluded from lint scanner; see sdk/scripts/check-phase-lifecycle-fresh.mjs for freshness enforcement."
     },
     {
+      "cjs": "get-shit-done/bin/lib/phase-lifecycle.cjs",
+      "ts": "sdk/src/query/phase-lifecycle.ts",
+      "classification": "ADAPTER-OVER-MODULE",
+      "justification": "CJS phase-lifecycle.cjs is the pure helper module consumed by phase.cjs; sdk/src/query/phase-lifecycle.ts remains the typed source counterpart. This pair is intentionally tracked as adapter-over-module rather than an unauthorized hand-sync pair."
+    },
+    {
       "cjs": "get-shit-done/bin/lib/profile-output.cjs",
       "ts": "sdk/src/query/profile-output.ts",
       "classification": "cooperating-sibling",
@@ -52,9 +58,9 @@
     },
     {
       "cjs": "get-shit-done/bin/lib/state-document.cjs",
-      "ts": "sdk/src/query/state-document.ts",
-      "classification": "cooperating-sibling",
-      "justification": "CJS state-document.cjs is the generated Adapter reading from sdk/src/state-document/ Shared Module (Phase 1/#3531). SDK state-document.ts is the corresponding source-of-truth query handler. Freshness check enforces alignment."
+      "ts": "sdk/src/state/index.ts",
+      "classification": "ADAPTER-OVER-MODULE",
+      "justification": "CJS state-document.cjs is a thin Adapter over get-shit-done/bin/lib/state-document.generated.cjs. That generated artifact is emitted from sdk/src/state/index.ts by sdk/scripts/gen-state-document.ts; freshness is enforced by sdk/scripts/check-state-document-fresh.mjs."
     },
     {
       "cjs": "get-shit-done/bin/lib/template.cjs",
@@ -75,6 +81,12 @@
       "justification": "CJS verify.cjs is the full verify implementation; SDK verify.ts provides the native handler. Phase 5.2+ candidate for further delegation. Check 8 (W006/W007) helpers now generated from sdk/src/query/validate.ts via sdk/scripts/gen-validate.mjs (issue #6); freshness check: sdk/scripts/check-validate-fresh.mjs."
     },
     {
+      "cjs": "get-shit-done/bin/lib/validate.cjs",
+      "ts": "sdk/src/query/validate.ts",
+      "classification": "ADAPTER-OVER-MODULE",
+      "justification": "CJS validate.cjs provides the pure validation helpers consumed by verify.cjs while sdk/src/query/validate.ts is the SDK handler-side counterpart. Keep this explicit adapter pair allowlisted to avoid false-positive hand-sync lint failures."
+    },
+    {
       "cjs": "get-shit-done/bin/lib/workstream.cjs",
       "ts": "sdk/src/query/workstream.ts",
       "classification": "cooperating-sibling",
@@ -91,6 +103,18 @@
       "ts": "sdk/src/config.ts",
       "classification": "CJS-CLI-ONLY",
       "justification": "Phase 2 (#3536) already migrated CONFIG_DEFAULTS and loadConfig/mergeDefaults to the Configuration Module and sdk/src/config.ts. What remains in config.cjs is exclusively CLI command handlers (cmdConfigGet, cmdConfigSet, cmdConfigNewProject, cmdConfigEnsureSection, cmdConfigSetModelProfile, cmdConfigPath, cmdMigrateConfig, buildNewProjectConfig, setConfigValue, ensureConfigFile) that depend on CJS-only APIs (withPlanningLock, platformWriteSync/ReadSync/EnsureDir, sync fs ops, process.exit). sdk/src/config.ts provides only the async loadConfig/mergeDefaults SDK layer. The two files serve disjoint surfaces with no logical overlap — not a hand-sync drift anti-pattern."
+    },
+    {
+      "cjs": "get-shit-done/bin/lib/config.cjs",
+      "ts": "sdk/src/config/index.ts",
+      "classification": "ADAPTER-OVER-MODULE",
+      "justification": "sdk/src/config/index.ts is the Configuration Module source-of-truth; CJS config.cjs consumes its generated Adapter through core/config-schema integration. This is an intentional seam relationship, not manual hand-sync."
+    },
+    {
+      "cjs": "get-shit-done/bin/lib/state.cjs",
+      "ts": "sdk/src/state/index.ts",
+      "classification": "ADAPTER-OVER-MODULE",
+      "justification": "sdk/src/state/index.ts is the STATE.md Document Module source-of-truth that emits get-shit-done/bin/lib/state-document.generated.cjs. state.cjs consumes that generated module as an Adapter dependency; basename overlap is intentional and not a duplicated implementation."
     },
     {
       "cjs": "get-shit-done/bin/lib/intel.cjs",
@@ -147,5 +171,13 @@
       "justification": "CJS prompt-budget.cjs provides the applyBudget implementation used by gsd-tools.cjs case 'prompt-budget'. SDK prompt-budget.ts is the native QueryHandler port for gsd-sdk query dispatch (#3081). The SDK handler ports the pure budget logic and adds CLI arg parsing / file I/O directly, satisfying the registry-integration drift-guard without duplicating shared state."
     }
   ],
-  "migrateMeBacklog": []
+  "migrateMeBacklog": [
+    {
+      "cjs": "get-shit-done/bin/lib/verify.cjs",
+      "ts": "sdk/src/query/validate.ts",
+      "classification": "drift-anti-pattern",
+      "justification": "Cross-name cooperating pair where validate policy changes can drift from verify checks; keep explicitly visible until Shared Module extraction removes hand-sync risk.",
+      "trackedIn": "#11"
+    }
+  ]
 }

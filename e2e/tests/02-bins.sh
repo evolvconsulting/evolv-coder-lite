@@ -1,7 +1,9 @@
 #!/bin/bash
 # Test 02: Bin invocation
-# Asserts: each bin's --help exits 0 and prints recognizable evolv-coder-lite
-# branding. ecl-tools is a back-compat alias of ecl-sdk and is treated as such.
+# Asserts: evolv-coder-lite --help and ecl-tools --help both exit 0 and emit
+# their own branded usage banner. (v1.2.0 retired the standalone SDK bin; the
+# new ecl-tools CLI rejects --version by design, so --help is the callability
+# probe — matching the upstream release-tarball-smoke.)
 set -uo pipefail
 
 SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
@@ -23,28 +25,19 @@ else
   test_fail "exit=$HELP_EXIT, branding match=$(echo "$HELP_OUT" | grep -c "evolv-coder-lite")"
 fi
 
-# ecl-sdk --version: must exit 0 (delegates to sdk/dist/cli.js)
-test_start "ecl-sdk --version exits 0"
-SDK_OUT=$(ecl-sdk --version 2>&1)
-SDK_EXIT=$?
-if [ "$SDK_EXIT" -eq 0 ]; then
-  echo -e "    ${YELLOW}${SDK_OUT}${NC}"
-  test_pass
-else
-  echo "$SDK_OUT" | head -5
-  test_fail "ecl-sdk --version exited $SDK_EXIT"
-fi
-
-# ecl-tools is the same shim — must also exit 0
-test_start "ecl-tools --version exits 0"
-TOOLS_OUT=$(ecl-tools --version 2>&1)
+# ecl-tools --help: the installed tools binary must be callable, exit 0, and
+# print its own name in the usage banner. (The new tools CLI has no --version;
+# --help is the contract the upstream release-tarball-smoke uses to assert
+# callability.) Symmetric with the evolv-coder-lite branding check above.
+test_start "ecl-tools --help exits 0 with branded banner"
+TOOLS_OUT=$(ecl-tools --help 2>&1)
 TOOLS_EXIT=$?
-if [ "$TOOLS_EXIT" -eq 0 ]; then
-  echo -e "    ${YELLOW}${TOOLS_OUT}${NC}"
+if [ "$TOOLS_EXIT" -eq 0 ] && echo "$TOOLS_OUT" | grep -q "ecl-tools"; then
+  echo -e "    ${YELLOW}$(echo "$TOOLS_OUT" | head -1)${NC}"
   test_pass
 else
   echo "$TOOLS_OUT" | head -5
-  test_fail "ecl-tools --version exited $TOOLS_EXIT"
+  test_fail "exit=$TOOLS_EXIT, branding match=$(echo "$TOOLS_OUT" | grep -c "ecl-tools")"
 fi
 
 test_summary

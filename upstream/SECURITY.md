@@ -4,7 +4,9 @@
 
 **Please do not report security vulnerabilities through public GitHub issues.**
 
-Instead, please report them via email to: **security@gsd.build** (or DM @glittercowboy on Discord/Twitter if email bounces)
+Instead, please report them via a **private GitHub security advisory**:
+
+**https://github.com/open-gsd/gsd-core/security/advisories/new**
 
 Include:
 - Description of the vulnerability
@@ -80,7 +82,7 @@ References:
 
 ### Purpose
 
-The `scripts/check-npm-integrity.sh` gate detects three classes of dependency
+The `scripts/check-npm-integrity.cjs` gate detects three classes of dependency
 drift that can silently introduce security or reliability risk:
 
 - **Invalid** — an installed package version does not satisfy the declared semver
@@ -98,7 +100,7 @@ OpenSSF Scorecard "Pinned-Dependencies" check
 ### Invoking locally
 
 ```bash
-./scripts/check-npm-integrity.sh
+node scripts/check-npm-integrity.cjs
 # or via npm script:
 npm run check:integrity
 ```
