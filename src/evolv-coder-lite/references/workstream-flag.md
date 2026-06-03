@@ -93,19 +93,19 @@ This ensures workstream scope chains automatically through the workflow:
 ## CLI Usage
 
 ```bash
-# All ecl-sdk query commands accept --ws
-ecl-sdk query state.json --ws feature-a
-ecl-sdk query find-phase 3 --ws feature-b
+# All ecl-tools query commands accept --ws
+ecl-tools query state.json --ws feature-a
+ecl-tools query find-phase 3 --ws feature-b
 
 # Session-local switching without --ws on every command
-ECL_SESSION_KEY=my-terminal-a ecl-sdk query workstream.set feature-a
-ECL_SESSION_KEY=my-terminal-a ecl-sdk query state.json
-ECL_SESSION_KEY=my-terminal-b ecl-sdk query workstream.set feature-b
-ECL_SESSION_KEY=my-terminal-b ecl-sdk query state.json
+ECL_SESSION_KEY=my-terminal-a ecl-tools query workstream.set feature-a
+ECL_SESSION_KEY=my-terminal-a ecl-tools query state.json
+ECL_SESSION_KEY=my-terminal-b ecl-tools query workstream.set feature-b
+ECL_SESSION_KEY=my-terminal-b ecl-tools query state.json
 
 # Workstream CRUD
-ecl-sdk query workstream.create <name>
-ecl-sdk query workstream.list
-ecl-sdk query workstream.status <name>
-ecl-sdk query workstream.complete <name>
+ecl-tools query workstream.create <name>
+ecl-tools query workstream.list
+ecl-tools query workstream.status <name>
+ecl-tools query workstream.complete <name>
 ```

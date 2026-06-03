@@ -30,20 +30,20 @@ describe('bug #3381: verify-work forwards workstream context', () => {
       /PHASE_ARG=\$\(echo "\$ARGUMENTS" \| sed -E 's\/--ws\[\[:space:\]\]\+\[\^\[:space:\]\]\+\/\/g' \| xargs\)/,
       'verify-work must derive PHASE_ARG after removing --ws',
     );
-    // After #3797 architectural fix, callsites use $ECL_SDK — accept either bare or $ECL_SDK form
+    // After #3797 architectural fix, callsites use ecl_run
     assert.match(
       workflow,
-      /(?:\$ECL_SDK|ecl-sdk) query init\.verify-work "\$\{PHASE_ARG\}" \$\{ECL_WS\}/,
+      /ecl_run query init\.verify-work "\$\{PHASE_ARG\}" \$\{ECL_WS\}/,
       'init.verify-work must receive ECL_WS so phase_dir resolves in workstreams',
     );
     assert.match(
       workflow,
-      /(?:\$ECL_SDK|ecl-sdk) query phase\.mvp-mode "\$\{phase_number\}" \$\{ECL_WS\} --pick active/,
+      /ecl_run query phase\.mvp-mode "\$\{phase_number\}" \$\{ECL_WS\} --pick active/,
       'phase.mvp-mode must receive ECL_WS so roadmap mode is workstream-scoped',
     );
     assert.match(
       workflow,
-      /(?:\$ECL_SDK|ecl-sdk) query roadmap\.get-phase "\$\{phase_number\}" \$\{ECL_WS\} --pick goal/,
+      /ecl_run query roadmap\.get-phase "\$\{phase_number\}" \$\{ECL_WS\} --pick goal/,
       'roadmap.get-phase must receive ECL_WS so goals are workstream-scoped',
     );
   });

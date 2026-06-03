@@ -1,0 +1,29 @@
+{
+  "compilerOptions": {
+    "allowJs": true,
+    "checkJs": true,
+    "noEmit": true,
+    "target": "ES2022",
+    "module": "commonjs",
+    "strict": false
+  },
+  "include": [
+    "evolv-coder-lite/bin/lib/**/*.cjs"
+  ],
+  "exclude": [
+    "evolv-coder-lite/bin/lib/command-aliases.cjs",
+    "evolv-coder-lite/bin/lib/configuration.cjs",
+    "evolv-coder-lite/bin/lib/decisions.cjs",
+    "evolv-coder-lite/bin/lib/phase-lifecycle.cjs",
+    "evolv-coder-lite/bin/lib/plan-scan.cjs",
+    "evolv-coder-lite/bin/lib/project-root.cjs",
+    "evolv-coder-lite/bin/lib/schema-detect.cjs",
+    "evolv-coder-lite/bin/lib/secrets.cjs",
+    "evolv-coder-lite/bin/lib/state-document.cjs",
+    "evolv-coder-lite/bin/lib/validate.cjs",
+    "evolv-coder-lite/bin/lib/workstream-inventory-builder.cjs",
+    "evolv-coder-lite/bin/lib/workstream-name-policy.cjs",
+    "tests/**/*",
+    "node_modules/**/*"
+  ]
+}

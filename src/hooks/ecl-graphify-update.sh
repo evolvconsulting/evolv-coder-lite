@@ -11,7 +11,7 @@
 # Gates (in fast-fail order — each shaves work off the common non-dispatch path):
 #   1. Stdin payload present and tool_name == "Bash"
 #   2. tool_input.command matches a HEAD-advancing git op (shell-direct or
-#      the exact `ecl-sdk query commit` command shape; the SDK command invokes
+#      the exact `ecl-tools query commit` command shape; the SDK command invokes
 #      git internally, so the literal "git commit" substring never appears —
 #      see #3653)
 #   3. $CI is unset/empty
@@ -49,10 +49,10 @@ COMMAND=$(printf '%s\n' "$TOOL_INFO" | sed -n '2p')
 
 [ "$TOOL_NAME" = "Bash" ] || exit 0
 
-# Gate 2 — HEAD-advancing git op (shell-direct or exact `ecl-sdk query commit`)
+# Gate 2 — HEAD-advancing git op (shell-direct or exact `ecl-tools query commit`)
 case "$COMMAND" in
   *"git commit"*|*"git merge"*|*"git pull"*|*"git rebase --continue"*|*"git cherry-pick"*) ;;
-  *"ecl-sdk query commit"|*"ecl-sdk query commit "*) ;;
+  *"ecl-tools query commit"|*"ecl-tools query commit "*) ;;
   *) exit 0 ;;
 esac
 

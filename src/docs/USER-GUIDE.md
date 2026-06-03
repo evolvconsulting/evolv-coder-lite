@@ -992,6 +992,33 @@ invocation to refresh just the affected subtrees. Flip the behavior with:
 
 The gate is non-blocking: any internal failure logs and the phase continues.
 
+### Plan Drift Guard
+
+**Default-on.** The plan drift guard (`plan_review.source_grounding: true`) runs during plan review and verifies that every symbol your plans cite — decorators, classes, functions, CLI flags — actually exists in your source tree at review time. This catches hallucinated names (symbols the planner invented but that don't exist yet) before any execution agent runs.
+
+**What it catches:**
+
+- Functions referenced in a PLAN.md step that don't exist in source
+- Class or decorator names that were renamed or removed since the plan was written
+- CLI flags documented in a plan that are not defined in the argument parser
+- Module paths cited in implementation steps that resolve to no files
+
+**Needs-acknowledgement behavior.** When the guard finds a missing symbol, it emits a `needs-acknowledgement` notice in the plan review output rather than hard-blocking. You can acknowledge and proceed (the symbol may be intentionally new) or request a plan revision. The guard does not auto-reject plans — it surfaces signal for human decision.
+
+**Works without intel.** By default the guard uses `grep`/`ripgrep` to search source files — no pre-indexing required. If you have run `/ecl:map-codebase` with `intel.enabled: true`, set `plan_review.source_grounding_authority: intel` to use the faster pre-built `api-map.json` index instead.
+
+```bash
+# Enable/disable (default: on)
+/ecl-settings plan_review.source_grounding true
+/ecl-settings plan_review.source_grounding false
+
+# Switch resolver authority
+/ecl-settings plan_review.source_grounding_authority grep   # live grep (default)
+/ecl-settings plan_review.source_grounding_authority intel  # pre-indexed api-map.json
+```
+
+Toggle at project setup (`/ecl:new-project` asks during workflow preferences) or any time via `/ecl:settings` (Planning section → Drift Guard).
+
 ### Quick Bug Fix
 
 ```bash
@@ -1068,11 +1095,11 @@ Each workspace gets:
 
 ## Troubleshooting
 
-### Programmatic CLI (`ecl-sdk query` vs `ecl-tools.cjs`)
+### Programmatic CLI (`ecl-tools query` vs `ecl-tools.cjs`)
 
-For automation and copy-paste from docs, prefer **`ecl-sdk query`** with a registered subcommand (see [CLI-TOOLS.md — SDK and programmatic access](CLI-TOOLS.md#sdk-and-programmatic-access) and [QUERY-HANDLERS.md](../sdk/src/query/QUERY-HANDLERS.md)). The legacy `node $HOME/.claude/evolv-coder-lite/bin/ecl-tools.cjs` CLI remains supported for dual-mode operation.
+For automation and copy-paste from docs, prefer **`ecl-tools query`** with a registered subcommand (see [CLI-TOOLS.md — SDK and programmatic access](CLI-TOOLS.md#sdk-and-programmatic-access) and [QUERY-HANDLERS.md](../sdk/src/query/QUERY-HANDLERS.md)). The legacy `node $HOME/.claude/evolv-coder-lite/bin/ecl-tools.cjs` CLI remains supported for dual-mode operation.
 
-**CLI-only (not in the query registry):** **graphify**, **from-ecl2** / **ecl2-import** — call `ecl-tools.cjs` (see [QUERY-HANDLERS.md](../sdk/src/query/QUERY-HANDLERS.md)). **Two different `state` JSON shapes in the legacy CLI:** `state json` (frontmatter rebuild) vs `state load` (`config` + `state_raw` + flags). **`ecl-sdk query` today:** both `state.json` and `state.load` resolve to the frontmatter-rebuild handler — use `node …/ecl-tools.cjs state load` when you need the CJS `state load` shape. See [CLI-TOOLS.md](CLI-TOOLS.md#sdk-and-programmatic-access) and QUERY-HANDLERS.
+**CLI-only (not in the query registry):** **graphify**, **from-ecl2** / **ecl2-import** — call `ecl-tools.cjs` (see [QUERY-HANDLERS.md](../sdk/src/query/QUERY-HANDLERS.md)). **Two distinct `state` JSON shapes, both available via `ecl-tools query`:** `state.json` (frontmatter rebuild) vs `state.load` (`config` + `state_raw` + flags) — they resolve to different handlers, so pick the one whose shape you need. The legacy `ecl-tools.cjs state json` / `state load` forms produce the same two shapes. See [CLI-TOOLS.md](CLI-TOOLS.md#sdk-and-programmatic-access) and QUERY-HANDLERS.
 
 ### STATE.md Out of Sync
 
@@ -1354,7 +1381,7 @@ Select the corresponding stable runtime in the installer prompt. Skills land in 
 | Copilot | `~/.copilot` | `COPILOT_CONFIG_DIR` |
 | Cursor | `~/.cursor` | `CURSOR_CONFIG_DIR` |
 | Windsurf | `~/.codeium/windsurf` | `WINDSURF_CONFIG_DIR` |
-| Antigravity | `~/.gemini/antigravity` | `ANTIGRAVITY_CONFIG_DIR` |
+| Antigravity | auto-detected: `~/.gemini/antigravity` (legacy), `~/.gemini/antigravity-ide`, or `~/.gemini/antigravity-cli` | `ANTIGRAVITY_CONFIG_DIR` |
 | Augment | `~/.augment` | `AUGMENT_CONFIG_DIR` |
 | Trae | `~/.trae` | `TRAE_CONFIG_DIR` |
 | Qwen Code | `~/.qwen` | `QWEN_CONFIG_DIR` |

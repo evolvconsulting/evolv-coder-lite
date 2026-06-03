@@ -109,9 +109,9 @@ Phase: "API documentation"       → Structure/navigation, Code examples depth, 
 Phase number from argument (required).
 
 ```bash
-ECL_TOOLS="${RUNTIME_DIR:-$(git rev-parse --show-toplevel 2>/dev/null || pwd)}/evolv-coder-lite/bin/ecl-tools.cjs"; [ -f "$ECL_TOOLS" ] && ECL_SDK="node $ECL_TOOLS" || { command -v ecl-sdk >/dev/null 2>&1 && ECL_SDK=ecl-sdk || { echo "ERROR: ecl-sdk not found. Run: npx evolv-coder-lite-cc@latest --claude --local" >&2; exit 1; }; }
-INIT=$($ECL_SDK query init.phase-op "${PHASE}"); [[ "$INIT" == @file:* ]] && INIT=$(cat "${INIT#@file:}")
-AGENT_SKILLS_ADVISOR=$($ECL_SDK query agent-skills ecl-advisor-researcher)
+_GSD_SHIM_NAME="ecl-tools.cjs"; _GSD_RUNTIME_ROOT="${RUNTIME_DIR:-$(git rev-parse --show-toplevel 2>/dev/null || pwd)}"; ECL_TOOLS="${_GSD_RUNTIME_ROOT}/evolv-coder-lite/bin/${_GSD_SHIM_NAME}"; if [ -f "$ECL_TOOLS" ]; then ecl_run() { node "$ECL_TOOLS" "$@"; }; elif [ -f "${_GSD_RUNTIME_ROOT}/.claude/evolv-coder-lite/bin/${_GSD_SHIM_NAME}" ]; then ECL_TOOLS="${_GSD_RUNTIME_ROOT}/.claude/evolv-coder-lite/bin/${_GSD_SHIM_NAME}"; ecl_run() { node "$ECL_TOOLS" "$@"; }; elif command -v ecl-tools >/dev/null 2>&1; then ECL_TOOLS="$(command -v ecl-tools)"; ecl_run() { "$ECL_TOOLS" "$@"; }; elif [ -f "$HOME/.claude/evolv-coder-lite/bin/${_GSD_SHIM_NAME}" ]; then ECL_TOOLS="$HOME/.claude/evolv-coder-lite/bin/${_GSD_SHIM_NAME}"; ecl_run() { node "$ECL_TOOLS" "$@"; }; else echo "ERROR: ecl-tools.cjs not found at $ECL_TOOLS and ecl-tools is not on PATH. Run: npx -y @evolvconsulting/evolv-coder-lite@latest --claude --local" >&2; exit 1; fi
+INIT=$(ecl_run query init.phase-op "${PHASE}"); [[ "$INIT" == @file:* ]] && INIT=$(cat "${INIT#@file:}")
+AGENT_SKILLS_ADVISOR=$(ecl_run query agent-skills ecl-advisor-researcher)
 ```
 
 Parse JSON for: `commit_docs`, `phase_found`, `phase_dir`, `phase_number`, `phase_name`, `phase_slug`, `padded_phase`, `has_research`, `has_context`, `has_plans`, `has_verification`, `plan_count`, `roadmap_exists`, `planning_exists`, `response_language`.
@@ -265,7 +265,7 @@ Build internal `<prior_decisions>` with sections for Project-Level (from PROJECT
 Check pending todos for matches with this phase's scope.
 
 ```bash
-TODO_MATCHES=$($ECL_SDK query todo.match-phase "${PHASE_NUMBER}")
+TODO_MATCHES=$(ecl_run query todo.match-phase "${PHASE_NUMBER}")
 ```
 
 Parse JSON for: `todo_count`, `matches[]` (each with `file`, `title`, `area`, `score`, `reasons`).
@@ -447,7 +447,7 @@ rm -f "${phase_dir}/${padded_phase}-DISCUSS-CHECKPOINT.json"
 
 Commit phase context and discussion log:
 ```bash
-$ECL_SDK query commit "docs(${padded_phase}): capture phase context" --files "${phase_dir}/${padded_phase}-CONTEXT.md" "${phase_dir}/${padded_phase}-DISCUSSION-LOG.md"
+ecl_run query commit "docs(${padded_phase}): capture phase context" --files "${phase_dir}/${padded_phase}-CONTEXT.md" "${phase_dir}/${padded_phase}-DISCUSSION-LOG.md"
 ```
 
 Confirm: "Committed: docs(${padded_phase}): capture phase context"
@@ -457,11 +457,11 @@ Confirm: "Committed: docs(${padded_phase}): capture phase context"
 Update STATE.md with session info:
 
 ```bash
-$ECL_SDK query state.record-session \
+ecl_run query state.record-session \
   --stopped-at "Phase ${PHASE} context gathered" \
   --resume-file "${phase_dir}/${padded_phase}-CONTEXT.md"
 
-$ECL_SDK query commit "docs(state): record phase ${PHASE} context session" --files .planning/STATE.md
+ecl_run query commit "docs(state): record phase ${PHASE} context session" --files .planning/STATE.md
 ```
 </step>
 

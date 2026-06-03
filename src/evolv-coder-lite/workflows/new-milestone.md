@@ -181,18 +181,8 @@ blockers, todos) is preserved across the switch — symmetric with
 `milestone.complete`.
 
 ```bash
-# SDK resolution: prefer local ecl-tools.cjs, fall back to global ecl-sdk (#3668)
-ECL_TOOLS="${RUNTIME_DIR:-$(git rev-parse --show-toplevel 2>/dev/null || pwd)}/evolv-coder-lite/bin/ecl-tools.cjs"
-if [ -f "$ECL_TOOLS" ]; then
-  ECL_SDK="node $ECL_TOOLS"
-elif command -v ecl-sdk >/dev/null 2>&1; then
-  ECL_SDK="ecl-sdk"
-else
-  echo "ERROR: ecl-sdk not found on PATH and $ECL_TOOLS does not exist." >&2
-  echo "Run: npx evolv-coder-lite-cc@latest --claude --local" >&2
-  exit 1
-fi
-$ECL_SDK query state.milestone-switch --milestone "v[X.Y]" --name "[Name]"
+_GSD_SHIM_NAME="ecl-tools.cjs"; _GSD_RUNTIME_ROOT="${RUNTIME_DIR:-$(git rev-parse --show-toplevel 2>/dev/null || pwd)}"; ECL_TOOLS="${_GSD_RUNTIME_ROOT}/evolv-coder-lite/bin/${_GSD_SHIM_NAME}"; if [ -f "$ECL_TOOLS" ]; then ecl_run() { node "$ECL_TOOLS" "$@"; }; elif [ -f "${_GSD_RUNTIME_ROOT}/.claude/evolv-coder-lite/bin/${_GSD_SHIM_NAME}" ]; then ECL_TOOLS="${_GSD_RUNTIME_ROOT}/.claude/evolv-coder-lite/bin/${_GSD_SHIM_NAME}"; ecl_run() { node "$ECL_TOOLS" "$@"; }; elif command -v ecl-tools >/dev/null 2>&1; then ECL_TOOLS="$(command -v ecl-tools)"; ecl_run() { "$ECL_TOOLS" "$@"; }; elif [ -f "$HOME/.claude/evolv-coder-lite/bin/${_GSD_SHIM_NAME}" ]; then ECL_TOOLS="$HOME/.claude/evolv-coder-lite/bin/${_GSD_SHIM_NAME}"; ecl_run() { node "$ECL_TOOLS" "$@"; }; else echo "ERROR: ecl-tools.cjs not found at $ECL_TOOLS and ecl-tools is not on PATH. Run: npx -y @evolvconsulting/evolv-coder-lite@latest --claude --local" >&2; exit 1; fi
+ecl_run query state.milestone-switch --milestone "v[X.Y]" --name "[Name]"
 ```
 
 The resulting Current Position section looks like:
@@ -219,21 +209,21 @@ Delete MILESTONE-CONTEXT.md if exists (consumed).
 Clear leftover phase directories from the previous milestone:
 
 ```bash
-$ECL_SDK query phases.clear --confirm
+ecl_run query phases.clear --confirm
 ```
 
 ```bash
-$ECL_SDK query commit "docs: start milestone v[X.Y] [Name]" --files .planning/PROJECT.md .planning/STATE.md
+ecl_run query commit "docs: start milestone v[X.Y] [Name]" --files .planning/PROJECT.md .planning/STATE.md
 ```
 
 ## 7. Load Context and Resolve Models
 
 ```bash
-INIT=$($ECL_SDK query init.new-milestone)
+INIT=$(ecl_run query init.new-milestone)
 if [[ "$INIT" == @file:* ]]; then INIT=$(cat "${INIT#@file:}"); fi
-AGENT_SKILLS_RESEARCHER=$($ECL_SDK query agent-skills ecl-project-researcher)
-AGENT_SKILLS_SYNTHESIZER=$($ECL_SDK query agent-skills ecl-research-synthesizer)
-AGENT_SKILLS_ROADMAPPER=$($ECL_SDK query agent-skills ecl-roadmapper)
+AGENT_SKILLS_RESEARCHER=$(ecl_run query agent-skills ecl-project-researcher)
+AGENT_SKILLS_SYNTHESIZER=$(ecl_run query agent-skills ecl-research-synthesizer)
+AGENT_SKILLS_ROADMAPPER=$(ecl_run query agent-skills ecl-roadmapper)
 ```
 
 Extract from init JSON: `researcher_model`, `synthesizer_model`, `roadmapper_model`, `commit_docs`, `research_enabled`, `current_milestone`, `project_exists`, `roadmap_exists`, `latest_completed_milestone`, `phase_dir_count`, `phase_archive_path`, `agents_installed`, `missing_agents`.
@@ -455,7 +445,7 @@ If "adjust": Return to scoping.
 
 **Commit requirements:**
 ```bash
-$ECL_SDK query commit "docs: define milestone v[X.Y] requirements" --files .planning/REQUIREMENTS.md
+ecl_run query commit "docs: define milestone v[X.Y] requirements" --files .planning/REQUIREMENTS.md
 ```
 
 ## 10. Create Roadmap
@@ -541,7 +531,7 @@ Success criteria:
 
 **Commit roadmap** (after approval):
 ```bash
-$ECL_SDK query commit "docs: create milestone v[X.Y] roadmap ([N] phases)" --files .planning/ROADMAP.md .planning/STATE.md .planning/REQUIREMENTS.md
+ecl_run query commit "docs: create milestone v[X.Y] roadmap ([N] phases)" --files .planning/ROADMAP.md .planning/STATE.md .planning/REQUIREMENTS.md
 ```
 
 ## 10.5. Link Pending Todos to Roadmap Phases
@@ -584,7 +574,7 @@ files: [existing]
 
 **If any todos were linked:**
 ```bash
-$ECL_SDK query commit "docs: tag [count] pending todos with resolves_phase after milestone v[X.Y] roadmap" --files .planning/todos/pending/*.md
+ecl_run query commit "docs: tag [count] pending todos with resolves_phase after milestone v[X.Y] roadmap" --files .planning/todos/pending/*.md
 ```
 
 Print a summary:

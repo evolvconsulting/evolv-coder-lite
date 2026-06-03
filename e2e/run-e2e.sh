@@ -56,8 +56,11 @@ if [ ! -f "$REPO_ROOT/src/package.json" ] || [ ! -f "$REPO_ROOT/src/REBRAND-MANI
 fi
 echo -e "${CYAN}Step 1: Using existing src/ (baked at $(jq -r .bakedAt "$REPO_ROOT/src/REBRAND-MANIFEST.json"))${NC}"
 
-echo -e "${CYAN}Step 2: Build SDK (npm pack does NOT run prepublishOnly — npm 7+)${NC}"
-( cd "$REPO_ROOT/src/sdk" && npm ci --silent && npm run build --silent )
+# v1.2.0 (ADR-0174) retired the separate sdk/ workspace; the build now lives at
+# the package root (generate:identity + build:hooks). npm pack does NOT run
+# prepublishOnly (npm 7+), so populate hooks/ + package-identity here.
+echo -e "${CYAN}Step 2: Build hooks + package identity (npm pack does NOT run prepublishOnly — npm 7+)${NC}"
+( cd "$REPO_ROOT/src" && npm run build --silent )
 
 echo -e "${CYAN}Step 3: npm pack from src/${NC}"
 ( cd "$REPO_ROOT/src" && rm -f evolvconsulting-evolv-coder-lite-*.tgz && npm pack --silent )

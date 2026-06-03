@@ -20,7 +20,7 @@
  * Parse code-review flags from an argv array.
  *
  * The first positional argument (phase number) is ignored by this function —
- * phase validation is handled by `ecl-sdk query init.phase-op`.
+ * phase validation is handled by `ecl-tools query init.phase-op`.
  *
  * @param {string[]} argv - Array of argument strings, e.g. ['2', '--fix', '--all']
  * @returns {CodeReviewFlags}

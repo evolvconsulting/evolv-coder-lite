@@ -674,11 +674,11 @@ Twelve additional agents ship under `agents/ecl-*.md` and are used by specialty 
 | **Tools** | Read, Write, Bash, Glob, Grep |
 | **Model (balanced)** | Sonnet |
 | **Color** | Cyan |
-| **Produces** | `.planning/intel/*.json` (and companion Markdown) consumed by `ecl-sdk query intel` |
+| **Produces** | `.planning/intel/*.json` (and companion Markdown) consumed by `ecl-tools query intel` |
 
 **Key behaviors:**
 - Writes current state only — no temporal language, every claim references an actual file path
-- Uses Glob / Read / Grep for cross-platform correctness; Bash is reserved for `ecl-sdk query intel` CLI calls
+- Uses Glob / Read / Grep for cross-platform correctness; Bash is reserved for `ecl-tools query intel` CLI calls
 
 ---
 

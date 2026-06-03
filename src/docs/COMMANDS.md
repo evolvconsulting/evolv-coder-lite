@@ -932,7 +932,7 @@ Interactive configuration of workflow toggles and model profile. Questions are g
 - **Model & Pipeline** — Model Profile, Auto-Advance, Branching
 - **Misc** — Context Warnings, Research Qs
 
-All answers are merged via `ecl-sdk query config-set` into the resolved project config path (`.planning/config.json` for a standard install, or `.planning/workstreams/<active>/config.json` when a workstream is active), preserving unrelated keys. After confirmation, the user may save the full settings object to `~/.ecl/defaults.json` so future `/ecl-new-project` runs start from the same baseline.
+All answers are merged via `ecl-tools query config-set` into the resolved project config path (`.planning/config.json` for a standard install, or `.planning/workstreams/<active>/config.json` when a workstream is active), preserving unrelated keys. After confirmation, the user may save the full settings object to `~/.ecl/defaults.json` so future `/ecl-new-project` runs start from the same baseline.
 
 ```bash
 /ecl-settings                       # Interactive config
@@ -960,7 +960,7 @@ Configure eCL settings interactively — workflow toggles, advanced knobs, integ
 | Git Customization | `git.base_branch`, `git.phase_branch_template`, `git.milestone_branch_template` |
 | Runtime / Output | `response_language`, `context_window`, `search_gitignored`, `graphify.build_timeout` |
 
-All answers merge via `ecl-sdk query config-set`, preserving unrelated keys. API keys are masked (`****<last-4>`) in all output.
+All answers merge via `ecl-tools query config-set`, preserving unrelated keys. API keys are masked (`****<last-4>`) in all output.
 
 ```bash
 /ecl-config                         # Common-case interactive config
@@ -1041,6 +1041,18 @@ Build, query, and inspect the project knowledge graph stored in `.planning/graph
 ```
 
 **Programmatic access:** `node ecl-tools.cjs graphify <build|query|status|diff|snapshot>` — see [CLI Tools Reference](CLI-TOOLS.md).
+
+### `ecl-tools intel api-surface`
+
+Render the `.planning/intel/api-map.json` index (built by `/ecl-map-codebase`) into a human-readable `API-SURFACE.md` in `.planning/intel/`. Gated on `intel.enabled: true` in `config.json`; when Intel is disabled the command prints an activation hint and exits. The output path is always `.planning/intel/API-SURFACE.md` — there is no `--out` or `--format` flag. When `api-map.json` is absent or empty the command still writes the file with an explicit "incomplete" banner so consumers never mistake silence for "nothing exists".
+
+**Produces:** `.planning/intel/API-SURFACE.md`
+
+```bash
+node ecl-tools.cjs intel api-surface              # Render api-map.json → API-SURFACE.md
+```
+
+The `API-SURFACE.md` output lists exported symbols (functions, classes, decorators, constants) grouped by source file with their signatures and detected visibility. When `plan_review.source_grounding_authority` is set to `intel`, the plan drift guard reads `api-map.json` directly rather than invoking the `api-surface` renderer.
 
 ---
 

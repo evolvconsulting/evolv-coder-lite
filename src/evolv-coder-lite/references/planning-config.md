@@ -55,19 +55,19 @@ Configuration options for `.planning/` directory behavior.
 - User must add `.planning/` to `.gitignore`
 - Useful for: OSS contributions, client projects, keeping planning private
 
-**Using `ecl-sdk query` (preferred):**
+**Using `ecl-tools query` (preferred):**
 
 ```bash
 # Commit with automatic commit_docs + gitignore checks:
-ecl-sdk query commit "docs: update state" --files .planning/STATE.md
+ecl-tools query commit "docs: update state" --files .planning/STATE.md
 
 # Load config via state load (returns JSON):
-INIT=$(ecl-sdk query state.load)
+INIT=$(ecl-tools query state.load)
 if [[ "$INIT" == @file:* ]]; then INIT=$(cat "${INIT#@file:}"); fi
 # commit_docs is available in the JSON output
 
 # Or use init commands which include commit_docs:
-INIT=$(ecl-sdk query init.execute-phase "1")
+INIT=$(ecl-tools query init.execute-phase "1")
 if [[ "$INIT" == @file:* ]]; then INIT=$(cat "${INIT#@file:}"); fi
 # commit_docs is included in all init command outputs
 ```
@@ -77,7 +77,7 @@ if [[ "$INIT" == @file:* ]]; then INIT=$(cat "${INIT#@file:}"); fi
 **Commit via CLI (handles checks automatically):**
 
 ```bash
-ecl-sdk query commit "docs: update state" --files .planning/STATE.md
+ecl-tools query commit "docs: update state" --files .planning/STATE.md
 ```
 
 The CLI checks `commit_docs` config and gitignore status internally — no manual conditionals needed.
@@ -165,14 +165,14 @@ To use uncommitted mode:
 
 Use `init execute-phase` which returns all config as JSON:
 ```bash
-INIT=$(ecl-sdk query init.execute-phase "1")
+INIT=$(ecl-tools query init.execute-phase "1")
 if [[ "$INIT" == @file:* ]]; then INIT=$(cat "${INIT#@file:}"); fi
 # JSON output includes: branching_strategy, phase_branch_template, milestone_branch_template
 ```
 
 Or use `state load` for the config values:
 ```bash
-INIT=$(ecl-sdk query state.load)
+INIT=$(ecl-tools query state.load)
 if [[ "$INIT" == @file:* ]]; then INIT=$(cat "${INIT#@file:}"); fi
 # Parse branching_strategy, phase_branch_template, milestone_branch_template from JSON
 ```

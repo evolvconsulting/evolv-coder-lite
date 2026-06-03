@@ -16,6 +16,7 @@ const { output, error, loadConfig } = require('./core.cjs');
 const { platformReadSync: safeReadFile, platformWriteSync, platformEnsureDir } = require('./shell-command-projection.cjs');
 const { getGlobalSkillDir } = require('./runtime-homes.cjs');
 const { formatGsdSlash, resolveRuntime } = require('./runtime-slash.cjs');
+const { resolveRuntimeNameFromCandidates } = require('./runtime-name-policy.cjs');
 
 // ─── Constants ────────────────────────────────────────────────────────────────
 
@@ -811,9 +812,16 @@ function cmdGenerateDevPreferences(cwd, options, raw) {
     let effectiveRuntime = 'claude';
     try {
       const config = loadConfig(cwd);
-      effectiveRuntime = process.env.ECL_RUNTIME || config.runtime || 'claude';
+      effectiveRuntime = resolveRuntimeNameFromCandidates(
+        process.env.ECL_RUNTIME,
+        config.runtime,
+        'claude'
+      ) || 'claude';
     } catch {
-      effectiveRuntime = process.env.ECL_RUNTIME || 'claude';
+      effectiveRuntime = resolveRuntimeNameFromCandidates(
+        process.env.ECL_RUNTIME,
+        'claude'
+      ) || 'claude';
     }
     const skillDir = getGlobalSkillDir(effectiveRuntime, 'ecl-dev-preferences');
     if (!skillDir) {
@@ -1003,7 +1011,10 @@ function cmdGenerateClaudeMd(cwd, options, raw) {
     // #3163: When runtime is codex, override the output target to AGENTS.md
     // regardless of claude_md_path, so Codex projects never write to CLAUDE.md.
     // ECL_RUNTIME env var takes precedence over config.runtime, mirroring detectRuntime().
-    const effectiveRuntime = process.env.ECL_RUNTIME || config.runtime || null;
+    const effectiveRuntime = resolveRuntimeNameFromCandidates(
+      process.env.ECL_RUNTIME,
+      config.runtime
+    );
     if (!options.output && effectiveRuntime === 'codex') {
       configClaudeMdPath = './AGENTS.md';
     }

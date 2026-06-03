@@ -8,11 +8,11 @@
 
 [![npm version](https://img.shields.io/npm/v/%40evolvconsulting%2Fevolv-coder-lite?style=for-the-badge&logo=npm&logoColor=white&color=CB3837)](https://www.npmjs.com/package/@evolvconsulting/evolv-coder-lite)
 [![npm downloads](https://img.shields.io/npm/dm/%40evolvconsulting%2Fevolv-coder-lite?style=for-the-badge&logo=npm&logoColor=white&color=CB3837)](https://www.npmjs.com/package/@evolvconsulting/evolv-coder-lite)
-[![Tests](https://img.shields.io/github/actions/workflow/status/eCL-redux/evolv-coder-lite/test.yml?branch=main&style=for-the-badge&logo=github&label=Tests)](https://github.com/eCL-redux/evolv-coder-lite/actions/workflows/test.yml)
+[![Tests](https://img.shields.io/github/actions/workflow/status/evolvconsulting/evolv-coder-lite/test.yml?branch=main&style=for-the-badge&logo=github&label=Tests)](https://github.com/evolvconsulting/evolv-coder-lite/actions/workflows/test.yml)
 [![Discord](https://img.shields.io/badge/Discord-Join-5865F2?style=for-the-badge&logo=discord&logoColor=white)](https://discord.gg/mYgfVNfA2r)
 [![X (Twitter)](https://img.shields.io/badge/X-@ecl__foundation-000000?style=for-the-badge&logo=x&logoColor=white)](https://x.com/ecl_foundation)
 [![$eCL Token](https://img.shields.io/badge/$eCL-Dexscreener-1C1C1C?style=for-the-badge&logo=data:image/svg+xml;base64,PHN2ZyB3aWR0aD0iMjQiIGhlaWdodD0iMjQiIHZpZXdCb3g9IjAgMCAyNCAyNCIgZmlsbD0ibm9uZSIgeG1sbnM9Imh0dHA6Ly93d3cudzMub3JnLzIwMDAvc3ZnIj48Y2lyY2xlIGN4PSIxMiIgY3k9IjEyIiByPSIxMCIgZmlsbD0iIzAwRkYwMCIvPjwvc3ZnPg==&logoColor=00FF00)](https://dexscreener.com/solana/dwudwjvan7bzkw9zwlbyv6kspdlvhwzrqy6ebk8xzxkv)
-[![GitHub stars](https://img.shields.io/github/stars/eCL-redux/evolv-coder-lite?style=for-the-badge&logo=github&color=181717)](https://github.com/eCL-redux/evolv-coder-lite)
+[![GitHub stars](https://img.shields.io/github/stars/evolvconsulting/evolv-coder-lite?style=for-the-badge&logo=github&color=181717)](https://github.com/evolvconsulting/evolv-coder-lite)
 [![License](https://img.shields.io/badge/license-MIT-blue?style=for-the-badge)](LICENSE)
 
 <br>
@@ -139,7 +139,7 @@ npx @evolvconsulting/evolv-coder-lite --all --global      # 安装到所有目�
 克隆仓库并本地运行安装程序：
 
 ```bash
-git clone https://github.com/eCL-redux/evolv-coder-lite.git
+git clone https://github.com/evolvconsulting/evolv-coder-lite.git
 cd evolv-coder-lite
 node bin/install.js --claude --local
 ```
@@ -704,11 +704,11 @@ OpenCode、Gemini CLI、Kilo 和 Codex 现在通过 `npx @evolvconsulting/evolv-
 
 ## Star 历史
 
-<a href="https://star-history.com/#eCL-redux/evolv-coder-lite&Date">
+<a href="https://star-history.com/#evolvconsulting/evolv-coder-lite&Date">
  <picture>
-   <source media="(prefers-color-scheme: dark)" srcset="https://api.star-history.com/svg?repos=eCL-redux/evolv-coder-lite&type=Date&theme=dark" />
-   <source media="(prefers-color-scheme: light)" srcset="https://api.star-history.com/svg?repos=eCL-redux/evolv-coder-lite&type=Date" />
-   <img alt="Star History Chart" src="https://api.star-history.com/svg?repos=eCL-redux/evolv-coder-lite&type=Date" />
+   <source media="(prefers-color-scheme: dark)" srcset="https://api.star-history.com/svg?repos=evolvconsulting/evolv-coder-lite&type=Date&theme=dark" />
+   <source media="(prefers-color-scheme: light)" srcset="https://api.star-history.com/svg?repos=evolvconsulting/evolv-coder-lite&type=Date" />
+   <img alt="Star History Chart" src="https://api.star-history.com/svg?repos=evolvconsulting/evolv-coder-lite&type=Date" />
  </picture>
 </a>
 

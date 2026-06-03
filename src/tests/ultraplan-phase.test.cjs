@@ -1,7 +1,7 @@
-// allow-test-rule: pending-migration-to-typed-ir [#2974]
-// Tracked in #2974 for migration to typed-IR assertions per CONTRIBUTING.md
-// "Prohibited: Raw Text Matching on Test Outputs". Per-file review may
-// reclassify some entries as source-text-is-the-product during migration.
+// allow-test-rule: source-text-is-the-product
+// Workflow .md / agent .md / command .md / reference .md files — their text
+// IS what the runtime loads. Testing text content tests the deployed contract.
+// Per CONTRIBUTING.md exception matrix.
 
 /**
  * /ecl-ultraplan-phase [BETA] Tests
@@ -111,10 +111,10 @@ describe('ultraplan-phase workflow initialization', () => {
   const content = fs.readFileSync(WF_PATH, 'utf-8');
 
   test('loads eCL phase context via ecl-sdk query init.plan-phase', () => {
-    // After #3797 architectural fix, callsites use $ECL_SDK — accept either form
+    // After #3797 architectural fix, callsites use ecl_run
     assert.ok(
-      content.includes('$ECL_SDK query init.plan-phase') || content.includes('ecl-sdk query init.plan-phase'),
-      'workflow must load phase context via ecl-sdk query init.plan-phase',
+      content.includes('ecl_run query init.plan-phase'),
+      'workflow must load phase context via ecl_run query init.plan-phase',
     );
   });
 

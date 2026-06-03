@@ -197,11 +197,11 @@ describe('ecl-health --context flag is wired into command + workflow', () => {
     const stepMatch = raw.match(/<step name="context_check">([\s\S]*?)<\/step>/);
     assert.ok(stepMatch, 'context_check step must be a closed <step>...</step> block');
     const stepBody = stepMatch[1];
-    // After #3797 architectural fix, callsites use $ECL_SDK — accept either form
+    // After #3797 architectural fix, callsites use ecl_run
     assert.match(
       stepBody,
-      /(?:\$ECL_SDK|ecl-sdk)\s+query\s+validate\.context/,
-      'context_check must call `ecl-sdk query validate.context`',
+      /ecl_run\s+query\s+validate\.context/,
+      'context_check must call `ecl_run query validate.context`',
     );
     assert.match(stepBody, /--tokens-used/, 'context_check must pass --tokens-used');
     assert.match(stepBody, /--context-window/, 'context_check must pass --context-window');
