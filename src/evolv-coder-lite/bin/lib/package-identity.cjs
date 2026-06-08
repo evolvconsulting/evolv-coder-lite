@@ -8,8 +8,8 @@ const binName = "evolv-coder-lite";
 const repoSlug = "evolvconsulting/evolv-coder-lite";
 const repoUrl = "https://github.com/evolvconsulting/evolv-coder-lite";
 const changelogRawUrl = "https://raw.githubusercontent.com/evolvconsulting/evolv-coder-lite/main/CHANGELOG.md";
-const cacheSlug = "opengsd-evolv-coder-lite";
-const updateCacheFileName = "ecl-update-check-opengsd-evolv-coder-lite.json";
+const cacheSlug = "evolvconsulting-evolv-coder-lite";
+const updateCacheFileName = "ecl-update-check-evolvconsulting-evolv-coder-lite.json";
 
 function formatManualInstall({ packageName, binName, scope, runtime } = {}) {
   const runtimeFlag = runtime ? ` --${runtime}` : '';

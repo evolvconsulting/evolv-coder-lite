@@ -445,7 +445,7 @@ done
 
 # Clear the shared tool-agnostic cache written by ecl-check-update.js hook (#2784).
 # The hook uses ~/.cache/ecl/ecl-update-check.json (legacy) or a per-package name
-# like ecl-update-check-opengsd-evolv-coder-lite.json; the glob clears all variants so the
+# like ecl-update-check-evolvconsulting-evolv-coder-lite.json; the glob clears all variants so the
 # statusline stops showing the stale "⬆ /ecl:update" indicator after update.
 rm -f "$HOME/.cache/ecl/ecl-update-check"*.json
 ```

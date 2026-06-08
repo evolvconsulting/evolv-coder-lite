@@ -12,6 +12,7 @@
 //   node overlay/bake.mjs --check    # dry-run, exit non-zero if src/ would differ
 
 import { readFile, readdir, writeFile, mkdir, rm, copyFile, stat } from 'node:fs/promises';
+import { execFileSync } from 'node:child_process';
 import { dirname, join, relative } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { rebrandPath, rebrandContent, isContentPreserved, looksLikeText, mergeHits } from './rebrand-map.mjs';
@@ -116,6 +117,28 @@ async function main() {
       await writeFile(join(SRC, 'package.json'), JSON.stringify(merged, null, 2) + '\n');
     }
     patched = true;
+  }
+
+  // -- Re-derive generated-from-package.json artifacts so the baked tree stays
+  //    self-consistent with the eCL package.json (name + version):
+  //      - scripts/generate-package-identity.cjs → the #498 cache-identity
+  //        module (cacheSlug / updateCacheFileName derived from the package
+  //        name), drift-checked by the unit suite.
+  //      - scripts/sync-manifest-versions.cjs → stamps the eCL version into the
+  //        versioned runtime manifests (.claude-plugin/plugin.json,
+  //        gemini-extension.json).
+  //    Upstream runs these via its build / `npm version` lifecycle; eCL sets
+  //    name+version through the overlay patch above, so the bake must re-run
+  //    them or the baked manifests/identity keep upstream's coordinates. Both
+  //    resolve their root from __dirname/.. → SRC and are deterministic (no
+  //    timestamps), so the release "matches a fresh bake" gate stays green.
+  if (!CHECK_ONLY && patched) {
+    for (const rel of ['scripts/generate-package-identity.cjs', 'scripts/sync-manifest-versions.cjs']) {
+      const script = join(SRC, rel);
+      if (await exists(script)) {
+        execFileSync(process.execPath, [script], { stdio: 'pipe' });
+      }
+    }
   }
 
   let upstreamRef = 'unknown';
