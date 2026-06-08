@@ -21,6 +21,7 @@ const {
   readGsdState,
   isInstalledAheadOfLatest,
 } = require('../hooks/gsd-statusline.js');
+const { cleanup } = require('./helpers.cjs');
 
 // ─── parseStateMd ───────────────────────────────────────────────────────────
 
@@ -333,6 +334,7 @@ describe('context meter respects CLAUDE_CODE_AUTO_COMPACT_WINDOW (#2219)', () =>
 
     // Parse normalized used% from the statusline bar output (e.g. "60%")
     // Strip ANSI escape codes then extract the percentage digit(s) before "%"
+    // eslint-disable-next-line no-control-regex -- \x1b (ESC) is the required leading byte of ANSI SGR color sequences; matching it is the purpose of stripping ANSI codes from captured CLI/console output
     const clean = stdout.replace(/\x1b\[[0-9;]*m/g, '');
     const match = clean.match(/(\d+)%/);
     const normalizedUsed = match ? parseInt(match[1], 10) : null;
@@ -396,7 +398,7 @@ describe('todo-resolution: resolves in_progress task from the newest matching to
   test('resolves in_progress task from the newest matching todos file (#305)', (t) => {
     const tempDir = fs.mkdtempSync(path.join(os.tmpdir(), 'gsd-305-'));
     t.after(() => {
-      try { fs.rmSync(tempDir, { recursive: true, force: true }); } catch {}
+      cleanup(tempDir);
     });
 
     const todosDir = path.join(tempDir, 'todos');

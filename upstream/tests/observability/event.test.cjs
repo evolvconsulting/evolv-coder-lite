@@ -7,12 +7,12 @@
  * observable behaviour (return values). No mocks, no vacuous truths.
  */
 
-const { describe, test, beforeEach, afterEach } = require('node:test');
+const { describe, test } = require('node:test');
 const assert = require('node:assert/strict');
 
 const {
   makeDispatchEvent,
-} = require('../../get-shit-done/bin/lib/observability/event.cjs');
+} = require('../../gsd-core/bin/lib/observability/event.cjs');
 
 describe('makeDispatchEvent — shape', () => {
   test('returns an object with required top-level fields', () => {

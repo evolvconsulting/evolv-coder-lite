@@ -41,10 +41,12 @@ Verify the work is ready to ship:
 
 1. **Verification passed?**
    ```bash
-   VERIFICATION=$(cat ${PHASE_DIR}/*-VERIFICATION.md 2>/dev/null)
+   VERIFICATION=$(ecl_run query verification.status "${PHASE_DIR}" 2>/dev/null)
+   STATUS=$(printf '%s' "$VERIFICATION" | jq -r '.status' 2>/dev/null || echo "")
+   NEXT_ACTION=$(printf '%s' "$VERIFICATION" | jq -r '.next_action' 2>/dev/null || echo "")
+   NEXT_COMMAND=$(printf '%s' "$VERIFICATION" | jq -r '.next_command' 2>/dev/null || echo "")
    ```
-   Check for `status: pass` or `status: passed`.
-   If no VERIFICATION.md or status is anything other than `pass` / `passed` (including `human_needed` / `gaps_found`): block with `PHASE_VERIFICATION_INCOMPLETE`; complete or formally re-run verification before shipping.
+   Only `passed` may ship. If `$STATUS` is `passed`, verification is complete — continue to the next preflight check. Any other value (including `gaps_found`, `human_needed`, `missing`, and `unknown`) blocks with `PHASE_VERIFICATION_INCOMPLETE`: present `$NEXT_ACTION` to the user and, when `$NEXT_COMMAND` is non-empty, show it as the command to run next. The query already handles missing files and unexpected values, so no per-status arm is needed.
 
 2. **Clean working tree?**
    ```bash
@@ -191,6 +193,53 @@ Example configured sections:
   }
 ]
 ```
+
+**8. TDD Audit section:**
+
+Reconstruct the per-commit TDD gate trail before squash-merge discards it. Walk the PR branch's own commits (merges excluded) and read each commit's `gate_status:` trailer with Git's native trailer machinery — never a raw `%B` grep, which would also match the string written in prose:
+
+```bash
+# Anchor on the merge-base so a stale local ${BASE_BRANCH} ref cannot over-count.
+RANGE_BASE=$(git merge-base "${BASE_BRANCH}" HEAD)
+git log "${RANGE_BASE}..HEAD" --no-merges --reverse \
+  --format='%H%x1f%s%x1f%(trailers:key=gate_status,valueonly,separator=%x2c)%x1e'
+```
+
+Records are separated by `\x1e`; the fields inside each are `\x1f`-separated — `<sha>`, `<subject>`, `<gate_status value>`.
+
+Pair commits by their conventional-commit type (the `type:` prefix of the subject):
+
+- A `test:` commit is the RED row. Pair it with the next following **implementation** commit — a `feat:` or `fix:` — as its **Impl commit** (the GREEN step), skipping over any intervening `refactor:`, `docs:`, or `chore:` commits so they are never mistaken for the GREEN step.
+- A `refactor:`, `docs:`, or `chore:` commit that is not consumed as an Impl pairing is a standalone row with Impl commit `—`.
+- A `feat:`/`fix:` commit with no preceding unpaired `test:` is a standalone row.
+
+Surface each commit's `gate_status:` value, normalized to exactly one of `skill`, `fallback`, `exempt`, or `missing` — never the raw trailer text. A commit whose trailer is absent, whose value is none of the first three, or which carries more than one `gate_status:` trailer (ambiguous) is counted as **missing** and still listed. This section is informational; it never blocks the ship.
+
+Harden every table cell against injection, not just subjects: escape `|` as `\|` and strip `\r`/`\n` from both commit subjects and the rendered `gate_status` value. Prefer NUL (`-z` / `%x00`) record separation, and reject any record whose fields contain the `\x1f`/`\x1e` delimiters, so an adversarial commit message cannot corrupt record or field boundaries.
+
+```markdown
+## TDD Audit
+
+| Test commit | Impl commit | gate_status |
+|---|---|---|
+| `a1b2c3d` test: failing parser test | `e4f5g6h` feat: implement parser | skill |
+| `i7j8k9l` test: failing export test | `m0n1o2p` feat: implement export | fallback |
+| `q3r4s5t` refactor: extract helper | — | exempt |
+
+Aggregate: 2 skill, 1 fallback, 1 exempt — 0 missing.
+```
+
+This `## TDD Audit` section is the final body section — it renders after the configured `pr_body_sections`, immediately before the aggregate trailer — so the frozen core sections and the append-only configured sections both keep their existing order.
+
+**9. Aggregate gate_status trailer (final line):**
+
+After every other section — including any configured `pr_body_sections` — emit the audit aggregate as a single Git trailer on the **final line** of the PR body, preceded by a blank line so it parses as a valid trailer:
+
+```
+gate_status: skill=2, fallback=1, exempt=1, missing=0
+```
+
+Use the exact key order `skill=`, `fallback=`, `exempt=`, `missing=` so downstream tooling parses it stably. Keeping it last means a GitHub squash-merge that defaults its commit message to the PR description carries the aggregate into `${BASE_BRANCH}`, preserving the audit footprint in `git log` after the PR branch is deleted. (Best-effort: it depends on the repo's squash-message default; the in-body `## TDD Audit` section is the source of truth regardless.)
 </step>
 
 <step name="create_pr">

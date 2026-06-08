@@ -27,6 +27,7 @@ const JS_HOOKS = [
   { name: 'ecl-prompt-guard.js',      registrationAnchor: 'hasPromptGuardHook' },
   { name: 'ecl-read-guard.js',        registrationAnchor: 'hasReadGuardHook' },
   { name: 'ecl-workflow-guard.js',    registrationAnchor: 'hasWorkflowGuardHook' },
+  { name: 'ecl-worktree-path-guard.js', registrationAnchor: 'hasWorktreePathGuardHook' },
 ];
 
 describe('bug #1754: .js hook registration guards', () => {

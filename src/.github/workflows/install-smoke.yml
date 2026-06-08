@@ -22,13 +22,14 @@ on:
       - 'bin/install.js'
       - 'evolv-coder-lite/bin/ecl-tools.cjs'
       - 'evolv-coder-lite/bin/**'
+      - 'src/**'
+      - 'tsconfig.build.json'
       - 'package.json'
       - 'package-lock.json'
       - 'scripts/release-tarball-smoke.cjs'
       - 'tests/release-tarball-smoke.install.test.cjs'
       - '.github/workflows/install-smoke.yml'
       - '.github/workflows/release.yml'
-      - '.github/workflows/hotfix.yml'
   push:
     branches:
       - main
@@ -46,6 +47,9 @@ on:
 concurrency:
   group: install-smoke-${{ github.workflow }}-${{ github.head_ref || github.run_id }}
   cancel-in-progress: true
+
+permissions:
+  contents: read
 
 jobs:
   # ---------------------------------------------------------------------------

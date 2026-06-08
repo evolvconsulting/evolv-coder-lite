@@ -1,6 +1,6 @@
 # PRD: CJS↔SDK hard seam — Shared-Module migration
 
-- **Status:** Reference
+- **Status:** Superseded by [ADR-0174](../adr/0174-retire-ecl-sdk-package-boundary.md) (2026-05-23) — historical migration plan; the CJS↔SDK seam and its hand-sync tooling were retired with the `@evolvconsulting/ecl-sdk` package boundary
 - **Date:** 2026-05-14
 - **Tracking issue:** [#3524](https://github.com/evolvconsulting/evolv-coder-lite/issues/3524)
 - **Related ADR:** [`docs/adr/3524-cjs-sdk-hard-seam.md`](../adr/3524-cjs-sdk-hard-seam.md)

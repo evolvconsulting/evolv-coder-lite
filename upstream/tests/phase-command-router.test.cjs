@@ -20,7 +20,7 @@
 const { describe, test, before, after } = require('node:test');
 const assert = require('node:assert/strict');
 
-const { routePhaseCommand } = require('../get-shit-done/bin/lib/phase-command-router.cjs');
+const { routePhaseCommand } = require('../gsd-core/bin/lib/phase-command-router.cjs');
 
 // Force CJS path throughout: set GSD_WORKSTREAM so tryLoadSdk() is bypassed.
 // This makes unit-level assertions deterministic regardless of SDK build state.
@@ -104,7 +104,7 @@ describe('phase-command-router — CLI arg translation (CJS path)', () => {
   test('routes phase add-batch: --descriptions JSON array parses correctly', () => {
     const calls = [];
     const phase = makePhase({
-      cmdPhaseAddBatch: (cwd, descriptions, raw) => calls.push({ descriptions }),
+      cmdPhaseAddBatch: (cwd, descriptions, _raw) => calls.push({ descriptions }),
     });
 
     routePhaseCommand({
@@ -121,7 +121,7 @@ describe('phase-command-router — CLI arg translation (CJS path)', () => {
   test('routes phase add-batch: positional args used when --descriptions absent', () => {
     const calls = [];
     const phase = makePhase({
-      cmdPhaseAddBatch: (cwd, descriptions, raw) => calls.push({ descriptions }),
+      cmdPhaseAddBatch: (cwd, descriptions, _raw) => calls.push({ descriptions }),
     });
 
     routePhaseCommand({
@@ -162,7 +162,7 @@ describe('phase-command-router — CLI arg translation (CJS path)', () => {
   test('routes phase remove: --force flag sets opts.force:true', () => {
     const calls = [];
     const phase = makePhase({
-      cmdPhaseRemove: (cwd, phaseNum, opts, raw) => calls.push({ opts }),
+      cmdPhaseRemove: (cwd, phaseNum, opts, _raw) => calls.push({ opts }),
     });
 
     routePhaseCommand({ phase, args: ['phase', 'remove', '--force', '03'], cwd: '/p', raw: false, error: (m) => { throw new Error(m); } });
@@ -402,7 +402,7 @@ describe('phase-command-router — integration: real hub + CJS phase handler', (
   test('dispatches phase add-batch through real hub with --descriptions', () => {
     const calls = [];
     const phase = makePhase({
-      cmdPhaseAddBatch: (cwd, descriptions, raw) => calls.push({ descriptions }),
+      cmdPhaseAddBatch: (cwd, descriptions, _raw) => calls.push({ descriptions }),
     });
 
     let errorMsg = null;

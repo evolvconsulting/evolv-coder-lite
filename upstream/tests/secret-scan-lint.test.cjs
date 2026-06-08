@@ -32,12 +32,13 @@
 // protocol. Migrating to a parsed IR would add ceremony without changing
 // what is verified — the strings ARE the typed surface.
 
-const { describe, test, before, after } = require('node:test');
+const { describe, test } = require('node:test');
 const assert = require('node:assert/strict');
 const { execFileSync, spawnSync } = require('child_process');
 const fs = require('fs');
 const os = require('os');
 const path = require('path');
+const { cleanup } = require('./helpers.cjs');
 
 const PROJECT_ROOT = path.join(__dirname, '..');
 const LINT_SCRIPT = path.join(PROJECT_ROOT, 'scripts', 'secret-scan-lint.sh');
@@ -69,7 +70,7 @@ function runLint(ignoreContent, extraArgs = []) {
       stderr: result.stderr || '',
     };
   } finally {
-    fs.rmSync(tmpDir, { recursive: true, force: true, maxRetries: 20, retryDelay: 250 });
+    cleanup(tmpDir);
   }
 }
 
@@ -94,27 +95,8 @@ function runSecretScan(fileContent, extraArgs = []) {
       stderr: result.stderr || '',
     };
   } finally {
-    fs.rmSync(tmpDir, { recursive: true, force: true, maxRetries: 20, retryDelay: 250 });
+    cleanup(tmpDir);
   }
-}
-
-/**
- * Run secret-scan.sh --dir <dir> [extraArgs] and count effective exclusions
- * by checking how many files in a known fixture set are skipped vs scanned.
- * Uses spawnSync with a generous timeout for large directories.
- */
-function runSecretScanDir(dirPath, extraArgs = []) {
-  const args = ['--dir', dirPath, ...extraArgs];
-  const result = spawnSync(SECRET_SCAN, args, {
-    encoding: 'utf-8',
-    timeout: 60000,
-    cwd: PROJECT_ROOT,
-  });
-  return {
-    status: result.status !== null ? result.status : 1,
-    stdout: result.stdout || '',
-    stderr: result.stderr || '',
-  };
 }
 
 // ─── Script Existence ─────────────────────────────────────────────────────────
@@ -300,7 +282,7 @@ describe('lint: grandfathered entries (backward compat)', { skip: IS_WINDOWS }, 
   // Under --strict: exit 1.
   const GRANDFATHER_FIXTURE = [
     '# plan-phase.md contains illustrative DATABASE_URL/REDIS_URL examples',
-    'get-shit-done/workflows/plan-phase.md',
+    'gsd-core/workflows/plan-phase.md',
     '',
   ].join('\n');
 
@@ -364,7 +346,7 @@ describe('secret-scan.sh --strict: reduces effective exclusions', { skip: IS_WIN
       // A clean file with no secrets must exit 0 under --strict
       assert.equal(status, 0, `--strict on a clean file should exit 0, got ${status}.\nstdout: ${result.stdout}\nstderr: ${result.stderr}`);
     } finally {
-      fs.rmSync(tmpDir, { recursive: true, force: true });
+      cleanup(tmpDir);
     }
   });
 
@@ -422,7 +404,7 @@ describe('secret-scan.sh --strict: reduces effective exclusions', { skip: IS_WIN
         `Strict mode should scan grandfathered file and find secrets (exit 1), got ${strictStatus}.\nstdout: ${strictResult.stdout}\nstderr: ${strictResult.stderr}`
       );
     } finally {
-      fs.rmSync(tmpDir, { recursive: true, force: true });
+      cleanup(tmpDir);
     }
   });
 });
@@ -431,10 +413,10 @@ describe('secret-scan.sh --strict: reduces effective exclusions', { skip: IS_WIN
 
 describe('secret-scan.sh default mode: regression test', { skip: IS_WINDOWS }, () => {
   test('existing .secretscanignore entry is still honoured in default mode', () => {
-    // The file get-shit-done/workflows/plan-phase.md is listed in .secretscanignore.
+    // The file gsd-core/workflows/plan-phase.md is listed in .secretscanignore.
     // Default mode must honour that exclusion: scanning the file directly should
     // show "scanned 0 files" (the ignorelist causes it to be skipped entirely).
-    const planPhase = path.join(PROJECT_ROOT, 'get-shit-done', 'workflows', 'plan-phase.md');
+    const planPhase = path.join(PROJECT_ROOT, 'gsd-core', 'workflows', 'plan-phase.md');
     if (!fs.existsSync(planPhase)) {
       // File doesn't exist in this branch — skip gracefully
       return;
@@ -442,7 +424,7 @@ describe('secret-scan.sh default mode: regression test', { skip: IS_WINDOWS }, (
 
     // Run scanner with --file on the excluded path, from project root so
     // .secretscanignore is found. Excluded → scanned 0 files → exit 0.
-    const result = spawnSync(SECRET_SCAN, ['--file', 'get-shit-done/workflows/plan-phase.md'], {
+    const result = spawnSync(SECRET_SCAN, ['--file', 'gsd-core/workflows/plan-phase.md'], {
       encoding: 'utf-8',
       timeout: 10000,
       cwd: PROJECT_ROOT,

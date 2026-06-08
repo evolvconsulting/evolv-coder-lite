@@ -29,7 +29,7 @@ const assert = require('node:assert/strict');
 const fs = require('fs');
 const path = require('path');
 
-const SETTINGS_PATH = path.join(__dirname, '..', 'get-shit-done', 'workflows', 'settings.md');
+const SETTINGS_PATH = path.join(__dirname, '..', 'gsd-core', 'workflows', 'settings.md');
 
 /**
  * Extract all AskUserQuestion option labels from a text block.
@@ -184,7 +184,6 @@ describe('bug #3784: settings.md model profile UI exposes all 5 profiles', () =>
     // commit bd53925f fixed a duplicate '{' introduced by 35fc1d21 when the model-profile
     // AskUserQuestion was split into Q1+Q2. This test guards against a recurrence.
     let depth = 0;
-    const maxDepth = 0;
     for (const ch of presentBlock) {
       if (ch === '{') { depth++; }
       if (ch === '}') { depth--; }

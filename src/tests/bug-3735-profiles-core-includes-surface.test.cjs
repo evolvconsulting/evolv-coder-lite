@@ -13,7 +13,6 @@ const assert = require('node:assert/strict');
 const path = require('path');
 
 const {
-  PROFILES,
   resolveProfile,
   loadSkillsManifest,
 } = require('../evolv-coder-lite/bin/lib/install-profiles.cjs');

@@ -8,6 +8,8 @@ const binName = "evolv-coder-lite";
 const repoSlug = "evolvconsulting/evolv-coder-lite";
 const repoUrl = "https://github.com/evolvconsulting/evolv-coder-lite";
 const changelogRawUrl = "https://raw.githubusercontent.com/evolvconsulting/evolv-coder-lite/main/CHANGELOG.md";
+const cacheSlug = "opengsd-evolv-coder-lite";
+const updateCacheFileName = "ecl-update-check-opengsd-evolv-coder-lite.json";
 
 function formatManualInstall({ packageName, binName, scope, runtime } = {}) {
   const runtimeFlag = runtime ? ` --${runtime}` : '';
@@ -21,11 +23,13 @@ function manualInstallCommand(opts = {}) {
 module.exports = Object.freeze({
   packageName,
   // PACKAGE_NAME: back-compat alias for #516-era consumers. Baked here, so it
-  // survives the installed tree’s synthetic package.json (fixes the #378 undefined).
+  // survives the installed tree's synthetic package.json (fixes the #378 undefined).
   PACKAGE_NAME: packageName,
   binName,
   repoSlug,
   repoUrl,
   changelogRawUrl,
+  cacheSlug,
+  updateCacheFileName,
   manualInstallCommand,
 });

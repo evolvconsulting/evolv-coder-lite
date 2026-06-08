@@ -1,6 +1,6 @@
 # GSD CLI Tools Reference
 
-> Surface-area reference for `get-shit-done/bin/gsd-tools.cjs` (Node CLI). For slash commands and user flows, see [Command Reference](COMMANDS.md).
+> Reference for the `gsd-tools` CLI (`gsd-core/bin/gsd-tools.cjs`). For slash commands and user flows, see [Command Reference](COMMANDS.md). Return to [docs index](README.md).
 
 ---
 
@@ -11,8 +11,8 @@
 
 |                    |                                                                                                                                                                                                        |
 | ------------------ | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
-| **Shipped path**   | `get-shit-done/bin/gsd-tools.cjs`                                                                                                                                                                      |
-| **Implementation** | 20 domain modules under `get-shit-done/bin/lib/` (the directory is authoritative)                                                                                                                        |
+| **Shipped path**   | `gsd-core/bin/gsd-tools.cjs`                                                                                                                                                                      |
+| **Implementation** | 20 domain modules under `gsd-core/bin/lib/` (the directory is authoritative)                                                                                                                        |
 | **Status**         | Primary runtime command surface for orchestration, workflows, and automation. |
 
 
@@ -421,6 +421,34 @@ node gsd-tools.cjs websearch <query> [--limit N] [--freshness day|week|month]
 
 ---
 
+## Worktree Commands
+
+Diagnose and configure the worktree fork base used by Claude Code's `isolation="worktree"` executor dispatch. These commands address the branch-divergence condition described in [Fix the worktree base-mismatch (exit 42) error](how-to/fix-worktree-base-mismatch.md).
+
+```bash
+# Check whether the current HEAD has diverged from the worktree fork base.
+# Returns JSON: { shouldDegrade, reason, message, headSha, forkRef, forkSha }
+node gsd-tools.cjs worktree base-check
+
+# Write worktree.baseRef:"head" into .claude/settings.local.json (no-clobber).
+# Returns JSON: { changed, skipped, previous, baseRef, file }
+node gsd-tools.cjs worktree set-baseref
+```
+
+**`worktree base-check`** reads `worktree.baseRef` from `.claude/settings.local.json` (then `.claude/settings.json`) and compares the current `HEAD` SHA against `origin/HEAD`. The `shouldDegrade` field is `true` when the execute-phase orchestrator will fall back to sequential execution. Possible `reason` values:
+
+| `reason` | `shouldDegrade` | Meaning |
+|---|---|---|
+| `baseref-head` | `false` | `worktree.baseRef:"head"` is set; no mismatch possible |
+| `head-matches-fork` | `false` | HEAD and `origin/HEAD` are the same commit |
+| `head-diverged-from-fork` | `true` | Branch is ahead of or diverged from `origin/HEAD` |
+| `fork-ref-unknown` | `true` | `origin/HEAD` could not be resolved |
+| `no-head` | `false` | Not in a git repo (no `HEAD`) |
+
+**`worktree set-baseref`** applies a no-clobber write of `worktree.baseRef:"head"` to `.claude/settings.local.json`. If the file already contains an explicit `baseRef` value other than `"head"`, the existing value is preserved and `skipped:"explicit-other"` is returned. Malformed JSON causes an error rather than a silent overwrite. Both fresh installs and upgrades of GSD Core run this automatically when `workflow.use_worktrees` is enabled (the default); the command is also available for manual use — for example, to apply the setting when worktrees were toggled on after installation, or to re-apply it after a settings change.
+
+---
+
 ## Graphify
 
 Build, query, and inspect the project knowledge graph in `.planning/graphs/`. Requires `graphify.enabled: true` in `config.json` (see [Configuration Reference](CONFIGURATION.md#graphify-settings)).
@@ -471,6 +499,7 @@ User-facing entry point: `/gsd-graphify` (see [Command Reference](COMMANDS.md#gs
 | Audit | `lib/audit.cjs` | Phase/milestone audit queue handlers; `audit-open` helper |
 | GSD2 Import | `lib/gsd2-import.cjs` | Reverse-migration importer from GSD-2 projects (backs `/gsd-import --from-gsd2`) |
 | Intel | `lib/intel.cjs` | Queryable codebase intelligence index (backs `/gsd-map-codebase --query`) |
+| Worktree Base Ref | `lib/worktree-base-ref.cjs` | Worktree fork-base detection and `worktree base-check` / `set-baseref` commands (#683) |
 
 ---
 
@@ -489,11 +518,14 @@ Slugs are validated against `[a-zA-Z0-9_-]+`; empty or path-containing slugs are
 
 ## Secret Handling
 
-API keys configured via `/gsd-settings` (`brave_search`, `firecrawl`, `exa_search`) are written plaintext to `.planning/config.json` but are masked (`****<last-4>`) in every `config-set` / `config-get` output, confirmation table, and interactive prompt. See `get-shit-done/bin/lib/secrets.cjs` for the masking implementation. The `config.json` file itself is the security boundary — protect it with filesystem permissions and keep it out of git (`.planning/` is gitignored by default).
+API keys configured via `/gsd-settings` (`brave_search`, `firecrawl`, `exa_search`) are written plaintext to `.planning/config.json` but are masked (`****<last-4>`) in every `config-set` / `config-get` output, confirmation table, and interactive prompt. See `gsd-core/bin/lib/secrets.cjs` for the masking implementation. The `config.json` file itself is the security boundary — protect it with filesystem permissions and keep it out of git (`.planning/` is gitignored by default).
 
 ---
 
-## See also
+## Related
 
-- [Architecture](ARCHITECTURE.md) — orchestration and runtime layering
-- [Command Reference](COMMANDS.md) — user-facing `/gsd-` commands
+- [Commands](COMMANDS.md)
+- [Configuration](CONFIGURATION.md)
+- [Architecture](ARCHITECTURE.md)
+- [Fix the worktree base-mismatch (exit 42) error](how-to/fix-worktree-base-mismatch.md)
+- [docs index](README.md)
