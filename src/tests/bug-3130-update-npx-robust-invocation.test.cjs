@@ -4,18 +4,20 @@
 // Regression guard for bug #3130.
 //
 // Two failure modes were observed with the pre-fix npx invocation form:
-//   1. Cache-stale: bare `npx -y @evolvconsulting/evolv-coder-lite@latest` hits npx's local
-//      cache and may pull an older version instead of @latest.
+//   1. Cache-stale: bare `npx -y @evolvconsulting/evolv-coder-lite@<tag>` hits npx's local
+//      cache and may pull an older version instead of the target tag.
 //   2. Token-routing: Bash-tool wrappers misroute the `@` token in
-//      `@evolvconsulting/evolv-coder-lite@latest`, causing npm to error with
-//      "Unknown command: @evolvconsulting/evolv-coder-lite@latest".
+//      `@evolvconsulting/evolv-coder-lite@<tag>`, causing npm to error with
+//      "Unknown command: @evolvconsulting/evolv-coder-lite@<tag>".
 //
 // The robust form is:
-//   npx -y --package=@evolvconsulting/evolv-coder-lite@latest -- evolv-coder-lite $ARGS
+//   npx -y --package=@evolvconsulting/evolv-coder-lite@"$TAG" -- evolv-coder-lite $ARGS
 //
 // `--package=` forces a fresh registry fetch, bypassing the npx cache.
 // `--` clearly delineates npx flags from the run-command, preventing
 // Bash-tool @-token misrouting.
+// `$TAG` is a shell variable (latest by default, next under --next/--rc),
+// set by the parse_update_channel step (#815).
 
 const { test } = require('node:test');
 const assert = require('node:assert/strict');
@@ -28,9 +30,9 @@ const UPDATE_WF = path.join(ROOT, 'evolv-coder-lite', 'workflows', 'update.md');
 const src = fs.readFileSync(UPDATE_WF, 'utf8');
 
 test('bug #3130: update.md contains no bare npx invocations (cache-stale form)', () => {
-  // Any occurrence of `npx -y @evolvconsulting/evolv-coder-lite@latest` without `--package=`
+  // Any occurrence of `npx -y @evolvconsulting/evolv-coder-lite@<something>` without `--package=`
   // is the stale form that triggers the two failure modes.
-  const stale = (src.match(/npx -y @evolvconsulting\/evolv-coder-lite@latest[^\n]*/g) || []);
+  const stale = (src.match(/npx -y @evolvconsulting\/evolv-coder-lite@\S+[^\n]*/g) || []);
   assert.deepEqual(
     stale,
     [],
@@ -40,7 +42,8 @@ test('bug #3130: update.md contains no bare npx invocations (cache-stale form)',
 
 test('bug #3130: update.md has >=3 robust npx invocations (--package= + -- separator)', () => {
   // Three sibling invocations: local, global, and unknown/fallback.
-  const robust = (src.match(/npx -y --package=@evolvconsulting\/evolv-coder-lite@latest -- evolv-coder-lite/g) || []);
+  // The tag is now a $TAG variable (latest by default, next under --next/--rc).
+  const robust = (src.match(/npx -y --package=@evolvconsulting\/evolv-coder-lite@\S+ -- evolv-coder-lite/g) || []);
   assert.ok(
     robust.length >= 3,
     `Expected >=3 robust npx invocations in update.md, found ${robust.length}`,

@@ -1,4 +1,4 @@
-# eCL Architecture
+# eCL Core Architecture
 
 > System architecture for contributors and advanced users. For user-facing documentation, see [Feature Reference](FEATURES.md) or [User Guide](USER-GUIDE.md).
 
@@ -21,10 +21,10 @@
 
 ## System Overview
 
-eCL is a **meta-prompting framework** that sits between the user and AI coding agents (Claude Code, Gemini CLI, OpenCode, Kilo, Codex, Copilot, Antigravity, Trae, Cline, Augment Code). It provides:
+eCL Core is a **meta-prompting framework** that sits between the user and AI coding agents (Claude Code, Gemini CLI, OpenCode, Kilo, Codex, Copilot, Antigravity, Trae, Cline, Augment Code). It provides:
 
-1. **Context engineering** — Structured artifacts that give the AI everything it needs per task
-2. **Multi-agent orchestration** — Thin orchestrators that spawn specialized agents with fresh context windows
+1. **Context engineering** — Structured artifacts that give the AI everything it needs per task (see [Context engineering](explanation/context-engineering.md))
+2. **Multi-agent orchestration** — Thin orchestrators that spawn specialized agents with fresh context windows (see [Multi-agent orchestration](explanation/multi-agent-orchestration.md))
 3. **Spec-driven development** — Requirements → research → plans → execution → verification pipeline
 4. **State management** — Persistent project memory across sessions and context resets
 
@@ -145,19 +145,43 @@ Orchestration logic that commands reference. Contains the step-by-step process i
 #### Progressive disclosure for workflows
 
 Workflow files are loaded verbatim into Claude's context every time the
-corresponding `/ecl-*` command is invoked. To keep that cost bounded, the
-workflow size budget enforced by `tests/workflow-size-budget.test.cjs`
-mirrors the agent budget from #2361:
+corresponding `/ecl-*` command is invoked. The workflow size budget enforced by
+`tests/workflow-size-budget.test.cjs` keeps each file bounded, mirroring the
+agent budget from #2361. The budget is measured in **bytes** (#717), not lines:
+line count over-penalizes prose and under-catches token-dense tables and code
+blocks, whereas bytes are deterministic and match the unit our vendors bound on
+— Codex truncates instruction docs past 32,768 bytes (`project_doc_max_bytes`).
+We adopt that unit, not that exact number: the XL/LARGE ceilings below sit above
+32,768 because these are grandfathered top-level orchestrators loaded by Claude,
+not Codex AGENTS.md docs.
 
-| Tier      | Per-file line limit |
-|-----------|--------------------|
-| `XL`      | 1700 — top-level orchestrators (`execute-phase`, `plan-phase`, `new-project`) |
-| `LARGE`   | 1500 — multi-step planners and large feature workflows |
-| `DEFAULT` | 1000 — focused single-purpose workflows (the target tier) |
+| Tier      | Per-file byte limit |
+|-----------|---------------------|
+| `XL`      | 90,000 — top-level orchestrators (`execute-phase`, `plan-phase`, `new-project`) |
+| `LARGE`   | 54,000 — multi-step planners and large feature workflows |
+| `DEFAULT` | 38,000 — focused single-purpose workflows (the target tier) |
 
-`workflows/discuss-phase.md` is held to a stricter <500-line ceiling per
-issue #2551. When a workflow grows beyond its tier, extract per-mode bodies
-into `workflows/<workflow>/modes/<mode>.md`, templates into
+Ceilings are not fixed forever: under the tighten-only ratchet (#597) each one
+tracks its tier's current high-water mark within a small grace band, so budgets
+may only decrease over time.
+
+**Why the budget exists.** With prompt caching the per-invocation *cost* of a
+large workflow is modest (cache reads run ~10% of input). The stronger,
+caching-independent reason is **quality**: as context grows, recall and
+reasoning degrade ("context rot" / attention budget), so leaner, higher-signal
+instructions produce better plans. The ceiling protects the agent's attention,
+not just the token bill.
+
+Because the budget measures one file, it is a proxy for the real goal —
+*bounded loaded context*. Extraction only helps when the extracted content is
+loaded **lazily** (Read at the step that needs it). Moving prose into a file
+that is still eagerly `@`-imported shrinks the measured file without shrinking
+loaded context, which games the proxy rather than serving the goal.
+
+`workflows/discuss-phase.md` is held to a stricter <30,000-byte ceiling per
+issue #2551 (originally <500 lines; re-based to bytes for #717). When a workflow grows
+beyond its tier, extract per-mode bodies into
+`workflows/<workflow>/modes/<mode>.md`, templates into
 `workflows/<workflow>/templates/`, and shared knowledge into
 `evolv-coder-lite/references/`. The parent file becomes a thin dispatcher that
 Reads only the mode and template files needed for the current invocation.
@@ -168,6 +192,16 @@ parent dispatches, modes/ holds per-flag behavior (`power.md`, `all.md`,
 `advisor.md`), and templates/ holds CONTEXT.md, DISCUSSION-LOG.md, and
 checkpoint.json schemas that are read only when the corresponding output
 file is being written.
+
+`workflows/plan-phase.md`, `workflows/execute-phase.md`, and the
+`ecl-planner` / `ecl-executor` agent definitions apply the same discipline
+to their MVP-only reference bodies — `planner-mvp-mode.md`,
+`user-story-template.md`, `skeleton-template.md`, and `execute-mvp-tdd.md`
+are referenced for the planner/executor to Read only on MVP,
+Walking-Skeleton, or MVP+TDD paths, rather than eagerly `@`-imported, so
+non-MVP runs do not pay their context cost (guards against the "`@`-import
+behind a conditional still loads eagerly" leak; see #720). The dedicated
+`mvp-phase` workflow keeps its eager imports, since it is always MVP.
 
 ### Agents (`agents/*.md`)
 
@@ -269,6 +303,37 @@ See [`docs/INVENTORY.md`](INVENTORY.md#hooks-11-shipped) for the authoritative 1
 ### Command Routing Hub (`evolv-coder-lite/bin/lib/command-routing-hub.cjs`)
 
 CJS command family routers dispatch through `CommandRoutingHub`. The hub owns the no-throw pure-result contract (`hub.dispatch()` catches internal exceptions and returns `{ ok: false, kind, ...typedPayload }`) and the closed runtime error taxonomy (`UnknownCommand`, `InvalidArgs`, `HandlerRefusal`, `HandlerFailure`). Router adapters remain thin CLI translators — they build the hub, call `dispatch`, then map the Result to `output()`/`error()` calls. The runtime is single-path (no dual-runtime mode selection). See `docs/adr/0174-retire-ecl-sdk-package-boundary.md`.
+
+### Research Module (`src/research-{store,provider}.cts`, `src/package-legitimacy.cts`)
+
+The Research Module implements an **L2-hybrid seam**: code owns the cache, provider policy, and package legitimacy verdicts; MCP owns the actual network fetch.
+
+Three compiled modules (generated to `evolv-coder-lite/bin/lib/*.cjs` per ADR-457) are reachable via `ecl-tools query research-plan | research-store | package-legitimacy`:
+
+- **Research Store** — content-addressed cache (`sha256(ecosystem+library+version+query+kind)`) with per-source TTL (curated-doc: 30 d, medium: 7 d, web/synthesis: 1 d) and two storage tiers: `~/.ecl/research-cache` for cross-project curated-doc hits, `.planning/research/.cache` for project-local web/synthesis results.
+- **Research Provider** — single `PROVIDER_WATERFALL` (`Context7→Ref→Jina→websearch` for docs; `Exa→Tavily→Perplexity→Brave→websearch` for web; `Firecrawl→Jina` for scrape-only). `planResearch()` returns cache hits plus a fetch plan; `classifyConfidence()` stamps `HIGH|MEDIUM|LOW` by provider tier.
+- **Package Legitimacy** — registry-API verdicts (npm/PyPI/crates.io injectable adapters) producing `OK|SUS|SLOP` per package. `slopcheck` is an optional escalate-only adapter; absence leaves registry verdicts intact rather than downgrading everything to `[ASSUMED]`.
+
+**Data flow:**
+
+```
+agent
+  │
+  ▼
+ecl-tools query research-plan          ← Research Provider: check cache, build fetch plan
+  │
+  ├── [cache hits] ──────────────────► RESEARCH.md (digest only, no raw content)
+  │
+  └── [fetch plan] ──────────────────► MCP fetch (agent calls MCP tools with the plan)
+                                          │
+                                          ▼
+                                    ecl-tools query research-store (put)
+                                          │
+                                          ▼
+                                    RESEARCH.md path returned to orchestrator
+```
+
+Agents always return a `RESEARCH.md` path, never raw fetched content. Context discipline is enforced through subagent isolation, compact provider output, and fetch-to-disk. See [ADR-0656](adr/0656-research-module-seam.md).
 
 ### CLI Tools (`evolv-coder-lite/bin/`)
 
@@ -700,6 +765,8 @@ The researcher → planner → executor pipeline includes a supply-chain gate ag
 
 ### Security Hooks (v1.27)
 
+For a conceptual overview of how the hook and guard layers fit into the broader security approach, see [Security model](explanation/security-model.md).
+
 **Prompt Guard** (`ecl-prompt-guard.js`):
 
 - Triggers on Write/Edit to `.planning/` files
@@ -733,15 +800,15 @@ The migration-specific ownership and source snapshots live in
 | Kilo | `~/.config/kilo` | `./.kilo` | `command/ecl-*.md` | `agents/ecl-*.md` | `kilo.json` or `kilo.jsonc`; no eCL hooks |
 | Gemini CLI | `~/.gemini` | `./.gemini` | `commands/ecl/*.toml` | `agents/ecl-*.md` | `settings.json` feature flag, hooks, and statusline |
 | Codex | `~/.codex` | `./.codex` | `skills/ecl-*/SKILL.md` | `agents/` source markdown plus per-agent TOML | `config.toml` `[agents.ecl-*]`, `[features].hooks` (canonical; legacy alias `codex_hooks` is recognized and migrated forward on reinstall, #3566), and hook tables |
-| GitHub Copilot | `~/.copilot` | `./.github` | `skills/ecl-*/SKILL.md` and `copilot-instructions.md` | `.agent.md` files | No eCL hooks or statusline |
+| GitHub Copilot | `~/.copilot` | `./.github` | `skills/ecl-*/SKILL.md`, `copilot-instructions.md`, and `AGENTS.md` (repo root, local) | `.agent.md` files | Self-contained `sessionStart` hook (`hooks/ecl-session.json`, inline `command` type); no statusline |
 | Antigravity | auto-detected: `~/.gemini/antigravity`, `~/.gemini/antigravity-ide`, or `~/.gemini/antigravity-cli` | `./.agent` | `skills/ecl-*/SKILL.md` | `agents/ecl-*.md` | Gemini-style `settings.json` hook entries when installed by eCL |
-| Cursor | `~/.cursor` | `./.cursor` | `skills/ecl-*/SKILL.md` | `agents/ecl-*.md` | Rule references under `rules/`; no eCL hooks |
+| Cursor | `~/.cursor` | `./.cursor` | `skills/ecl-*/SKILL.md` | `agents/ecl-*.md` | Rule references under `rules/`; `hooks.json` with sessionStart context injection and postToolUse STATE.md monitor (#777) |
 | Windsurf | `~/.codeium/windsurf` | `./.windsurf` | `skills/ecl-*/SKILL.md` | `agents/ecl-*.md` | Rule references under `rules/`; no eCL hooks |
 | Augment Code | `~/.augment` | `./.augment` | `skills/ecl-*/SKILL.md` | `agents/ecl-*.md` | No eCL hooks or statusline |
 | Trae | `~/.trae` | `./.trae` | `skills/ecl-*/SKILL.md` | `agents/ecl-*.md` | Rule references under `rules/`; no eCL hooks |
 | Qwen Code | `~/.qwen` | `./.qwen` | `skills/ecl-*/SKILL.md` | `agents/ecl-*.md` | Common eCL settings and hook entries where supported |
 | Hermes Agent | `~/.hermes` | `./.hermes` | `skills/ecl/DESCRIPTION.md` plus `skills/ecl/ecl-*/SKILL.md` | `agents/ecl-*.md` | Common eCL settings and hook entries where supported |
-| CodeBuddy | `~/.codebuddy` | `./.codebuddy` | `skills/ecl-*/SKILL.md` | `agents/ecl-*.md` | Common eCL settings and hook entries where supported |
+| CodeBuddy | `~/.codebuddy` | `./.codebuddy` | `skills/ecl-*/SKILL.md` (`user-invocable: false`) | `agents/ecl-*.md` | `/ecl-*` slash commands under `commands/`; common eCL settings and hook entries where supported |
 | Cline | `~/.cline` | project root | `.clinerules` | Rules only | No eCL hooks or statusline |
 
 ### Upstream Contract Sources
@@ -770,3 +837,12 @@ available. The current source snapshot is 2026-05-11:
 5. **Model references** — `inherit` profile lets eCL defer to runtime's model selection
 
 The installer handles all translation at install time. Workflows and agents are written in Claude Code's native format and transformed during deployment.
+
+---
+
+## Related
+
+- [Multi-agent orchestration](explanation/multi-agent-orchestration.md)
+- [Security model](explanation/security-model.md)
+- [CLI tools](CLI-TOOLS.md)
+- [docs index](README.md)

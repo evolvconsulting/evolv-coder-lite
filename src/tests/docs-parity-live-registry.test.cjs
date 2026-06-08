@@ -174,7 +174,17 @@ const INTERNAL_COMPONENT_SLUGS = new Set([
  * this was /ecl-old-name...").
  */
 function stripHtmlComments(content) {
-  return content.replace(/<!--[\s\S]*?-->/g, '');
+  // regex-free HTML-comment stripper (CodeQL: avoid incomplete-multi-character-sanitization)
+  let out = '';
+  let rest = content;
+  let idx;
+  while ((idx = rest.indexOf('<!--')) !== -1) {
+    out += rest.slice(0, idx);
+    const end = rest.indexOf('-->', idx + 4);
+    if (end === -1) { rest = ''; break; }
+    rest = rest.slice(end + 3);
+  }
+  return out + rest;
 }
 
 /**
@@ -299,10 +309,6 @@ describe('getLiveCommandTokens() — helper contract', () => {
   test('contains exactly 3 tokens per slug (slash, colon, dollar)', () => {
     const result = getLiveCommandTokens();
     // Every /ecl-slug should have a matching /ecl:slug and $ecl-slug
-    let tokenCount = 0;
-    for (const token of result) {
-      if (token.startsWith('/ecl-')) tokenCount++;
-    }
     const slashTokens = [...result].filter(t => t.startsWith('/ecl-'));
     for (const slash of slashTokens) {
       const slug = slash.slice('/ecl-'.length);

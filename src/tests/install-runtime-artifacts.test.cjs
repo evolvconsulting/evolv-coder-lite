@@ -28,6 +28,7 @@ const { createTempDir, cleanup } = require('./helpers.cjs');
 
 const {
   installRuntimeArtifacts,
+  installOpencodeFamilySkills,
   parseRuntimeInput,
   allRuntimes,
 } = require('../bin/install.js');
@@ -131,14 +132,44 @@ describe('installRuntimeArtifacts — gemini commands layout', () => {
   });
 });
 
-describe('installRuntimeArtifacts — cline no-op', () => {
-  test('cline: no kinds — call succeeds, no dirs created', (t) => {
+describe('installRuntimeArtifacts — cursor commands layout (#785)', () => {
+  test('cursor: skills/ AND commands/ both created; commands/ecl-help.md is plain markdown', (t) => {
+    const configDir = createTempDir('ecl-ial-cursor-cmds-');
+    t.after(() => cleanup(configDir));
+
+    installRuntimeArtifacts('cursor', configDir, 'global', RESOLVED_CORE);
+
+    // Existing skills kind still present
+    const skillsDir = path.join(configDir, 'skills');
+    assert.ok(fs.existsSync(skillsDir), 'skills/ must exist');
+    assert.ok(fs.existsSync(path.join(skillsDir, 'ecl-help', 'SKILL.md')),
+      'skills/ecl-help/SKILL.md must exist');
+
+    // New commands kind (#785)
+    const commandsDir = path.join(configDir, 'commands');
+    assert.ok(fs.existsSync(commandsDir), 'commands/ must exist (#785)');
+    assert.ok(fs.existsSync(path.join(commandsDir, 'ecl-help.md')),
+      'commands/ecl-help.md must exist (#785)');
+
+    // Cursor commands are plain markdown — no YAML frontmatter
+    const helpContent = fs.readFileSync(path.join(commandsDir, 'ecl-help.md'), 'utf8');
+    assert.ok(!helpContent.startsWith('---'), 'cursor commands must not start with YAML frontmatter');
+  });
+});
+
+describe('installRuntimeArtifacts — cline skills (#782)', () => {
+  test('cline: global install writes ecl-prefixed skill dirs under skills/', (t) => {
     const configDir = createTempDir('ecl-ial-cline-');
     t.after(() => cleanup(configDir));
 
     assert.doesNotThrow(() => installRuntimeArtifacts('cline', configDir, 'global', RESOLVED_CORE));
-    assert.ok(!fs.existsSync(path.join(configDir, 'skills')));
-    assert.ok(!fs.existsSync(path.join(configDir, 'commands')));
+
+    const skillsDir = path.join(configDir, 'skills');
+    assert.ok(fs.existsSync(skillsDir), 'skills/ must be created for global cline install');
+    assert.ok(
+      fs.existsSync(path.join(skillsDir, 'ecl-help', 'SKILL.md')),
+      'ecl-help/SKILL.md must exist'
+    );
   });
 });
 
@@ -153,6 +184,83 @@ describe('installRuntimeArtifacts — opencode / kilo flat commands', () => {
       const commandDir = path.join(configDir, 'command');
       assert.ok(fs.existsSync(commandDir));
       assert.ok(fs.existsSync(path.join(commandDir, 'ecl-help.md')));
+    });
+  }
+});
+
+// ─── #784: installOpencodeFamilySkills — skills + path rewrite + preservation ─
+
+// Stage the raw command set the way the installer's _stageSkills() does, so the
+// skills writer receives the same input as the flattened-command writer.
+function stageRawCommands(runtime, configDir) {
+  const layout = resolveRuntimeArtifactLayout(runtime, configDir, 'global');
+  const commandsKind = layout.kinds.find((k) => k.kind === 'commands');
+  return commandsKind.stage(RESOLVED_CORE);
+}
+
+describe('installOpencodeFamilySkills — emits skills/<name>/SKILL.md (#784)', () => {
+  for (const runtime of ['opencode', 'kilo']) {
+    test(`${runtime}: writes ecl-help/SKILL.md with name + description`, (t) => {
+      const configDir = createTempDir(`ecl-ocs-${runtime}-`);
+      t.after(() => cleanup(configDir));
+
+      const raw = stageRawCommands(runtime, configDir);
+      const count = installOpencodeFamilySkills(runtime, configDir, raw, `${configDir}/`);
+      assert.ok(count >= 1, 'should report installed skills');
+
+      const skillMd = path.join(configDir, 'skills', 'ecl-help', 'SKILL.md');
+      assert.ok(fs.existsSync(skillMd), 'ecl-help/SKILL.md must exist');
+      const content = fs.readFileSync(skillMd, 'utf8');
+      assert.match(content, /^name: ecl-help$/m, 'name matches dir');
+      assert.match(content, /^description: /m, 'description present');
+      assert.ok(!/\/ecl:/.test(content), 'no /ecl: colon refs in body');
+    });
+
+    test(`${runtime}: rewrites body paths to the actual install target (#784 path fix)`, (t) => {
+      const configDir = createTempDir(`ecl-ocp-${runtime}-`);
+      t.after(() => cleanup(configDir));
+
+      // Simulate a custom/local install: pathPrefix points at configDir, NOT the
+      // runtime's default global config dir. Body refs must use pathPrefix.
+      const pathPrefix = `${configDir}/`;
+      installOpencodeFamilySkills(runtime, configDir, stageRawCommands(runtime, configDir), pathPrefix);
+
+      const defaultBase = runtime === 'kilo' ? '.config/kilo' : '.config/opencode';
+      const help = fs.readFileSync(path.join(configDir, 'skills', 'ecl-help', 'SKILL.md'), 'utf8');
+      // ecl-help references evolv-coder-lite workflow files via @<configDir>/evolv-coder-lite/...
+      assert.ok(
+        help.includes(`${configDir}/evolv-coder-lite/`),
+        'ecl-help body must reference the actual install target via pathPrefix',
+      );
+      for (const skillName of fs.readdirSync(path.join(configDir, 'skills'))) {
+        const body = fs.readFileSync(path.join(configDir, 'skills', skillName, 'SKILL.md'), 'utf8');
+        assert.ok(
+          !body.includes(`~/${defaultBase}/`),
+          `${skillName}: must not leak hardcoded ~/${defaultBase}/ — should use install target`,
+        );
+        // Regression guard for the prefix-overlap double-rewrite (e.g. kilo-alt-alt).
+        assert.ok(
+          !new RegExp(`${defaultBase.replace(/[\\.*+?^${}()|[\]]/g, '\\$&')}-[^/\\s]*-`).test(body),
+          `${skillName}: must not contain a doubled config-dir suffix`,
+        );
+      }
+    });
+
+    test(`${runtime}: preserves user-owned ecl-dev-preferences across reinstall (#784)`, (t) => {
+      const configDir = createTempDir(`ecl-ocd-${runtime}-`);
+      t.after(() => cleanup(configDir));
+
+      const userSkill = path.join(configDir, 'skills', 'ecl-dev-preferences');
+      fs.mkdirSync(userSkill, { recursive: true });
+      const marker = '---\nname: ecl-dev-preferences\ndescription: mine\n---\nKEEP ME\n';
+      fs.writeFileSync(path.join(userSkill, 'SKILL.md'), marker);
+
+      installOpencodeFamilySkills(runtime, configDir, stageRawCommands(runtime, configDir), `${configDir}/`);
+
+      const after = fs.readFileSync(path.join(userSkill, 'SKILL.md'), 'utf8');
+      assert.ok(after.includes('KEEP ME'), 'user-owned dev-preferences must survive reinstall');
+      // eCL-managed skills should also be present.
+      assert.ok(fs.existsSync(path.join(configDir, 'skills', 'ecl-help', 'SKILL.md')));
     });
   }
 });

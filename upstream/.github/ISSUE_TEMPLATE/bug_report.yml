@@ -13,6 +13,14 @@ body:
         > 2. Redact usernames, paths, and API keys (e.g., replace `/Users/yourname/` with `/Users/REDACTED/`)
         > 3. Or run your logs through an anonymizer — we recommend **[presidio-anonymizer](https://microsoft.github.io/presidio/)** (open-source, local-only) or **[scrub](https://github.com/dssg/scrub)** before pasting
 
+  - type: checkboxes
+    id: preflight
+    attributes:
+      label: Pre-submission checklist
+      options:
+        - label: I have searched existing issues and this bug has not already been reported
+          required: true
+
   - type: input
     id: version
     attributes:
@@ -216,8 +224,8 @@ body:
 
         **Useful diagnostics to include (if applicable):**
         - `npm list -g @opengsd/gsd-core` — confirms installed version
-        - `ls -la ~/.claude/get-shit-done/` — confirms installation files (Claude Code)
-        - `cat ~/.claude/get-shit-done/gsd-file-manifest.json` — file manifest for debugging install issues
+        - `ls -la ~/.claude/gsd-core/` — confirms installation files (Claude Code)
+        - `cat ~/.claude/gsd-core/gsd-file-manifest.json` — file manifest for debugging install issues
         - `ls -la .planning/` — confirms planning directory state
 
         **⚠️ PII Warning:** File listings and manifests contain your home directory path. Replace your username with `REDACTED`.

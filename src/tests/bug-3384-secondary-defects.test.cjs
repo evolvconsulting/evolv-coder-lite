@@ -5,6 +5,7 @@ const fs = require('node:fs');
 const path = require('node:path');
 
 const repoRoot = path.resolve(__dirname, '..');
+const WORKTREE_BRANCH_CHECK_FRAGMENT = path.join(repoRoot, 'evolv-coder-lite', 'references', 'worktree-branch-check.md');
 
 function read(relPath) {
   return fs.readFileSync(path.join(repoRoot, relPath), 'utf8');
@@ -21,15 +22,27 @@ describe('bug #3384: adjacent worktree data-loss guards', () => {
     assert.match(skipSet, /'worktree'/);
   });
 
-  test('diagnose-issues agents assert disposable worktree branch before reset --hard', () => {
-    const source = read('evolv-coder-lite/workflows/diagnose-issues.md');
-    const branchCheck = source.indexOf('HEAD_REF=$(git symbolic-ref --quiet HEAD || echo');
-    const namespaceCheck = source.indexOf('worktree-agent-* namespace');
-    const reset = source.indexOf('git reset --hard {EXPECTED_BASE}');
+  test('diagnose-issues references canonical fragment; fragment is verify-only and fails closed (#48)', () => {
+    // diagnose-issues.md now references the canonical fragment rather than
+    // inlining the block. Verify (a) it references the fragment and (b) the
+    // fragment itself has the correct ordering: symbolic-ref/HEAD assertion and
+    // ^worktree-agent- allow-list appear before any work, and (c) the fragment
+    // is verify-only — no destructive self-recovery.
+    const diagnoseSource = read('evolv-coder-lite/workflows/diagnose-issues.md');
+    assert.ok(
+      diagnoseSource.includes('worktree-branch-check.md'),
+      'diagnose-issues.md must reference the canonical worktree-branch-check.md fragment'
+    );
 
-    assert.ok(branchCheck > 0, 'diagnose prompt must assert HEAD before repair');
-    assert.ok(namespaceCheck > branchCheck, 'diagnose prompt must require disposable worktree-agent branch');
-    assert.ok(reset > namespaceCheck, 'reset --hard must come only after branch namespace check');
+    const fragmentSource = fs.readFileSync(WORKTREE_BRANCH_CHECK_FRAGMENT, 'utf8');
+    const branchCheck = fragmentSource.indexOf('HEAD_REF=$(git symbolic-ref --quiet HEAD || echo');
+    const namespaceCheck = fragmentSource.indexOf('^worktree-agent-');
+
+    assert.ok(branchCheck > 0, 'canonical fragment must assert HEAD before any work');
+    assert.ok(namespaceCheck > branchCheck, 'canonical fragment must require disposable worktree-agent branch');
+    // #48: verify-only — the destructive self-recovery is gone; the fragment fails closed instead.
+    assert.ok(!fragmentSource.includes('git reset --hard {EXPECTED_BASE}'), 'canonical fragment must not self-recover via reset --hard — orchestrator owns recovery (#48)');
+    assert.ok(fragmentSource.includes('exit 42'), 'canonical fragment must fail closed with exit 42 on base mismatch (#48)');
   });
 
   test('remove-workspace fails closed when git worktree remove fails', () => {
@@ -50,7 +63,11 @@ describe('bug #3384: adjacent worktree data-loss guards', () => {
 
   test('validate health warns when worktree inventory cannot be listed', () => {
     const source = read('evolv-coder-lite/bin/lib/verify.cjs');
-    const failureBranch = source.indexOf("worktreeHealth.reason === 'git_list_failed'");
+    // Accept both hand-written dot access and the tsc-compiled bracket form
+    // (ADR-457: verify.cjs is now emitted from src/verify.cts):
+    //   hand-written: worktreeHealth.reason === 'git_list_failed'
+    //   tsc-compiled:  worktreeHealth['reason'] === 'git_list_failed'
+    const failureBranch = source.search(/worktreeHealth(?:\.reason|\['reason'\]) === 'git_list_failed'/);
     const warning = source.indexOf("addIssue('warning', 'W020'", failureBranch);
 
     assert.ok(failureBranch > 0, 'verify health should branch on git_list_failed');

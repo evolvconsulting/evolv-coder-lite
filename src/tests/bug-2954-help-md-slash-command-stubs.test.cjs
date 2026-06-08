@@ -79,7 +79,10 @@ function extractSlashReferences(contents) {
   const names = new Set();
   // Negative lookbehind: must not be preceded by a letter (avoids matching npm scope
   // paths like @evolvconsulting/evolv-coder-lite where `/ecl-` appears inside a package URL).
-  const tokenRe = /(?<![a-z])\/ecl[:-]([a-z][a-z0-9-]*)/g;
+  // Negative lookahead (?![\w-]*\/): excludes filesystem path segments like
+  // `/evolv-coder-lite/bin` where the captured name is followed by a `/`, which would
+  // be a directory segment rather than a slash command name.
+  const tokenRe = /(?<![a-z])\/ecl[:-]([a-z][a-z0-9-]*)(?![\w-]*\/)/g;
   let match;
   while ((match = tokenRe.exec(contents)) !== null) {
     names.add(match[1]);

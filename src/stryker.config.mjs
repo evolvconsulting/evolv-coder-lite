@@ -21,38 +21,52 @@
  * to stay bounded. Full runs are for local exploration only.
  */
 
-// Generated files that must NEVER be mutated
-const GENERATED_FILES = [
-  '!evolv-coder-lite/bin/lib/configuration.cjs',   // GENERATED — sdk/src/config/index.ts
-  '!evolv-coder-lite/bin/lib/command-aliases.cjs',  // GENERATED
-  '!evolv-coder-lite/bin/lib/commands.cjs',         // GENERATED
-  '!evolv-coder-lite/bin/lib/core.cjs',             // GENERATED
-  '!evolv-coder-lite/bin/lib/install-profiles.cjs', // GENERATED
-  '!evolv-coder-lite/bin/lib/installer-migrations.cjs', // GENERATED
-  '!evolv-coder-lite/bin/lib/phase.cjs',            // GENERATED
-  '!evolv-coder-lite/bin/lib/profile-output.cjs',   // GENERATED
-  '!evolv-coder-lite/bin/lib/state.cjs',            // GENERATED
-  '!evolv-coder-lite/bin/lib/verify.cjs',           // GENERATED
-  '!evolv-coder-lite/bin/lib/init.cjs',             // GENERATED
-  '!evolv-coder-lite/bin/lib/audit.cjs',            // GENERATED
-  '!evolv-coder-lite/bin/lib/ecl2-import.cjs',      // GENERATED
+// ADR-457: bin/lib/*.cjs are gitignored build artifacts (compiled from
+// src/*.cts by `npm run build:lib`, which the mutation CI job runs via `npm ci`
+// → prepare before Stryker). Stryker mutates the *built* .cjs directly — the
+// command runner runs the tests with NO rebuild, so each mutation to the
+// shipped artifact is seen by the tests. (Mutating src/*.cts instead would
+// force a full tsc rebuild per mutant — far too slow for the 30-min CI budget.)
+// Large/low-coverage modules are excluded (the command's test set does not
+// exercise them, so they would only ever produce survived mutants).
+const UNMUTATED = [
+  '!evolv-coder-lite/bin/lib/command-aliases.cjs',
+  '!evolv-coder-lite/bin/lib/commands.cjs',
+  '!evolv-coder-lite/bin/lib/core.cjs',
+  '!evolv-coder-lite/bin/lib/install-profiles.cjs',
+  '!evolv-coder-lite/bin/lib/installer-migrations.cjs',
+  '!evolv-coder-lite/bin/lib/phase.cjs',
+  '!evolv-coder-lite/bin/lib/profile-output.cjs',
+  '!evolv-coder-lite/bin/lib/state.cjs',
+  '!evolv-coder-lite/bin/lib/verify.cjs',
+  '!evolv-coder-lite/bin/lib/init.cjs',
+  '!evolv-coder-lite/bin/lib/audit.cjs',
+  '!evolv-coder-lite/bin/lib/ecl2-import.cjs',
 ];
+
+// Full test command used by local runs and as the fallback when CI does not
+// inject a per-shard command via MUTATION_TEST_CMD.
+const DEFAULT_TEST_CMD = 'node --test tests/context-utilization.property.test.cjs tests/prompt-budget.property.test.cjs tests/frontmatter.property.test.cjs tests/adr-parser.property.test.cjs tests/config-schema.property.test.cjs tests/adr-parser.test.cjs tests/active-workstream-store.test.cjs tests/active-workstream-store.unit.test.cjs tests/prompt-budget.unit.test.cjs tests/adr-parser.unit.test.cjs tests/frontmatter.unit.test.cjs';
 
 /** @type {import('@stryker-mutator/core').PartialStrykerOptions} */
 export default {
   // ── Test runner ──────────────────────────────────────────────────────────────
   testRunner: 'command',
   commandRunner: {
-    // Run property tests + unit tests over lib only.
-    // Deliberately avoids running the full integration suite (slow).
-    command: 'node --test tests/context-utilization.property.test.cjs tests/prompt-budget.property.test.cjs tests/frontmatter.property.test.cjs tests/adr-parser.property.test.cjs tests/config-schema.property.test.cjs tests/adr-parser.test.cjs tests/active-workstream-store.test.cjs',
+    // Run property + unit tests over lib only (avoids the slow integration
+    // suite). NO build step here: Stryker mutates the already-built .cjs and the
+    // tests load it directly — adding a build would rebuild over the mutation.
+    // In CI each matrix shard injects MUTATION_TEST_CMD with only its own tests.
+    command: process.env.MUTATION_TEST_CMD || DEFAULT_TEST_CMD,
   },
 
   // ── Files to mutate ──────────────────────────────────────────────────────────
+  // The built bin/lib/*.cjs artifacts (ADR-457). CI overrides this with
+  // --mutate <changed, covered modules> computed in mutation.yml.
   mutate: [
     'evolv-coder-lite/bin/lib/**/*.cjs',
     '!evolv-coder-lite/bin/lib/**/*.test.cjs',
-    ...GENERATED_FILES,
+    ...UNMUTATED,
   ],
 
   // ── Coverage ─────────────────────────────────────────────────────────────────

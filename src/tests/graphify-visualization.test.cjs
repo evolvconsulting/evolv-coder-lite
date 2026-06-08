@@ -214,7 +214,7 @@ describe('mvp-viz', () => {
   function parseSkillFrontmatter(text) {
     const lines = text.split(/\r?\n/);
     const out = {};
-    let activeKey = null;
+    let _activeKey = null;
     let activeList = null;
     for (const raw of lines) {
       const listItem = raw.match(/^\s+-\s+(.+?)\s*$/);
@@ -227,11 +227,11 @@ describe('mvp-viz', () => {
       const [, key, rawValue] = kv;
       const value = rawValue.trim();
       if (value === '') {
-        activeKey = key;
+        _activeKey = key;
         activeList = [];
         out[key] = activeList;
       } else {
-        activeKey = null;
+        _activeKey = null;
         activeList = null;
         out[key] = value;
       }
@@ -365,7 +365,7 @@ describe('regressions', () => {
   function parseBug3166SkillFrontmatter(text) {
     const lines = text.split(/\r?\n/);
     const out = {};
-    let activeKey = null;
+    let _activeKey = null;
     let activeList = null;
     for (const raw of lines) {
       const listItem = raw.match(/^\s+-\s+(.+?)\s*$/);
@@ -378,11 +378,11 @@ describe('regressions', () => {
       const [, key, rawValue] = kv;
       const value = rawValue.trim();
       if (value === '') {
-        activeKey = key;
+        _activeKey = key;
         activeList = [];
         out[key] = activeList;
       } else {
-        activeKey = null;
+        _activeKey = null;
         activeList = null;
         out[key] = value;
       }
@@ -469,8 +469,8 @@ describe('regressions', () => {
       'a bash code block must invoke `graphify update .`'
     );
     assert.ok(
-      bashBlocks.some(b => /ecl-tools\.cjs["']?\s+graphify build snapshot/.test(b.content)),
-      'a bash code block must invoke `ecl-tools.cjs graphify build snapshot`'
+      bashBlocks.some(b => /ecl_run\s+graphify build snapshot/.test(b.content)),
+      'a bash code block must invoke `ecl_run graphify build snapshot`'
     );
   });
 
@@ -546,9 +546,7 @@ describe('regressions', () => {
     });
 
     after(() => {
-      if (tmpDir) {
-        try { fs.rmSync(tmpDir, { recursive: true, force: true }); } catch { /* ignore */ }
-      }
+      cleanup(tmpDir);
     });
 
     test('hooks/ecl-graphify-update.sh present at install target', () => {

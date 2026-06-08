@@ -19,6 +19,8 @@ const fs = require('fs');
 const path = require('path');
 const os = require('os');
 const { execFileSync } = require('child_process');
+const { cleanup } = require('./helpers.cjs');
+const jsYaml = require('js-yaml');
 
 // #2153 follow-up: ensure hooks/dist/ exists before any install integration
 // test runs. The Codex install path copies hook files from hooks/dist/, which
@@ -43,6 +45,8 @@ const {
   convertClaudeAgentToCodexAgent,
   convertClaudeCommandToCodexSkill,
   generateCodexAgentToml,
+  generateCodexSkillMetadataYaml,
+  writeCodexSkillMetadataFiles,
   generateCodexConfigBlock,
   stripGsdFromCodexConfig,
   migrateCodexHooksMapFormat,
@@ -399,6 +403,74 @@ tools: Read, Grep, Glob
     assert.ok(modelIdx !== -1, 'model field present');
     assert.ok(instrIdx !== -1, 'developer_instructions present');
     assert.ok(modelIdx < instrIdx, 'model field must appear before developer_instructions');
+  });
+
+  // ─── #774: service_tier / model_verbosity for light-tier agents ───────────────
+
+  test('emits service_tier="flex" and model_verbosity="low" for light-tier agents (#774)', () => {
+    // ecl-plan-checker has routingTier:"light" in model-catalog.json
+    const lightAgent = `---
+name: ecl-plan-checker
+description: Checks plans quickly
+tools: Read, Grep
+---
+
+<role>You check plans.</role>`;
+    const result = generateCodexAgentToml('ecl-plan-checker', lightAgent);
+    assert.ok(result.includes('service_tier = "flex"'), 'light-tier agent must have service_tier = "flex"');
+    assert.ok(result.includes('model_verbosity = "low"'), 'light-tier agent must have model_verbosity = "low"');
+  });
+
+  test('does not emit service_tier or model_verbosity for standard-tier agents (#774)', () => {
+    // ecl-executor has routingTier:"standard" in model-catalog.json
+    const result = generateCodexAgentToml('ecl-executor', sampleAgent);
+    assert.ok(!result.includes('service_tier'), 'standard-tier agent must not have service_tier');
+    assert.ok(!result.includes('model_verbosity'), 'standard-tier agent must not have model_verbosity');
+  });
+
+  test('does not emit service_tier or model_verbosity for heavy-tier agents (#774)', () => {
+    // ecl-planner has routingTier:"heavy" in model-catalog.json
+    const heavyAgent = `---
+name: ecl-planner
+description: Creates plans
+tools: Read, Write, Edit
+---
+
+<role>You plan.</role>`;
+    const result = generateCodexAgentToml('ecl-planner', heavyAgent);
+    assert.ok(!result.includes('service_tier'), 'heavy-tier agent must not have service_tier');
+    assert.ok(!result.includes('model_verbosity'), 'heavy-tier agent must not have model_verbosity');
+  });
+
+  test('service_tier and model_verbosity appear before developer_instructions (#774)', () => {
+    const lightAgent = `---
+name: ecl-plan-checker
+description: Checks plans
+---
+
+<role>You check plans.</role>`;
+    const result = generateCodexAgentToml('ecl-plan-checker', lightAgent);
+    const stIdx = result.indexOf('service_tier = "flex"');
+    const mvIdx = result.indexOf('model_verbosity = "low"');
+    const instrIdx = result.indexOf("developer_instructions = '''");
+    assert.ok(stIdx !== -1, 'service_tier present');
+    assert.ok(mvIdx !== -1, 'model_verbosity present');
+    assert.ok(instrIdx !== -1, 'developer_instructions present');
+    assert.ok(stIdx < instrIdx, 'service_tier must appear before developer_instructions');
+    assert.ok(mvIdx < instrIdx, 'model_verbosity must appear before developer_instructions');
+  });
+
+  test('emitted TOML is parseable and contains correct field values for light-tier agents (#774)', () => {
+    const lightAgent = `---
+name: ecl-codebase-mapper
+description: Maps the codebase
+---
+
+<role>You map the codebase.</role>`;
+    const toml = generateCodexAgentToml('ecl-codebase-mapper', lightAgent);
+    const parsed = parseTomlToObject(toml);
+    assert.strictEqual(parsed.service_tier, 'flex', 'service_tier must parse to "flex"');
+    assert.strictEqual(parsed.model_verbosity, 'low', 'model_verbosity must parse to "low"');
   });
 });
 
@@ -953,7 +1025,7 @@ describe('Codex hooks emit: migration produces namespaced AoT so managed-emit co
     tmpDir = fs.mkdtempSync(path.join(os.tmpdir(), 'ecl-codex-fieldparity-'));
   });
   afterEach(() => {
-    fs.rmSync(tmpDir, { recursive: true, force: true });
+    cleanup(tmpDir);
   });
 
   test('migration of legacy [hooks.SessionStart] produces two-level nested AoT (#2773)', () => {
@@ -1002,7 +1074,7 @@ describe('mergeCodexConfig', () => {
   });
 
   afterEach(() => {
-    fs.rmSync(tmpDir, { recursive: true, force: true });
+    cleanup(tmpDir);
   });
 
   const sampleBlock = generateCodexConfigBlock([
@@ -1321,7 +1393,7 @@ describe('installCodexConfig (integration)', () => {
   });
 
   afterEach(() => {
-    fs.rmSync(tmpTarget, { recursive: true, force: true });
+    cleanup(tmpTarget);
   });
 
   // Only run if agents/ directory exists (not in CI without full checkout)
@@ -1430,7 +1502,7 @@ describe('Codex install hook configuration (e2e)', () => {
   });
 
   afterEach(() => {
-    fs.rmSync(tmpDir, { recursive: true, force: true });
+    cleanup(tmpDir);
   });
 
   test('Codex install copies hook file that is referenced in hooks.json (#2153)', () => {
@@ -2141,7 +2213,7 @@ describe('Codex uninstall symmetry for hook-enabled configs', () => {
   });
 
   afterEach(() => {
-    fs.rmSync(tmpDir, { recursive: true, force: true });
+    cleanup(tmpDir);
   });
 
   test('fresh install removes the eCL-added codex_hooks feature on uninstall', () => {
@@ -2275,7 +2347,7 @@ describe('Codex uninstall symmetry for hook-enabled configs', () => {
       const cleaned = stripGsdFromCodexConfig(readCodexConfig(codexHome));
       assert.strictEqual(cleaned, initialContent, `preserves short-circuited root features assignment: ${initialContent.split('\n')[0]}`);
 
-      fs.rmSync(codexHome, { recursive: true, force: true });
+      cleanup(codexHome);
       fs.mkdirSync(codexHome, { recursive: true });
     }
   });
@@ -2299,5 +2371,217 @@ describe('Codex uninstall symmetry for hook-enabled configs', () => {
     assert.strictEqual(countMatches(cleaned, /^codex_hooks = true$/gm), 0, 'removes the injected codex_hooks key');
     assert.strictEqual(countMatches(cleaned, /ecl-check-update\.js/g), 0, 'removes the eCL update hook');
     assert.strictEqual(countMatches(cleaned, /\[agents\.ecl-/g), 0, 'removes managed eCL agent sections');
+  });
+});
+
+// ─── #774: generateCodexSkillMetadataYaml ────────────────────────────────────────
+
+describe('generateCodexSkillMetadataYaml', () => {
+  test('emits valid parseable YAML with interface section (#774)', () => {
+    const yaml = generateCodexSkillMetadataYaml('ecl-plan-phase', 'Plan and structure the next development phase.');
+    // Must start with interface: and be parseable YAML
+    assert.ok(yaml.startsWith('interface:'), 'must start with interface: key');
+    const parsed = jsYaml.load(yaml);
+    assert.ok(parsed && typeof parsed === 'object', 'must be parseable YAML object');
+    assert.ok(parsed.interface, 'must have interface key');
+    assert.ok('display_name' in parsed.interface, 'must include display_name');
+    assert.ok('short_description' in parsed.interface, 'must include short_description');
+  });
+
+  test('strips ecl- prefix from display_name and converts hyphens to spaces (#774)', () => {
+    const yaml = generateCodexSkillMetadataYaml('ecl-plan-phase', 'Plan and structure the next development phase.');
+    const parsed = jsYaml.load(yaml);
+    assert.strictEqual(parsed.interface.display_name, 'plan phase',
+      'display_name must be "plan phase" (ecl- stripped, hyphens→spaces)');
+  });
+
+  test('embeds the short_description text as decoded string (#774)', () => {
+    const desc = 'Run eCL workflow ecl-test.';
+    const yaml = generateCodexSkillMetadataYaml('ecl-test', desc);
+    const parsed = jsYaml.load(yaml);
+    assert.strictEqual(parsed.interface.short_description, desc,
+      'short_description must round-trip through YAML correctly');
+  });
+
+  test('escapes double-quotes in description so parsed value is correct (#774)', () => {
+    const desc = 'Run "special" workflow.';
+    const yaml = generateCodexSkillMetadataYaml('ecl-test', desc);
+    const parsed = jsYaml.load(yaml);
+    assert.strictEqual(parsed.interface.short_description, desc,
+      'double-quotes in description must round-trip correctly through YAML');
+  });
+
+  test('escapes backslashes in description so parsed value is correct (#774)', () => {
+    const desc = 'Run C:\\path\\to workflow.';
+    const yaml = generateCodexSkillMetadataYaml('ecl-test', desc);
+    const parsed = jsYaml.load(yaml);
+    assert.strictEqual(parsed.interface.short_description, desc,
+      'backslashes in description must round-trip correctly through YAML');
+  });
+
+  test('output ends with a newline (#774)', () => {
+    const yaml = generateCodexSkillMetadataYaml('ecl-test', 'Test skill.');
+    assert.ok(yaml.endsWith('\n'), 'output must end with a newline');
+  });
+
+  test('works for skill without ecl- prefix (#774)', () => {
+    const yaml = generateCodexSkillMetadataYaml('my-skill', 'A custom skill.');
+    const parsed = jsYaml.load(yaml);
+    assert.strictEqual(parsed.interface.display_name, 'my skill',
+      'display_name must convert hyphens to spaces even without ecl- prefix');
+  });
+});
+
+// ─── #774: writeCodexSkillMetadataFiles ─────────────────────────────────────────
+
+describe('writeCodexSkillMetadataFiles', () => {
+  let tmpDir;
+
+  beforeEach(() => {
+    tmpDir = fs.mkdtempSync(path.join(os.tmpdir(), 'ecl-test-skill-meta-'));
+  });
+
+  afterEach(() => {
+    cleanup(tmpDir);
+  });
+
+  test('writes agents/openai.yaml for each ecl-* skill directory (#774)', () => {
+    // Set up a synthetic skills directory with two ecl-* skill dirs
+    const skills = [
+      { name: 'ecl-plan-phase', desc: 'Plan and structure the next development phase.' },
+      { name: 'ecl-execute-phase', desc: 'Execute the current phase.' },
+    ];
+    for (const { name, desc } of skills) {
+      const skillDir = path.join(tmpDir, name);
+      fs.mkdirSync(skillDir, { recursive: true });
+      const skillMd = `---\nname: ${name}\ndescription: "${desc}"\nmetadata:\n  short-description: "${desc}"\n---\n\nBody text.\n`;
+      fs.writeFileSync(path.join(skillDir, 'SKILL.md'), skillMd);
+    }
+
+    writeCodexSkillMetadataFiles(tmpDir);
+
+    for (const { name, desc } of skills) {
+      const yamlPath = path.join(tmpDir, name, 'agents', 'openai.yaml');
+      assert.ok(fs.existsSync(yamlPath), `agents/openai.yaml must exist for ${name}`);
+      const content = fs.readFileSync(yamlPath, 'utf8');
+      // Verify it's parseable YAML with the correct structure
+      const parsed = jsYaml.load(content);
+      assert.ok(parsed && parsed.interface, `${name}/agents/openai.yaml must parse to object with interface:`);
+      assert.ok('display_name' in parsed.interface, `${name}/agents/openai.yaml must have display_name`);
+      assert.strictEqual(parsed.interface.short_description, desc,
+        `${name}/agents/openai.yaml short_description must match source description`);
+    }
+  });
+
+  test('ignores non-ecl directories (#774)', () => {
+    // Non-ecl-* dir should not get agents/openai.yaml
+    const nonGsdDir = path.join(tmpDir, 'custom-skill');
+    fs.mkdirSync(nonGsdDir, { recursive: true });
+    fs.writeFileSync(path.join(nonGsdDir, 'SKILL.md'), '---\nname: custom\n---\nBody.\n');
+
+    writeCodexSkillMetadataFiles(tmpDir);
+
+    assert.ok(!fs.existsSync(path.join(nonGsdDir, 'agents', 'openai.yaml')),
+      'non-ecl-* dirs must not get agents/openai.yaml');
+  });
+
+  test('does not overwrite user-owned ecl-dev-preferences/agents/openai.yaml (#774)', () => {
+    // ecl-dev-preferences is user-owned and must never be modified by eCL install
+    const userOwnedDir = path.join(tmpDir, 'ecl-dev-preferences');
+    const agentsSubdir = path.join(userOwnedDir, 'agents');
+    fs.mkdirSync(agentsSubdir, { recursive: true });
+    fs.writeFileSync(path.join(userOwnedDir, 'SKILL.md'), '---\nname: ecl-dev-preferences\ndescription: "User pref"\n---\nBody.\n');
+    const userYaml = 'interface:\n  display_name: "my preferences"\n  short_description: "User-authored"\n';
+    fs.writeFileSync(path.join(agentsSubdir, 'openai.yaml'), userYaml);
+
+    writeCodexSkillMetadataFiles(tmpDir);
+
+    // User-authored file must remain unchanged
+    const after = fs.readFileSync(path.join(agentsSubdir, 'openai.yaml'), 'utf8');
+    assert.strictEqual(after, userYaml, 'user-owned ecl-dev-preferences/agents/openai.yaml must not be overwritten');
+  });
+
+  test('does not create agents/openai.yaml for ecl-dev-preferences if absent (#774)', () => {
+    // Even if ecl-dev-preferences exists without an openai.yaml, we must not create one
+    const userOwnedDir = path.join(tmpDir, 'ecl-dev-preferences');
+    fs.mkdirSync(userOwnedDir, { recursive: true });
+    fs.writeFileSync(path.join(userOwnedDir, 'SKILL.md'), '---\nname: ecl-dev-preferences\n---\nBody.\n');
+
+    writeCodexSkillMetadataFiles(tmpDir);
+
+    assert.ok(!fs.existsSync(path.join(userOwnedDir, 'agents', 'openai.yaml')),
+      'ecl-dev-preferences must not get agents/openai.yaml even if it was absent');
+  });
+
+  test('is a no-op when skillsDir does not exist (#774)', () => {
+    // Should not throw when the directory doesn't exist
+    assert.doesNotThrow(() => {
+      writeCodexSkillMetadataFiles(path.join(tmpDir, 'nonexistent'));
+    }, 'must not throw when skillsDir does not exist');
+  });
+
+  test('skips skill dirs with missing SKILL.md without throwing (#774)', () => {
+    // Create a ecl-* dir with no SKILL.md — should fail open
+    const emptySkillDir = path.join(tmpDir, 'ecl-empty');
+    fs.mkdirSync(emptySkillDir, { recursive: true });
+
+    assert.doesNotThrow(() => {
+      writeCodexSkillMetadataFiles(tmpDir);
+    }, 'must not throw when SKILL.md is missing');
+  });
+
+  test('display_name in agents/openai.yaml has ecl- prefix stripped (#774)', () => {
+    const skillDir = path.join(tmpDir, 'ecl-plan-phase');
+    fs.mkdirSync(skillDir, { recursive: true });
+    const skillMd = `---\nname: ecl-plan-phase\ndescription: "Plan the phase."\nmetadata:\n  short-description: "Plan the phase."\n---\n\nBody.\n`;
+    fs.writeFileSync(path.join(skillDir, 'SKILL.md'), skillMd);
+
+    writeCodexSkillMetadataFiles(tmpDir);
+
+    const yamlContent = fs.readFileSync(path.join(tmpDir, 'ecl-plan-phase', 'agents', 'openai.yaml'), 'utf8');
+    const parsed = jsYaml.load(yamlContent);
+    assert.strictEqual(parsed.interface.display_name, 'plan phase',
+      'display_name must have ecl- stripped and hyphens→spaces');
+  });
+
+  test('correctly unescapes YAML-quoted short-description from SKILL.md (#774)', () => {
+    // convertClaudeCommandToCodexSkill emits double-quoted YAML for descriptions.
+    // Verify that escape sequences like \" in the YAML source round-trip to literal " in output.
+    const skillDir = path.join(tmpDir, 'ecl-test-esc');
+    fs.mkdirSync(skillDir, { recursive: true });
+    // SKILL.md has a YAML-escaped double-quote in short-description
+    const skillMd = '---\nname: ecl-test-esc\ndescription: "Normal"\nmetadata:\n  short-description: "Run \\"special\\" workflow."\n---\n\nBody.\n';
+    fs.writeFileSync(path.join(skillDir, 'SKILL.md'), skillMd);
+
+    writeCodexSkillMetadataFiles(tmpDir);
+
+    const yamlContent = fs.readFileSync(path.join(tmpDir, 'ecl-test-esc', 'agents', 'openai.yaml'), 'utf8');
+    const parsed = jsYaml.load(yamlContent);
+    assert.strictEqual(parsed.interface.short_description, 'Run "special" workflow.',
+      'YAML-escaped quotes in SKILL.md must round-trip to literal quotes in agents/openai.yaml');
+  });
+
+  test('Codex install emits agents/openai.yaml for each skill (#774)', () => {
+    // Integration test: run a full Codex install and verify agents/openai.yaml is written.
+    // Use runCodexInstall so CODEX_HOME is saved and restored correctly even if it was
+    // already set in the environment before this test ran.
+    const codexHome = path.join(tmpDir, 'codex-home');
+    fs.mkdirSync(codexHome, { recursive: true });
+    runCodexInstall(codexHome);
+    const skillsDir = path.join(codexHome, 'skills');
+    // Assert that the install actually created a skills directory
+    assert.ok(fs.existsSync(skillsDir), 'Codex install must create a skills/ directory');
+    const gsdSkillDirs = fs.readdirSync(skillsDir, { withFileTypes: true })
+      .filter(e => e.isDirectory() && e.name.startsWith('ecl-'));
+    // At least some skills should be present
+    assert.ok(gsdSkillDirs.length > 0, 'install must create at least one ecl-* skill directory');
+    // Each skill directory must have agents/openai.yaml with valid YAML
+    for (const skillEntry of gsdSkillDirs) {
+      const yamlPath = path.join(skillsDir, skillEntry.name, 'agents', 'openai.yaml');
+      assert.ok(fs.existsSync(yamlPath), `${skillEntry.name}/agents/openai.yaml must exist after install`);
+      const content = fs.readFileSync(yamlPath, 'utf8');
+      const parsed = jsYaml.load(content);
+      assert.ok(parsed && parsed.interface, `${skillEntry.name}/agents/openai.yaml must parse to object with interface:`);
+    }
   });
 });

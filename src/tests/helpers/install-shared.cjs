@@ -26,6 +26,7 @@ const EXPECTED_SH_HOOKS = [
 
 const EXPECTED_ALL_HOOKS = [
   'ecl-check-update.js',
+  'ecl-config-reload.js',
   'ecl-context-monitor.js',
   'ecl-prompt-guard.js',
   'ecl-read-guard.js',

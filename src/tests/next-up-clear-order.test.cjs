@@ -17,7 +17,6 @@ const { test, describe } = require('node:test');
 const assert = require('node:assert/strict');
 const fs = require('fs');
 const path = require('path');
-const glob = require('path');
 
 const ECL_ROOT = path.join(__dirname, '..', 'evolv-coder-lite');
 const UI_BRAND = path.join(ECL_ROOT, 'references', 'ui-brand.md');

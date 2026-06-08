@@ -21,7 +21,7 @@ const assert = require('node:assert/strict');
 const fs = require('fs');
 const path = require('path');
 
-const UPDATE_MD = path.join(__dirname, '..', 'get-shit-done', 'workflows', 'update.md');
+const UPDATE_MD = path.join(__dirname, '..', 'gsd-core', 'workflows', 'update.md');
 
 describe('update.md — no bare ~.claude path references (#2470)', () => {
   const content = fs.readFileSync(UPDATE_MD, 'utf-8');
@@ -35,7 +35,7 @@ describe('update.md — no bare ~.claude path references (#2470)', () => {
     assert.strictEqual(
       matches,
       null,
-      `update.md must not contain bare ~/\.claude (without trailing slash) — installer scanner flags these as unresolved path refs: ${JSON.stringify(matches)}`
+      `update.md must not contain bare ~/.claude (without trailing slash) — installer scanner flags these as unresolved path refs: ${JSON.stringify(matches)}`
     );
   });
 });

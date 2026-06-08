@@ -1,6 +1,6 @@
 # GSD Feature Reference
 
-> Complete feature and function documentation with requirements. For architecture details, see [Architecture](ARCHITECTURE.md). For command syntax, see [Command Reference](COMMANDS.md).
+> Feature index and reference for GSD Core. For architecture details, see [Architecture](ARCHITECTURE.md). For command syntax, see [Command Reference](COMMANDS.md). Return to [docs index](README.md).
 
 ---
 
@@ -208,7 +208,7 @@
 **Functional Requirements:**
 - Questions adapt based on detected project type (web app, CLI, mobile, API, etc.)
 - Research agents have web search capability for current ecosystem information
-- Granularity setting controls phase count: `coarse` (3-5), `standard` (5-8), `fine` (8-12)
+- Granularity setting controls phase count: `coarse` (2-4), `standard` (4-6), `fine` (6-10)
 - `--auto` mode extracts all information from the provided document without interactive questioning
 - Existing codebase context (from `/gsd-map-codebase`) is loaded if present
 
@@ -904,6 +904,7 @@ continues. Drift detection cannot fail verification.
 - REQ-UPDATE-03: System MUST be runtime-aware and target the correct directory
 - REQ-UPDATE-04: System MUST back up locally modified files to `gsd-local-patches/`
 - REQ-UPDATE-05: `/gsd-update --reapply` MUST restore local modifications after update
+- REQ-UPDATE-06: `/gsd-update --next` (alias `--rc`) MUST target the `@next` RC dist-tag for version check and install; omitting the flag MUST keep `@latest` behavior unchanged (ADR #660)
 
 ---
 
@@ -925,6 +926,7 @@ continues. Drift detection cannot fail verification.
 | `granularity` | enum | `standard` | `coarse`, `standard`, or `fine` |
 | `model_profile` | enum | `balanced` | `quality`, `balanced`, `budget`, or `inherit` |
 | `models.<phase_type>` | enum | (none) | Per-phase-type tier override (`planning`, `discuss`, `research`, `execution`, `verification`, `completion`). Values: `opus`, `sonnet`, `haiku`, `inherit`. Coarse phase-level tuning that wins over `model_profile` but loses to per-agent `model_overrides`. See [CONFIGURATION.md](CONFIGURATION.md#per-phase-type-models-models--added-in-v140). Added in v1.40 |
+| `granularities.<phase_type>` | enum | (none) | Per-phase-type granularity override (`planning`, `discuss`, `research`, `execution`, `verification`, `completion`). Values: `coarse`, `standard`, `fine`. Mirrors `models.<phase_type>` for granularity. See [CONFIGURATION.md](CONFIGURATION.md#core-settings). Added in v1.43 ([#68](https://github.com/open-gsd/gsd-core/issues/68)). `/gsd:plan-phase --granularity <coarse\|standard\|fine>` overrides all config-based granularity for a single invocation (takes precedence over `granularities.planning`, top-level `granularity`, and `planning.granularity`). ([#703](https://github.com/open-gsd/gsd-core/issues/703)) |
 | `dynamic_routing.enabled` | boolean | `false` | Master switch for failure-tier escalation. When `true`, agents resolve to `tier_models[default_tier]` and escalate one tier on orchestrator-detected soft failure. Capped by `max_escalations`. See [CONFIGURATION.md](CONFIGURATION.md#dynamic-routing-with-failure-tier-escalation-dynamic_routing--added-in-v140). Added in v1.40 |
 | `workflow.research` | boolean | `true` | Domain research before planning |
 | `workflow.plan_check` | boolean | `true` | Plan verification loop |
@@ -1012,12 +1014,18 @@ fix(03-01): correct auth token expiry
 
 **Runtime Transformations:**
 
-| Aspect | Claude Code | OpenCode | Gemini | Kilo | Codex | Copilot | Antigravity | Trae | Cline | Augment | CodeBuddy | Qwen Code |
-|--------|------------|----------|--------|-------|-------|---------|-------------|------|-------|---------|-----------|-----------|
-| Commands | Slash commands | Slash commands | Slash commands | Slash commands | Skills (TOML) | Slash commands | Skills | Skills | Rules | Skills | Skills | Skills |
-| Agent format | Claude native | `mode: subagent` | Claude native | `mode: subagent` | Skills | Tool mapping | Skills | Skills | Rules | Skills | Skills | Skills |
-| Hook events | `PostToolUse` | N/A | `AfterTool` | N/A | N/A | N/A | N/A | N/A | N/A | N/A | N/A | N/A |
-| Config | `settings.json` | `opencode.json(c)` | `settings.json` | `kilo.json(c)` | TOML | Instructions | Config | Config | `.clinerules` | Config | Config | Config |
+| Aspect | Claude Code | OpenCode | Gemini | Kilo | Codex | Copilot | Antigravity | Cursor | Trae | Cline | Augment | CodeBuddy | Qwen Code |
+|--------|------------|----------|--------|-------|-------|---------|-------------|--------|------|-------|---------|-----------|-----------|
+| Commands | Slash commands | Slash commands | Slash commands | Slash commands | Skills (TOML) | Slash commands | Skills | Skills + Slash commands | Skills | Rules | Skills | Skills | Skills |
+| Agent format | Claude native | `mode: subagent` | Claude native | `mode: subagent` | Skills | Tool mapping | Skills | Skills | Skills | Rules | Skills | Skills | Skills |
+| Hook events | `PostToolUse` | N/A | `AfterTool` | N/A | N/A | N/A | N/A | N/A | N/A | N/A | N/A | N/A | N/A |
+| Config | `settings.json` | `opencode.json(c)` | `settings.json` | `kilo.json(c)` | TOML | Instructions | Config | Config | Config | `.clinerules` | Config | Config | Config |
+
+**Cursor artifact surfaces:** `gsd install --cursor` writes two artifact kinds:
+- `~/.cursor/skills/gsd-<name>/SKILL.md` — rich skills with YAML frontmatter, Cursor tool-name mapping, and adapter context header (existing surface)
+- `~/.cursor/commands/gsd-<name>.md` — plain markdown slash commands (no frontmatter) invocable via `/` in the Agent input (Cursor 1.6+, added in #785)
+
+**Claude Code native plugin distribution:** GSD Core ships a `.claude-plugin/plugin.json` manifest, enabling installation and lifecycle management via `claude plugin install|enable|disable|update gsd-core`. Commands load under the `/gsd-core:` namespace (e.g. `/gsd-core:plan-phase`), avoiding slash-command collisions with the classic npm installer which uses `/gsd:`. Always-on guard and update hooks are wired automatically via `hooks/hooks.json`. The plugin path is additive — the npm installer (`npx @opengsd/gsd-core`) remains fully supported.
 
 ---
 
@@ -1164,9 +1172,9 @@ When verification returns `human_needed`, items are persisted as a trackable HUM
 
 ### 42. Cross-AI Peer Review
 
-**Command:** `/gsd-review --phase N [--gemini] [--claude] [--codex] [--coderabbit] [--opencode] [--qwen] [--cursor] [--ollama] [--lm-studio] [--llama-cpp] [--all]`
+**Command:** `/gsd-review --phase N [--gemini] [--claude] [--codex] [--coderabbit] [--opencode] [--qwen] [--cursor] [--agy] [--ollama] [--lm-studio] [--llama-cpp] [--all]`
 
-**Purpose:** Invoke external AI CLIs (Gemini, Claude, Codex, CodeRabbit, OpenCode, Qwen Code, Cursor) to independently review phase plans. Produces structured REVIEWS.md with per-reviewer feedback.
+**Purpose:** Invoke external AI CLIs (Gemini, Claude, Codex, CodeRabbit, OpenCode, Qwen Code, Cursor, Antigravity) to independently review phase plans. Produces structured REVIEWS.md with per-reviewer feedback.
 
 **Requirements:**
 - REQ-REVIEW-01: System MUST detect available AI CLIs on the system
@@ -2086,7 +2094,7 @@ Test suite that scans all agent, workflow, and command files for embedded inject
 
 ### 92. Gates Taxonomy
 
-**References:** `get-shit-done/references/gates.md`
+**References:** `gsd-core/references/gates.md`
 **Agents:** plan-checker, verifier
 
 **Purpose:** Define 4 canonical gate types that structure all workflow decision points, enabling plan-checker and verifier agents to apply consistent gate logic.
@@ -2283,7 +2291,7 @@ Test suite that scans all agent, workflow, and command files for embedded inject
 
 **Requirements:**
 - REQ-CLINE-02: Cline install MUST write `.clinerules` to `~/.cline/` (global) or `./.cline/` (local). No custom slash commands — rules-based integration only. Flag: `--cline`.
-- REQ-CODEBUDDY-01: CodeBuddy install MUST deploy skills to `~/.codebuddy/skills/gsd-*/SKILL.md`. Flag: `--codebuddy`.
+- REQ-CODEBUDDY-01: CodeBuddy install MUST deploy skills to `~/.codebuddy/skills/gsd-*/SKILL.md` (emitted `user-invocable: false`), `/gsd-*` slash commands to `~/.codebuddy/commands/gsd-*.md`, and subagents to `~/.codebuddy/agents/gsd-*.md`. The commands surface is the sole `/` menu entry point. No `mcp.json` is written (gsd ships no MCP server). Flag: `--codebuddy`.
 - REQ-QWEN-01: Qwen Code install MUST deploy skills to `~/.qwen/skills/gsd-*/SKILL.md`, following the open standard used by Claude Code 2.1.88+. `QWEN_CONFIG_DIR` env var overrides the default path. Flag: `--qwen`.
 
 **Runtime summary:**
@@ -2666,7 +2674,7 @@ Users who run a memory / knowledge-base MCP server (for example, ExoCortex-style
 - REQ-LIFECYCLE-02: `formatGsdState()` checks the lifecycle fields in priority order and emits the first matching scene (Phase active → Idle next-recommended → Milestone complete → Default fallback).
 - REQ-LIFECYCLE-03: All four fields default to undefined; existing STATE.md files render byte-for-byte identically.
 
-**Reference issue:** [#2833](https://github.com/open-gsd/gsd-core/issues/2833) — see [`docs/STATE-MD-LIFECYCLE.md`](STATE-MD-LIFECYCLE.md) for the full field reference and rendering rules.
+**Reference issue:** [#2833](https://github.com/open-gsd/gsd-core/issues/2833) — see [`docs/STATE-MD-LIFECYCLE.md`](reference/state-md.md) for the full field reference and rendering rules.
 
 ---
 
@@ -2816,7 +2824,7 @@ Source commit: abc1234 (3 commits behind HEAD)
 - REQ-PKG-GATE-02: Planner MUST gate unverified or suspicious package installs before execution.
 - REQ-PKG-GATE-03: Executor MUST NOT auto-substitute package names after failed package-manager installs.
 
-**Reference:** [v1.42.1 Release Notes](RELEASE-v1.42.1.md)
+**Reference:** [v1.42.1 Release Notes](RELEASE-NOTES-LEGACY.md)
 
 ---
 
@@ -2935,7 +2943,7 @@ explicit reviewer flags -> --all -> review.default_reviewers -> all detected rev
 - REQ-HUMAN-VERIFY-02: Human-needed verification MUST remain pending until the end-of-phase review resolves it.
 - REQ-HUMAN-VERIFY-03: Configs without the key MUST use `"end-of-phase"`.
 
-**Reference:** [Checkpoints Reference](../get-shit-done/references/checkpoints.md)
+**Reference:** [Checkpoints Reference](../gsd-core/references/checkpoints.md)
 
 ---
 
@@ -3007,5 +3015,13 @@ explicit reviewer flags -> --all -> review.default_reviewers -> all detected rev
 - REQ-JSON-ERRORS-01: Unknown commands, validation errors, timeouts, native failures, fallback failures, and internal errors MUST map to canonical error kinds.
 - REQ-JSON-ERRORS-02: CLI exit code mapping MUST remain stable for automation callers.
 - REQ-JSON-ERRORS-03: Human-readable output MUST remain the default when `--json-errors` is absent.
+
+---
+
+## Related
+
+- [Commands](COMMANDS.md)
+- [Configuration](CONFIGURATION.md)
+- [docs index](README.md)
 
 **Reference:** [JSON Error Mode](json-errors.md)

@@ -1,7 +1,7 @@
 ---
 name: ecl-debug-session-manager
 description: Manages multi-cycle /ecl:debug checkpoint and continuation loop in isolated context. Spawns ecl-debugger agents, handles checkpoints via AskUserQuestion, dispatches specialist skills, applies fixes. Returns compact summary to main context. Spawned by /ecl:debug command.
-tools: Read, Write, Bash, Grep, Glob, Agent, AskUserQuestion
+tools: Read, Write, Edit, Bash, Grep, Glob, Agent, AskUserQuestion
 color: orange
 # hooks:
 #   PostToolUse:

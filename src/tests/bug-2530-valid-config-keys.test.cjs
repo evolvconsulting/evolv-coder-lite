@@ -13,7 +13,6 @@
 
 const { describe, test } = require('node:test');
 const assert = require('node:assert/strict');
-const path = require('node:path');
 const { createTempProject, cleanup, runGsdTools } = require('./helpers.cjs');
 
 const { VALID_CONFIG_KEYS, isValidConfigKey } = require('../evolv-coder-lite/bin/lib/config-schema.cjs');

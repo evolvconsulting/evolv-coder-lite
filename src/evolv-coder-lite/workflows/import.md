@@ -197,6 +197,8 @@ Write the PLAN.md file to the target directory.
 
 Delegate validation to ecl-plan-checker:
 
+Print: "Delegating to ecl-plan-checker (runs in a subagent — no output until it returns, ~1–5 min; expected, not a freeze)"
+
 ```
 Agent({
   subagent_type: "ecl-plan-checker",

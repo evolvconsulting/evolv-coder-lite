@@ -59,7 +59,8 @@ echo -e "${CYAN}Step 1: Using existing src/ (baked at $(jq -r .bakedAt "$REPO_RO
 # v1.2.0 (ADR-0174) retired the separate sdk/ workspace; the build now lives at
 # the package root (generate:identity + build:hooks). npm pack does NOT run
 # prepublishOnly (npm 7+), so populate hooks/ + package-identity here.
-echo -e "${CYAN}Step 2: Build hooks + package identity (npm pack does NOT run prepublishOnly — npm 7+)${NC}"
+echo -e "${CYAN}Step 2: Install src/ deps + build hooks/lib/identity (npm pack does NOT run prepublishOnly — npm 7+; v1.4.0 build:lib runs tsc, needs devDeps)${NC}"
+( cd "$REPO_ROOT/src" && npm ci --no-audit --no-fund || npm install --no-audit --no-fund )
 ( cd "$REPO_ROOT/src" && npm run build --silent )
 
 echo -e "${CYAN}Step 3: npm pack from src/${NC}"
