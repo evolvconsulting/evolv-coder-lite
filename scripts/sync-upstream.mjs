@@ -49,13 +49,18 @@ async function readLock() {
 }
 
 async function fetchLatestRelease() {
-  const res = await fetch(GITHUB_API, { headers: ghHeaders() });
+  // Default to "latest"; pin a specific release with UPSTREAM_TAG=v<X.Y.Z>.
+  const pinned = process.env.UPSTREAM_TAG;
+  const url = pinned
+    ? `https://api.github.com/repos/${UPSTREAM_REPO}/releases/tags/${encodeURIComponent(pinned)}`
+    : GITHUB_API;
+  const res = await fetch(url, { headers: ghHeaders() });
   if (!res.ok) {
     throw new Error(`GitHub releases API ${res.status}: ${await res.text()}`);
   }
   const release = await res.json();
   if (!release.tag_name) {
-    throw new Error('Latest release has no tag_name');
+    throw new Error('Release has no tag_name');
   }
   return release;
 }
