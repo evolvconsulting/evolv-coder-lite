@@ -26,7 +26,9 @@ on:
         default: 'false'
 
 permissions:
-  contents: read
+  # `contents: write` is required by the "Create GitHub Release" step below
+  # (gh release create/edit). The publish steps themselves only read.
+  contents: write
   # NOTE: id-token: write is needed only for `npm publish --provenance`.
   # Provenance was removed because the npm account's 2FA-on-writes setting
   # blocked it (EOTP from GitHub Actions). Sibling @evolvconsulting packages
@@ -125,3 +127,60 @@ jobs:
         env:
           NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
         run: npm publish --access public
+
+      # ── GitHub Release ─────────────────────────────────────────────────
+      # On a successful version-tag push, publish a GitHub Release so the tag
+      # carries human-readable notes alongside the npm publish. Body source,
+      # in order of preference:
+      #   1. the matching `## [X.Y.Z]` section of src/CHANGELOG.md, if present
+      #   2. the annotated tag's own message
+      # Idempotent: edits the release if one already exists for the tag, so a
+      # re-run (or a manually pre-created release) never fails the workflow.
+      - name: Create GitHub Release
+        if: github.event_name == 'push'
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          TAG="${GITHUB_REF#refs/tags/}"
+          VERSION="${TAG#v}"
+          NOTES_FILE="$(mktemp)"
+
+          # 1) Try the matching CHANGELOG section: everything between the
+          #    `## [VERSION]` heading and the next `## [` heading.
+          if [ -f src/CHANGELOG.md ]; then
+            awk -v v="$VERSION" '
+              $0 ~ "^## \\[" v "\\]" { capture = 1; next }
+              capture && /^## \[/   { exit }
+              capture               { print }
+            ' src/CHANGELOG.md > "$NOTES_FILE"
+          fi
+
+          # 2) Fall back to the annotated tag message.
+          if [ -s "$NOTES_FILE" ]; then
+            echo "Release notes: src/CHANGELOG.md section [$VERSION]"
+          else
+            echo "No CHANGELOG section for $VERSION — using tag annotation"
+            git tag -l --format='%(contents)' "$TAG" > "$NOTES_FILE"
+          fi
+
+          # 3) Rebrand the notes. src/CHANGELOG.md is content-preserved by the
+          #    bake (it keeps upstream's gsd-core / @opengsd / /gsd: wording), so
+          #    rewrite through the rebrand map before publishing the release.
+          #    A non-content-preserved rel ('release-notes.md') makes the rules
+          #    apply; on already-eCL text (e.g. a tag annotation) it is a no-op.
+          node -e '
+            import("./overlay/rebrand-map.mjs").then((m) => {
+              const fs = require("fs");
+              const f = process.argv[1];
+              const out = m.rebrandContent(fs.readFileSync(f, "utf8"), "release-notes.md");
+              fs.writeFileSync(f, out.text);
+            }).catch((e) => { console.error(e); process.exit(1); });
+          ' "$NOTES_FILE"
+
+          if gh release view "$TAG" >/dev/null 2>&1; then
+            gh release edit "$TAG" --title "eCL $TAG" --notes-file "$NOTES_FILE"
+            echo "Updated existing GitHub Release $TAG"
+          else
+            gh release create "$TAG" --title "eCL $TAG" --notes-file "$NOTES_FILE" --verify-tag
+            echo "Created GitHub Release $TAG"
+          fi
