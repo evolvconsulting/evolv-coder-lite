@@ -2,6 +2,8 @@
 name: ecl:autonomous
 description: Run all remaining phases autonomously — discuss→plan→execute per phase
 argument-hint: "[--from N] [--to N] [--only N] [--interactive]"
+context: fork
+effort: xhigh
 allowed-tools:
   - Read
   - Write

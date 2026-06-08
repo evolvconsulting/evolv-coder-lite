@@ -213,7 +213,7 @@ describe('workstream-name-policy: hostile names are slugified or rejected', () =
       // of toWorkstreamSlug is a name the rest of the system already trusts.
       assert.match(slug, /^[a-z0-9][a-z0-9._-]*$|^$/, `slug shape for ${c.label}: ${JSON.stringify(slug)}`);
       // And it never contains shell metacharacters or path separators.
-      assert.doesNotMatch(slug, /[$`;&|<>\\\/]/, `slug must not echo shell metacharacters: ${JSON.stringify(slug)}`);
+      assert.doesNotMatch(slug, /[$`;&|<>\\/]/, `slug must not echo shell metacharacters: ${JSON.stringify(slug)}`);
     });
   }
 });
@@ -643,7 +643,7 @@ describe('validatePath: hostile path values are rejected before write', () => {
     assert.strictEqual(r.safe, false,
       'a symlink whose target is outside the base must fail containment');
     // Cleanup the outside dir; the link itself is cleaned by cleanup(tmpDir).
-    fs.rmSync(outside, { recursive: true, force: true, maxRetries: 20, retryDelay: 250 });
+    cleanup(outside);
   });
 });
 

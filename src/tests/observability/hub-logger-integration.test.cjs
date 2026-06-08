@@ -22,13 +22,12 @@ const os = require('os');
 
 const {
   createHub,
-  ERROR_KINDS,
 } = require('../../evolv-coder-lite/bin/lib/command-routing-hub.cjs');
 
 const {
   createDefaultLogger,
-  createNoOpLogger,
 } = require('../../evolv-coder-lite/bin/lib/observability/logger.cjs');
+const { cleanup } = require('../helpers.cjs');
 
 // ─── helpers ─────────────────────────────────────────────────────────────────
 
@@ -346,7 +345,7 @@ describe('Hub + createDefaultLogger — end-to-end', () => {
   afterEach(() => {
     if (savedAudit === undefined) delete process.env.ECL_AUDIT; else process.env.ECL_AUDIT = savedAudit;
     if (savedAuditArgs === undefined) delete process.env.ECL_AUDIT_ARGS; else process.env.ECL_AUDIT_ARGS = savedAuditArgs;
-    fs.rmSync(tmpDir, { recursive: true, force: true });
+    cleanup(tmpDir);
   });
 
   test('silent on success with default logger', () => {

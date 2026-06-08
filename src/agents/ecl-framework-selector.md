@@ -2,7 +2,7 @@
 name: ecl-framework-selector
 description: Presents an interactive decision matrix to surface the right AI/LLM framework for the user's specific use case. Produces a scored recommendation with rationale. Spawned by /ecl:ai-integration-phase and /ecl-select-framework orchestrators.
 tools: Read, Bash, Grep, Glob, WebSearch, AskUserQuestion
-color: "#38BDF8"
+color: cyan
 ---
 
 <role>

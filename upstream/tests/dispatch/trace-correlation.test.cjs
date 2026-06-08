@@ -20,8 +20,9 @@ const fs = require('fs');
 const path = require('path');
 const os = require('os');
 
-const { createHub } = require('../../get-shit-done/bin/lib/command-routing-hub.cjs');
-const { createDefaultLogger } = require('../../get-shit-done/bin/lib/observability/logger.cjs');
+const { createHub } = require('../../gsd-core/bin/lib/command-routing-hub.cjs');
+const { createDefaultLogger } = require('../../gsd-core/bin/lib/observability/logger.cjs');
+const { cleanup } = require('../helpers.cjs');
 
 // ─── Test fixture setup ───────────────────────────────────────────────────────
 
@@ -99,7 +100,7 @@ describe('trace correlation — end-to-end parentTraceId propagation', () => {
       process.env.GSD_AUDIT = savedAudit;
     }
     // Clean up the temp directory
-    fs.rmSync(tmpDir, { recursive: true, force: true });
+    cleanup(tmpDir);
   });
 
   // ── Assertions ────────────────────────────────────────────────────────────
@@ -180,7 +181,7 @@ describe('trace correlation — end-to-end parentTraceId propagation', () => {
       const allEvents = readJsonl(isolatedAuditPath);
       assert.equal(allEvents.length, 3, 'must have 3 events total (root + valid child + invalid child)');
 
-      const [root, validChild, invalidChild] = allEvents;
+      const [, validChild, invalidChild] = allEvents;
 
       // Valid child carries the correct parentTraceId
       assert.strictEqual(validChild.parentTraceId, rootTraceId,
@@ -210,7 +211,7 @@ describe('trace correlation — end-to-end parentTraceId propagation', () => {
       } else {
         process.env.GSD_AUDIT = isolatedSavedAudit;
       }
-      fs.rmSync(isolatedTmp, { recursive: true, force: true });
+      cleanup(isolatedTmp);
     }
   });
 

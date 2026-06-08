@@ -20,11 +20,33 @@
 // See docs/TESTING-SUITES.md for full grouping policy.
 'use strict';
 
-const { readdirSync } = require('fs');
+const { readdirSync, existsSync } = require('fs');
 const { join } = require('path');
 const { execFileSync } = require('child_process');
+const { ExitError, runMain } = require('./lib/cli-exit.cjs');
 
 const SUITES = ['all', 'unit', 'integration', 'install', 'security', 'slow'];
+
+// ADR-457 build-at-publish: evolv-coder-lite/bin/lib/*.cjs is generated from
+// src/*.cts and gitignored, so on a clean checkout (fresh CI, before any build)
+// the artifact is absent — yet test files require it. This is the universal
+// chokepoint every test path funnels through (test:unit, --files-from, direct
+// invocation), so build the artifact here if missing. It is a no-op once built
+// (dev, pretest, a prior run in the same job), which keeps the harness test's
+// spawned invocations side-effect-free. Paths resolve from __dirname (not cwd),
+// so it works regardless of ECL_TEST_DIR / temp-dir cwd. NOTE: the sentinel is
+// the pilot module; revisit (or switch to an unconditional quiet build) as more
+// modules migrate into src/.
+function ensureBuiltArtifacts() {
+  const root = join(__dirname, '..');
+  const sentinel = join(root, 'evolv-coder-lite', 'bin', 'lib', 'semver-compare.cjs');
+  if (existsSync(sentinel)) return;
+  const tscBin = require.resolve('typescript/bin/tsc');
+  execFileSync(process.execPath, [tscBin, '-p', join(root, 'tsconfig.build.json')], {
+    cwd: root,
+    stdio: 'inherit',
+  });
+}
 const MARKED_SUITES = ['integration', 'install', 'security', 'slow'];
 
 function parseArgs(argv) {
@@ -140,7 +162,15 @@ function selectExplicitFiles(allFiles, filesValue, filesFrom) {
   const selected = [];
   const missing = [];
   for (const file of requested) {
-    if (available.has(file)) {
+    // If the token is a bare suite name (e.g. "unit" written by ci-test-scope
+    // as the #408 fallback sentinel), delegate to the existing suite resolver
+    // rather than treating it as a filename. This prevents the
+    // "requested test file(s) not found: unit" crash (#641).
+    if (SUITES.includes(file)) {
+      for (const f of selectFiles(allFiles, file)) {
+        selected.push(f);
+      }
+    } else if (available.has(file)) {
       selected.push(file);
     } else {
       missing.push(file);
@@ -160,13 +190,13 @@ function main() {
   if (parsed.error) {
     console.error(`run-tests: ${parsed.error}`);
     console.error(`Valid suites: ${SUITES.join(', ')}`);
-    process.exit(2);
+    throw new ExitError(2);
   }
   const suite = parsed.suite;
   if (suite !== null && !SUITES.includes(suite)) {
     console.error(`run-tests: unknown suite "${suite}"`);
     console.error(`Valid suites: ${SUITES.join(', ')}`);
-    process.exit(2);
+    throw new ExitError(2);
   }
 
   const testDir = process.env.ECL_TEST_DIR
@@ -179,7 +209,7 @@ function main() {
 
   if (allFiles.length === 0) {
     console.error(`No test files found in ${testDir}`);
-    process.exit(1);
+    throw new ExitError(1);
   }
 
   let selectedNames;
@@ -187,7 +217,7 @@ function main() {
     const explicit = selectExplicitFiles(allFiles, parsed.files, parsed.filesFrom);
     if (explicit.error) {
       console.error(`run-tests: ${explicit.error}`);
-      process.exit(2);
+      throw new ExitError(2);
     }
     selectedNames = explicit.files;
   } else {
@@ -200,8 +230,11 @@ function main() {
     // adversarial tests land) don't gate CI. CI consumers wanting strictness
     // can grep stderr for "no tests in suite".
     console.error(`run-tests: no tests in suite "${suite || 'all'}"`);
-    process.exit(0);
+    return 0;
   }
+
+  // Build the gitignored bin/lib artifact if absent, before any test requires it.
+  ensureBuiltArtifacts();
 
   // Log selected files to stderr for CI / harness-test visibility.
   // node:test default reporter doesn't echo filenames, so this gives
@@ -272,11 +305,11 @@ function main() {
       if (firstFailureExit === 0) firstFailureExit = code;
     }
   }
-  if (firstFailureExit !== 0) process.exit(firstFailureExit);
+  if (firstFailureExit !== 0) return firstFailureExit;
 }
 
 if (require.main === module) {
-  main();
+  runMain(main);
 }
 
 module.exports = { suiteOf };

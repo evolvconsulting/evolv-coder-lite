@@ -8,6 +8,8 @@ const path = require('path');
 const os = require('os');
 const { spawn } = require('child_process');
 
+const { updateCacheFileName } = require('../evolv-coder-lite/bin/lib/package-identity.cjs');
+
 const homeDir = os.homedir();
 const cwd = process.cwd();
 
@@ -33,7 +35,7 @@ const projectConfigDir = detectConfigDir(cwd);
 // resolution mismatches where check-update writes to one runtime's cache
 // but statusline reads from another (#1421).
 const cacheDir = path.join(homeDir, '.cache', 'ecl');
-const cacheFile = path.join(cacheDir, 'ecl-update-check.json');
+const cacheFile = path.join(cacheDir, updateCacheFileName);
 
 // VERSION file locations (check project first, then global)
 const projectVersionFile = path.join(projectConfigDir, 'evolv-coder-lite', 'VERSION');

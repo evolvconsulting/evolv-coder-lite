@@ -29,6 +29,8 @@ const {
   resolveProfile,
 } = require('../evolv-coder-lite/bin/lib/install-profiles.cjs');
 
+const { cleanup } = require('./helpers.cjs');
+
 const manifest = loadSkillsManifest();
 const resolvedProfileFull = resolveProfile({ modes: [], manifest });
 
@@ -136,9 +138,7 @@ describe('Qwen Code: installRuntimeArtifacts', () => {
   });
 
   afterEach(() => {
-    if (fs.existsSync(tmpDir)) {
-      fs.rmSync(tmpDir, { recursive: true });
-    }
+    cleanup(tmpDir);
   });
 
   test('creates skills/ecl-xxx/SKILL.md directory structure', () => {

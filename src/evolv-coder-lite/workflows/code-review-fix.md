@@ -179,7 +179,7 @@ If REVIEW.md contains a `files_reviewed_list` frontmatter field, use that as the
 </step>
 
 <step name="spawn_fixer">
-Spawn the ecl-code-fixer agent with config:
+Spawn the ecl-code-fixer agent with config (runs in a subagent — no output until it returns, ~1–5 min; expected, not a freeze):
 
 ```bash
 # Build config for agent
@@ -271,7 +271,7 @@ if [ "$AUTO_MODE" = "true" ]; then
       done
     fi
     
-    # Spawn ecl-code-reviewer agent to re-review
+    # Spawn ecl-code-reviewer agent to re-review (runs in a subagent — no output until it returns, ~1–5 min; expected, not a freeze)
     # (This overwrites REVIEW_PATH with latest review state)
     Agent(subagent_type="ecl-code-reviewer", prompt="
 <config>
@@ -304,7 +304,7 @@ Do NOT commit the output — the orchestrator handles that.
       break
     fi
     
-    # Still has issues — spawn fixer again
+    # Still has issues — spawn fixer again (runs in a subagent — no output until it returns, ~1–5 min; expected, not a freeze)
     echo "Issues remain. Applying fixes for iteration ${ITERATION}..."
     
     Agent(subagent_type="ecl-code-fixer", prompt="

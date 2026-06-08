@@ -15,6 +15,7 @@ const { test, describe, beforeEach, afterEach } = require('node:test');
 const assert = require('node:assert/strict');
 const fs = require('fs');
 const path = require('path');
+const { cleanup } = require('./helpers.cjs');
 
 const repoRoot = path.resolve(__dirname, '..');
 const commandPath = path.join(repoRoot, 'commands', 'ecl', 'milestone-summary.md');
@@ -162,9 +163,6 @@ describe('milestone-summary command structure', () => {
 });
 
 describe('milestone-summary artifact path resolution', () => {
-  const { createTempProject, cleanup } = require('./helpers.cjs');
-  let tmpDir;
-
   test('archived milestone paths point to milestones/ directory', () => {
     const content = fs.readFileSync(workflowPath, 'utf-8');
     // Archived roadmap path should be under milestones/
@@ -206,7 +204,7 @@ describe('milestone-summary fixture-based artifact discovery', () => {
   });
 
   afterEach(() => {
-    if (tmpDir) fs.rmSync(tmpDir, { recursive: true, force: true });
+    cleanup(tmpDir);
   });
 
   test('discovers artifacts in archived milestone structure', () => {
@@ -325,7 +323,7 @@ describe('milestone-summary git stats resilience', () => {
 // ─────────────────────────────────────────────────────────────────────────────
 
 describe('audit.cjs module (#2158)', () => {
-  const { createTempProject: createTP, cleanup: cleanTP, runGsdTools: run } = require('./helpers.cjs');
+  const { createTempProject: createTP, cleanup: cleanTP } = require('./helpers.cjs');
   let tmpDir;
 
   beforeEach(() => { tmpDir = createTP('audit-test'); });

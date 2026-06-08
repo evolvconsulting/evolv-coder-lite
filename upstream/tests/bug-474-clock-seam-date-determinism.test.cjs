@@ -14,7 +14,7 @@
  *      the clock seam (in-process, using makeFakeClock — no subprocess needed).
  */
 
-const { describe, it, test, before, after } = require('node:test');
+const { describe, test, before, after } = require('node:test');
 const assert = require('node:assert/strict');
 const fs = require('fs');
 const path = require('path');
@@ -108,7 +108,7 @@ describe('bug-474: state date-stamping is pinned by GSD_NOW_MS', () => {
  */
 
 describe('bug-474: realClock GSD_NOW_MS invalid-input hardening', () => {
-  const realClock = require('../get-shit-done/bin/lib/clock.cjs').realClock;
+  const realClock = require('../gsd-core/bin/lib/clock.cjs').realClock;
 
   // Save and restore env so these tests cannot bleed into neighbouring tests.
   let savedTestMode;
@@ -224,11 +224,11 @@ describe('bug-474: installer-migrations lock-loop timeout is deterministic via c
   test('acquireInstallMigrationLock timeout path fires deterministically via makeFakeClock', (t) => {
     // AAA — Arrange
     const os = require('os');
-    const { acquireInstallMigrationLock } = require('../get-shit-done/bin/lib/installer-migrations.cjs');
+    const { acquireInstallMigrationLock } = require('../gsd-core/bin/lib/installer-migrations.cjs');
     const configDir = fs.mkdtempSync(path.join(os.tmpdir(), 'gsd-474-lock-'));
 
     t.after(() => {
-      fs.rmSync(configDir, { recursive: true, force: true });
+      cleanup(configDir);
     });
 
     const LOCK_NAME = 'gsd-install-migration.lock';

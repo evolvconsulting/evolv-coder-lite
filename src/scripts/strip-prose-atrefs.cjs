@@ -30,7 +30,7 @@ const DRY_RUN      = process.argv.includes('--dry-run');
 const ROOT         = path.join(__dirname, '..');
 const COMMANDS_DIR = path.join(ROOT, 'commands', 'ecl');
 
-const AT_PATH_PATTERN = /@(?:~|\$HOME)\/.+?evolv-coder-lite\/[^\s`\)]+/;
+const AT_PATH_PATTERN = /@(?:~|\$HOME)\/.+?evolv-coder-lite\/[^\s`)]+/;
 const mkAtRe = () => new RegExp(AT_PATH_PATTERN.source, 'g');
 
 function transformLine(line) {

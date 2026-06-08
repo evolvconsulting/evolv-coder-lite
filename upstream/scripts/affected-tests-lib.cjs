@@ -4,6 +4,7 @@ const { execFileSync } = require('node:child_process');
 const { readdirSync, readFileSync, existsSync } = require('node:fs');
 const path = require('node:path');
 
+const { ExitError } = require('./lib/cli-exit.cjs');
 const { suiteOf } = require('./run-tests.cjs');
 
 const CRITICAL_PATHS = [
@@ -25,7 +26,7 @@ const PR_FULL_SUITES = ['unit', 'integration', 'security'];
 // Relative to repoRoot. We walk these to discover SUT-internal requires so that
 // a change to a deep helper propagates through re-export chains to tests.
 const SOURCE_TREES = [
-  'get-shit-done/bin/lib',
+  'gsd-core/bin/lib',
   'bin/lib',
   'bin',
   'scripts',
@@ -409,7 +410,7 @@ function runNodeTestFiles(repoRoot, files) {
       if (firstFailure === 0) firstFailure = code;
     }
   }
-  if (firstFailure !== 0) process.exit(firstFailure);
+  if (firstFailure !== 0) throw new ExitError(firstFailure);
 }
 
 function runSuite(repoRoot, suite) {
@@ -442,7 +443,7 @@ function resolveBaseRef() {
  * security), so every concrete match that pickAffectedTests put into `selected`
  * belongs to one of those suites and will be exercised by running all three.
  */
-function resolveRunPlan({ changedFiles, selected, widenRequired, criticalPath, noChanges }) {
+function resolveRunPlan({ changedFiles: _changedFiles, selected, widenRequired, criticalPath, noChanges }) {
   if (noChanges) {
     return { mode: 'suite', suite: 'unit' };
   }

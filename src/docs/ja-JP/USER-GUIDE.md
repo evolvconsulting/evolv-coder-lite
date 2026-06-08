@@ -1,29 +1,90 @@
 # eCL ユーザーガイド
 
-ワークフロー、トラブルシューティング、設定の詳細なリファレンスです。クイックスタートの設定については、[README](../README.md) をご覧ください。
+eCL Core のナラティブ形式の補足ガイドです。まずここで全体像を把握し、各専用ドキュメントへのリンクをたどってください。
+
+> **eCL Core のドキュメントは [Diataxis](https://diataxis.fr) の体系で整理されています。**
+> 目的別にブラウズ: [チュートリアル](README.md#tutorials) · [ハウツーガイド](README.md#how-to-guides) · [リファレンス](README.md#reference) · [解説](README.md#explanation) · [ドキュメント索引](README.md)
 
 ---
 
 ## 目次
 
-- [ワークフロー図](#ワークフロー図)
-- [UI デザインコントラクト](#ui-デザインコントラクト)
-- [バックログとスレッド](#バックログとスレッド)
-- [ワークストリーム](#ワークストリーム)
-- [セキュリティ](#セキュリティ)
-- [コマンドリファレンス](#コマンドリファレンス)
-- [設定リファレンス](#設定リファレンス)
-- [使用例](#使用例)
-- [トラブルシューティング](#トラブルシューティング)
-- [リカバリークイックリファレンス](#リカバリークイックリファレンス)
+- [スラッシュコマンドの形式](#slash-command-forms-hyphen-vs-colon)
+- [名前空間ルーティング入門](#namespace-routing-primer-gsdnamespace-v140)
+- [プロジェクトライフサイクル概要](#project-lifecycle-overview)
+- [ワークフロー図](#workflow-diagrams)
+- [UI デザインコントラクト](#ui-design-contract)
+- [スパイクとスケッチ](#spiking--sketching)
+- [バックログとスレッド](#backlog--threads)
+- [ワークストリームとワークスペース](#workstreams--workspaces)
+- [セキュリティ](#security)
+- [使用例](#usage-examples)
+- [トラブルシューティング](#troubleshooting)
+- [リカバリークイックリファレンス](#recovery-quick-reference)
+- [プロジェクトファイル構造](#project-file-structure)
+- [関連](#related)
+
+GitHub / Linear / Jira のイシューから eCL を直接操作する方法については、
+[Issue-driven orchestration](issue-driven-orchestration.md) ガイドを参照してください。
+トラッカーのイシューを、既存の eCL プリミティブを用いた workspace → discuss → plan →
+execute → verify → review → ship ループにマッピングするレシピです。
 
 ---
 
-## ワークフロー図
+## スラッシュコマンドの形式（ハイフン形式 vs コロン形式） {#slash-command-forms-hyphen-vs-colon}
+
+eCL はサポートされているすべてのランタイムに **同一のスキルセット** を提供しますが、スラッシュ形式には 2 種類の表記が存在します。
+
+- **ハイフン形式** — `/ecl-command-name` — Claude Code、Copilot、OpenCode、Kilo、Cursor、Windsurf、Augment、Antigravity、Trae で使用されます。
+- **コロン形式** — `/ecl:command-name` — **Gemini CLI 専用**。Gemini はすべてのプラグインコマンドをプラグイン ID 配下に名前空間分けするため、インストール時に `--gemini` フラグを指定するとコマンドディレクトリ内の本文参照とコマンドファイルがすべてコロン形式に書き換えられます。
+
+どちらを選ぶ必要はありません — インストーラーが対象の各ランタイムのコマンドディレクトリに正しい形式を書き込みます。Gemini 端末でウォークスルーを実行する場合は、スラッシュコマンドを読む際に `ecl` 後のハイフンをコロンに置き換えてください。
+
+## 名前空間ルーティング入門（`ecl:<namespace>`、v1.40） {#namespace-routing-primer-gsdnamespace-v140}
+
+v1.40 では、階層的ルーティングへのファーストステージエントリーポイントとして **6 つの名前空間メタスキル** が追加されました。これにより、スキル一覧のトークンコストを低く抑えながら（86 スキルのフラットな列挙の約 2,150 トークンに対し、6 つのルーターで約 120 トークン）、各具体的なサブスキルは直接呼び出し可能なままです。各名前空間ルーターの本文には、ユーザーの意図を正しい具体的サブスキルにマッピングするルーティングテーブルが含まれています。
+
+| 名前空間 | ルーター | ルーティング先 |
+|-----------|--------|-----------|
+| フェーズパイプライン | `/ecl-workflow` | discuss / plan / execute / verify / phase / progress |
+| プロジェクトライフサイクル | `/ecl-project` | マイルストーン、監査、サマリー |
+| 品質ゲート | `/ecl-quality` | コードレビュー、デバッグ、監査、セキュリティ、評価、UI |
+| コードベースインテリジェンス | `/ecl-context` | マップ、グラフ化、ドキュメント、学習内容 |
+| 管理 | `/ecl-manage` | 設定、ワークスペース、ワークストリーム、スレッド、更新、ship、受信トレイ |
+| 探索とキャプチャ | `/ecl-ideate` | 探索、スケッチ、スパイク、仕様、キャプチャ |
+
+名前空間ルーターを自分でタイプする必要はほぼありません。その価値はモデルが適切なサブスキルを見つけるために使うルーティングレイヤーにあります — システムプロンプトが 86 エントリではなく 6 エントリを列挙できるようにするために存在しています。具体的なコマンドがわかっている場合（例: `/ecl-plan-phase`）は、直接呼び出してください。
+
+---
+
+## プロジェクトライフサイクル概要 {#project-lifecycle-overview}
+
+eCL のコアループは **discuss → plan → execute → verify → ship** であり、フェーズごとに繰り返されます。例示出力、作成されるファイル、使用されるフラグを含むステップバイステップのウォークスルーは専用チュートリアルに記載されています。
+
+[最初のプロジェクト](tutorials/your-first-project.md) を参照してください。
+
+新しいマイルストーンを開始する前に既存のコードベースをオンボーディングする方法については、[既存のコードベースのオンボーディング](tutorials/onboarding-an-existing-codebase.md) を参照してください。
+
+**主要フラグ一覧:**
+
+| フラグ | コマンド | 使用場面 |
+| ---- | ------- | ----------- |
+| `--auto` | `/ecl-new-project` | インタラクティブな質問をスキップし、PRD ファイルから取り込む |
+| `--research` | `/ecl-quick` | アドホックタスクにリサーチエージェントを追加する |
+| `--validate` | `/ecl-quick` | プランチェックと実行後の検証を追加する |
+| `--chain` | `/ecl-discuss-phase` | discuss → plan → execute を停止なしで自動チェーンする |
+| `--skip-research` | `/ecl-plan-phase` | ドメインが既知の場合にリサーチエージェントをスキップする |
+| `--draft` | `/ecl-ship` | レビュー準備完了ではなくドラフト PR を作成する |
+
+すべてのフラグを含む完全なコマンドリファレンスは [`docs/COMMANDS.md`](COMMANDS.md) を、設定オプション（モデルプロファイル、ワークフローエージェント、git ブランチ戦略）は [`docs/CONFIGURATION.md`](CONFIGURATION.md) を参照してください。
+
+---
+
+## ワークフロー図 {#workflow-diagrams}
 
 ### プロジェクト全体のライフサイクル
 
-```
+```text
   ┌──────────────────────────────────────────────────┐
   │                   NEW PROJECT                    │
   │  /ecl-new-project                                │
@@ -75,9 +136,9 @@
                └──────────────────────┘
 ```
 
-### プランニングエージェントの連携
+### プランニングエージェントの協調
 
-```
+```text
   /ecl-plan-phase N
          │
          ├── Phase Researcher (x4 parallel)
@@ -111,21 +172,17 @@
 
 ### バリデーションアーキテクチャ（Nyquist レイヤー）
 
-plan-phase のリサーチ時に、eCL はコードが書かれる前に各フェーズ要件に対する自動テストカバレッジをマッピングします。これにより、Claude のエグゼキューターがタスクをコミットした際に、数秒以内で検証できるフィードバックメカニズムが既に存在することが保証されます。
+プランフェーズのリサーチ中、eCL はコードが書かれる前に各フェーズ要件に対して自動テストカバレッジをマッピングします。リサーチャーは既存のテストインフラを検出し、各要件を特定のテストコマンドにマッピングし、実装開始前に作成しなければならないテスト足場（Wave 0 タスク）を識別します。プランチェッカーはこれを 8 番目の検証ディメンションとして強制します: 自動検証コマンドが不足しているタスクを含むプランは承認されません。
 
-リサーチャーは既存のテストインフラを検出し、各要件を特定のテストコマンドにマッピングし、実装開始前に作成が必要なテストスキャフォールディングを特定します（Wave 0 タスク）。
+**出力:** `{phase}-VALIDATION.md` — フェーズのフィードバックコントラクト。
 
-プランチェッカーはこれを8番目の検証次元として強制します：自動検証コマンドが不足しているタスクを含むプランは承認されません。
+**無効化:** テストインフラが焦点でないラピッドプロトタイピングフェーズでは、`/ecl-settings` で `workflow.nyquist_validation: false` を設定してください。
 
-**出力：** `{phase}-VALIDATION.md` -- フェーズのフィードバックコントラクト。
+### 遡及バリデーション（`/ecl-validate-phase`）
 
-**無効化：** テストインフラが重視されないラピッドプロトタイピングフェーズでは、`/ecl-settings` で `workflow.nyquist_validation: false` を設定してください。
+Nyquist バリデーションが存在する前に実行されたフェーズ、またはテストスイートのみを持つ既存のコードベースに対し、カバレッジのギャップを遡及的に監査して補完します。
 
-### 遡及バリデーション (`/ecl-validate-phase`)
-
-Nyquist バリデーションが存在する前に実行されたフェーズ、または従来のテストスイートのみを持つ既存コードベースに対して、遡及的に監査しカバレッジのギャップを埋めます：
-
-```
+```text
   /ecl-validate-phase N
          |
          +-- Detect state (VALIDATION.md exists? SUMMARY.md exists?)
@@ -144,203 +201,31 @@ Nyquist バリデーションが存在する前に実行されたフェーズ、
                +-- PARTIAL -> some gaps escalated to manual-only
 ```
 
-オーディターは実装コードを変更しません — テストファイルと VALIDATION.md のみを変更します。テストが実装のバグを発見した場合、対処が必要なエスカレーションとしてフラグが立てられます。
+オーディターは実装コードを変更しません — テストファイルと VALIDATION.md のみです。テストが実装バグを検出した場合、対応すべきエスカレーションとして報告されます。
 
-**使用タイミング：** Nyquist が有効化される前にプランニングされたフェーズを実行した後、または `/ecl-audit-milestone` が Nyquist コンプライアンスのギャップを検出した後。
+### 前提条件ディスカッションモード
 
-### 前提確認ディスカッションモード
+デフォルトでは、`/ecl-discuss-phase` は実装の好みに関するオープンエンドな質問をします。前提条件モードではこれが逆転します: eCL がまずコードベースを読み込み、フェーズをどのように構築するかについての構造化された前提条件を提示し、修正点のみを尋ねます。
 
-デフォルトでは、`/ecl-discuss-phase` は実装の好みについてオープンエンドな質問を行います。前提確認モードではこれを反転させます：eCL がまずコードベースを読み込み、フェーズの構築方法に関する構造化された前提を提示し、修正が必要な箇所のみを確認します。
+**有効化:** `/ecl-settings` 経由で `workflow.discuss_mode` を `'assumptions'` に設定してください。
 
-**有効化：** `/ecl-settings` で `workflow.discuss_mode` を `'assumptions'` に設定します。
+詳細なディスカッションモードのリファレンスは [docs/workflow-discuss-mode.md](workflow-discuss-mode.md) を参照してください。
 
-**動作の仕組み：**
-1. PROJECT.md、コードベースマッピング、既存の規約を読み込む
-2. 前提の構造化リストを生成（技術選定、パターン、ファイル配置）
-3. 前提を提示し、確認・修正・補足を求める
-4. 確認された前提から CONTEXT.md を作成
+### 意思決定カバレッジゲート
 
-**使用タイミング：**
-- コードベースを熟知している経験豊富な開発者
-- オープンエンドな質問が作業を遅らせる高速イテレーション
-- パターンが確立されていて予測可能なプロジェクト
+ディスカッションフェーズは実装上の意思決定を CONTEXT.md の `<decisions>` ブロック内に番号付き箇条書き（`- **D-01:** …`）として記録します。2 つのゲートによりこれらの意思決定がプランおよびシップされたコードに確実に反映されます。
 
-ディスカッションモードの完全なリファレンスは [docs/workflow-discuss-mode.md](../workflow-discuss-mode.md) をご覧ください。
+**プランフェーズ変換ゲート（ブロッキング）。** プランニング後、eCL はすべての追跡可能な意思決定が少なくとも 1 つのプランの `must_haves`、`truths`、または本文に含まれるまでフェーズ計画済みのマークを拒否します。
 
----
+**検証フェーズバリデーションゲート（非ブロッキング）。** 検証中、eCL はプラン、SUMMARY.md、変更されたファイル、および直近のコミットメッセージで各追跡可能な意思決定を検索します。見落としは警告セクションとして VERIFICATION.md に記録されますが、検証ステータスは変更されません。
 
-## UI デザインコントラクト
+**意思決定のオプトアウト。** `<decisions>` 内の `### Claude's Discretion` 見出し配下に移動するか、タグを付けてください: `- **D-08 [informational]:** …`、`- **D-09 [folded]:** …`、`- **D-10 [deferred]:** …`。
 
-### 背景
+**ゲートの無効化。** `.planning/config.json`（または `/ecl-settings` 経由）で `workflow.context_coverage_gate: false` を設定してください。デフォルトは `true` です。
 
-AI 生成のフロントエンドの見た目が一貫しないのは、Claude Code の UI 能力が低いからではなく、実行前にデザインコントラクトが存在しなかったためです。共通のスペーシングスケール、カラーコントラクト、コピーライティング基準なしに構築された5つのコンポーネントは、5つのわずかに異なるビジュアル上の判断を生み出します。
+### 実行ウェーブの協調
 
-`/ecl-ui-phase` はプランニング前にデザインコントラクトを確定させます。`/ecl-ui-review` は実行後に結果を監査します。
-
-### コマンド
-
-| コマンド | 説明 |
-|---------|-------------|
-| `/ecl-ui-phase [N]` | フロントエンドフェーズ用の UI-SPEC.md デザインコントラクトを生成 |
-| `/ecl-ui-review [N]` | 実装済み UI の遡及的6ピラービジュアル監査 |
-
-### ワークフロー：`/ecl-ui-phase`
-
-**実行タイミング：** `/ecl-discuss-phase` の後、`/ecl-plan-phase` の前 — フロントエンド/UI 作業を含むフェーズで使用。
-
-**フロー：**
-1. CONTEXT.md、RESEARCH.md、REQUIREMENTS.md を読み込んで既存の決定事項を確認
-2. デザインシステムの状態を検出（shadcn components.json、Tailwind 設定、既存トークン）
-3. shadcn 初期化ゲート — React/Next.js/Vite プロジェクトで未設定の場合、初期化を提案
-4. 未回答のデザインコントラクト質問のみを確認（スペーシング、タイポグラフィ、カラー、コピーライティング、レジストリの安全性）
-5. `{phase}-UI-SPEC.md` をフェーズディレクトリに書き出す
-6. 6つの次元で検証（コピーライティング、ビジュアル、カラー、タイポグラフィ、スペーシング、レジストリの安全性）
-7. BLOCKED の場合はリビジョンループ（最大2回）
-
-**出力：** `.planning/phases/{phase-dir}/` 内の `{padded_phase}-UI-SPEC.md`
-
-### ワークフロー：`/ecl-ui-review`
-
-**実行タイミング：** `/ecl-execute-phase` または `/ecl-verify-work` の後 — フロントエンドコードを含むプロジェクトで使用。
-
-**スタンドアロン：** eCL 管理プロジェクトに限らず、あらゆるプロジェクトで動作します。UI-SPEC.md が存在しない場合は、抽象的な6ピラー基準に基づいて監査します。
-
-**6ピラー（各1-4点）：**
-1. コピーライティング — CTA ラベル、空状態、エラー状態
-2. ビジュアル — フォーカルポイント、ビジュアルヒエラルキー、アイコンのアクセシビリティ
-3. カラー — アクセントカラーの使用規律、60/30/10 準拠
-4. タイポグラフィ — フォントサイズ/ウェイト制約の遵守
-5. スペーシング — グリッド整列、トークンの一貫性
-6. エクスペリエンスデザイン — ローディング/エラー/空状態のカバレッジ
-
-**出力：** フェーズディレクトリ内の `{padded_phase}-UI-REVIEW.md`（スコアと優先度の高い修正点トップ3）。
-
-### 設定
-
-| 設定 | デフォルト | 説明 |
-|---------|---------|-------------|
-| `workflow.ui_phase` | `true` | フロントエンドフェーズ用の UI デザインコントラクトを生成 |
-| `workflow.ui_safety_gate` | `true` | plan-phase 時にフロントエンドフェーズで /ecl-ui-phase の実行を促す |
-
-どちらも「未設定＝有効」パターンに従います。`/ecl-settings` から無効化できます。
-
-### shadcn の初期化
-
-React/Next.js/Vite プロジェクトの場合、UI リサーチャーは `components.json` が見つからない場合に shadcn の初期化を提案します。フローは以下の通りです：
-
-1. `ui.shadcn.com/create` にアクセスしてプリセットを設定
-2. プリセット文字列をコピー
-3. `npx shadcn init --preset {paste}` を実行
-4. プリセットはデザインシステム全体をエンコード — カラー、ボーダーラディウス、フォント
-
-プリセット文字列は eCL の第一級プランニングアーティファクトとなり、フェーズやマイルストーンをまたいで再現可能です。
-
-### レジストリの安全性ゲート
-
-サードパーティの shadcn レジストリは任意のコードを注入できます。安全性ゲートでは以下が必要です：
-- `npx shadcn view {component}` — インストール前に確認
-- `npx shadcn diff {component}` — 公式との比較
-
-`workflow.ui_safety_gate` 設定トグルで制御します。
-
-### スクリーンショットの保存
-
-`/ecl-ui-review` は Playwright CLI を使用してスクリーンショットを `.planning/ui-reviews/` にキャプチャします。バイナリファイルが git に含まれないよう、`.gitignore` が自動的に作成されます。スクリーンショットは `/ecl-complete-milestone` 時にクリーンアップされます。
-
----
-
-## バックログとスレッド
-
-### バックログパーキングロット
-
-アクティブなプランニングの準備ができていないアイデアは、999.x 番号を使用してバックログに格納され、アクティブなフェーズシーケンスの外に保持されます。
-
-```
-/ecl-capture --backlog "GraphQL API layer"     # Creates 999.1-graphql-api-layer/
-/ecl-capture --backlog "Mobile responsive"     # Creates 999.2-mobile-responsive/
-```
-
-バックログアイテムは完全なフェーズディレクトリを取得するため、`/ecl-discuss-phase 999.1` でアイデアをさらに探索したり、準備が整ったら `/ecl-plan-phase 999.1` を使用できます。
-
-**レビューとプロモーション** は `/ecl-review-backlog` で行います — すべてのバックログアイテムを表示し、プロモーション（アクティブシーケンスへの移動）、保持（バックログに残す）、または削除を選択できます。
-
-### シード
-
-シードは、トリガー条件を持つ将来を見据えたアイデアです。バックログアイテムとは異なり、適切なマイルストーンが到来すると自動的に表面化されます。
-
-```
-/ecl-capture --seed "Add real-time collab when WebSocket infra is in place"
-```
-
-シードは完全な WHY と表面化タイミングを保持します。`/ecl-new-milestone` はすべてのシードをスキャンし、一致するものを提示します。
-
-**保存場所：** `.planning/seeds/SEED-NNN-slug.md`
-
-### 永続コンテキストスレッド
-
-スレッドは、複数のセッションにまたがるが特定のフェーズに属さない作業のための、軽量なクロスセッション知識ストアです。
-
-```
-/ecl-thread                              # List all threads
-/ecl-thread fix-deploy-key-auth          # Resume existing thread
-/ecl-thread "Investigate TCP timeout"    # Create new thread
-```
-
-スレッドは `/ecl-pause-work` より軽量です — フェーズ状態やプランコンテキストはありません。各スレッドファイルには Goal、Context、References、Next Steps セクションが含まれます。
-
-スレッドは成熟した段階でフェーズ (`/ecl-phase`) やバックログアイテム (`/ecl-capture --backlog`) にプロモーションできます。
-
-**保存場所：** `.planning/threads/{slug}.md`
-
----
-
-## ワークストリーム
-
-ワークストリームを使うと、状態の衝突なしに複数のマイルストーン領域で並行作業できます。各ワークストリームは独立した `.planning/` 状態を持つため、切り替え時に進捗が上書きされることはありません。
-
-**使用タイミング：** 異なる関心領域にまたがるマイルストーン機能（例：バックエンド API とフロントエンドダッシュボード）に取り組んでいて、コンテキストの混在なしに独立してプランニング・実行・ディスカッションしたい場合。
-
-### コマンド
-
-| コマンド | 用途 |
-|---------|---------|
-| `/ecl-workstreams create <name>` | 独立したプランニング状態を持つ新しいワークストリームを作成 |
-| `/ecl-workstreams switch <name>` | アクティブコンテキストを別のワークストリームに切り替え |
-| `/ecl-workstreams list` | すべてのワークストリームとアクティブなものを表示 |
-| `/ecl-workstreams complete <name>` | ワークストリームを完了としてマークし、状態をアーカイブ |
-
-### 動作の仕組み
-
-各ワークストリームは独自の `.planning/` ディレクトリサブツリーを維持します。ワークストリームを切り替えると、eCL はアクティブなプランニングコンテキストを入れ替え、`/ecl-progress`、`/ecl-discuss-phase`、`/ecl-plan-phase` などのコマンドがそのワークストリームの状態に対して動作するようにします。
-
-これは `/ecl-workspace --new`（別のリポジトリワークツリーを作成）より軽量です。ワークストリームは同じコードベースと git 履歴を共有しつつ、プランニングアーティファクトを分離します。
-
----
-
-## セキュリティ
-
-### 多層防御（v1.27）
-
-eCL はマークダウンファイルを生成し、それが LLM のシステムプロンプトとなります。これは、プランニングアーティファクトに流入するユーザー制御テキストが、潜在的な間接プロンプトインジェクションベクターであることを意味します。v1.27 では集中型セキュリティ強化が導入されました：
-
-**パストラバーサル防止：**
-すべてのユーザー提供ファイルパス（`--text-file`、`--prd`）は、プロジェクトディレクトリ内に解決されることが検証されます。macOS の `/var` → `/private/var` シンボリックリンク解決にも対応しています。
-
-**プロンプトインジェクション検出：**
-`security.cjs` モジュールは、ユーザー提供テキストがプランニングアーティファクトに入る前に、既知のインジェクションパターン（ロールオーバーライド、インストラクションバイパス、system タグインジェクション）をスキャンします。
-
-**ランタイムフック：**
-- `ecl-prompt-guard.js` — `.planning/` への Write/Edit 呼び出しをインジェクションパターンでスキャン（常時有効、アドバイザリーのみ）
-- `ecl-workflow-guard.js` — eCL ワークフローコンテキスト外でのファイル編集を警告（`hooks.workflow_guard` でオプトイン）
-
-**CI スキャナー：**
-`prompt-injection-scan.test.cjs` は、すべてのエージェント、ワークフロー、コマンドファイルに埋め込まれたインジェクションベクターをスキャンします。テストスイートの一部として実行されます。
-
----
-
-### 実行ウェーブの調整
-
-```
+```text
   /ecl-execute-phase N
          │
          ├── Analyze plan dependencies
@@ -353,273 +238,280 @@ eCL はマークダウンファイルを生成し、それが LLM のシステ�
          │     └── Executor C (fresh 200K context) -> commit
          │
          └── Verifier
-               └── Check codebase against phase goals
-                     │
-                     ├── PASS -> VERIFICATION.md (success)
-                     └── FAIL -> Issues logged for /ecl-verify-work
-```
-
-### ブラウンフィールドワークフロー（既存コードベース）
-
-```
-  /ecl-map-codebase
-         │
-         ├── Stack Mapper     -> codebase/STACK.md
-         ├── Arch Mapper      -> codebase/ARCHITECTURE.md
-         ├── Convention Mapper -> codebase/CONVENTIONS.md
-         └── Concern Mapper   -> codebase/CONCERNS.md
-                │
-        ┌───────▼──────────┐
-        │ /ecl-new-project │  <- Questions focus on what you're ADDING
-        └──────────────────┘
+               ├── Check codebase against phase goals
+               ├── Test quality audit (disabled tests, circular patterns, assertion strength)
+               │
+               ├── PASS -> VERIFICATION.md (success)
+               └── FAIL -> Issues logged for /ecl-verify-work
 ```
 
 ---
 
-## コマンドリファレンス
+## UI デザインコントラクト {#ui-design-contract}
 
-### コアワークフロー
+AI が生成するフロントエンドが視覚的に一貫しないのは、Claude Code の UI 能力の問題ではなく、実行前にデザインコントラクトが存在しなかったためです。`/ecl-ui-phase` はプランニング前にデザインコントラクトをロックし、`/ecl-ui-review` は実行後に結果を監査します。
 
-| コマンド | 用途 | 使用タイミング |
-|---------|---------|-------------|
-| `/ecl-new-project` | フルプロジェクト初期化：質問、リサーチ、要件定義、ロードマップ | 新規プロジェクトの開始時 |
-| `/ecl-new-project --auto @idea.md` | ドキュメントからの自動初期化 | PRD やアイデアドキュメントが準備済みの場合 |
-| `/ecl-discuss-phase [N]` | 実装上の決定事項を記録 | プランニング前に、構築方法を決定するため |
-| `/ecl-ui-phase [N]` | UI デザインコントラクトを生成 | discuss-phase の後、plan-phase の前（フロントエンドフェーズ） |
-| `/ecl-plan-phase [N]` | リサーチ + プランニング + 検証 | フェーズ実行前 |
-| `/ecl-execute-phase <N>` | すべてのプランを並列ウェーブで実行 | プランニング完了後 |
-| `/ecl-verify-work [N]` | 自動診断付き手動 UAT | 実行完了後 |
-| `/ecl-ship [N]` | 検証済みの作業から PR を作成 | 検証合格後 |
-| `/ecl-fast <text>` | インラインの軽微なタスク — プランニングを完全にスキップ | タイプミス修正、設定変更、小規模リファクタリング |
-| `/ecl-progress --next` | 状態を自動検出して次のステップを実行 | いつでも — 「次に何をすべき？」 |
-| `/ecl-ui-review [N]` | 遡及的6ピラービジュアル監査 | 実行後または verify-work 後（フロントエンドプロジェクト） |
-| `/ecl-audit-milestone` | マイルストーンの完了定義を満たしているか検証 | マイルストーン完了前 |
-| `/ecl-complete-milestone` | マイルストーンをアーカイブし、リリースタグを作成 | 全フェーズの検証完了後 |
-| `/ecl-new-milestone [name]` | 次のバージョンサイクルを開始 | マイルストーン完了後 |
+完全なワークフロー、設定、shadcn の初期化、レジストリ安全ゲートについては [UI フェーズのデザイン](how-to/design-a-ui-phase.md) を参照してください。
 
-### ナビゲーション
+**クイックリファレンス:**
 
-| コマンド | 用途 | 使用タイミング |
-|---------|---------|-------------|
-| `/ecl-progress` | 状態と次のステップを表示 | いつでも -- 「今どこにいる？」 |
-| `/ecl-resume-work` | 前回のセッションからフルコンテキストを復元 | 新しいセッションの開始時 |
-| `/ecl-pause-work` | 構造化されたハンドオフを保存（HANDOFF.json + continue-here.md） | フェーズの途中で作業を中断する時 |
-| `/ecl-pause-work --report` | 作業内容と成果を含むセッションサマリーを生成 | セッション終了時、ステークホルダーへの共有時 |
-| `/ecl-help` | すべてのコマンドを表示 | クイックリファレンス |
-| `/ecl-update` | 変更履歴プレビュー付きで eCL を更新 | 新バージョンの確認時 |
+| コマンド              | 説明                                              |
+| -------------------- | -------------------------------------------------------- |
+| `/ecl-ui-phase [N]`  | フロントエンドフェーズ用の UI-SPEC.md デザインコントラクトを生成する |
+| `/ecl-ui-review [N]` | 実装済み UI の 6 柱ビジュアル監査を遡及的に実行する      |
 
-### フェーズ管理
-
-| コマンド | 用途 | 使用タイミング |
-|---------|---------|-------------|
-| `/ecl-phase` | ロードマップに新しいフェーズを追加 | 初期プランニング後にスコープが拡大した場合 |
-| `/ecl-phase --insert [N]` | 緊急作業を挿入（小数番号） | マイルストーン中の緊急修正 |
-| `/ecl-phase --remove [N]` | 将来のフェーズを削除して番号を振り直す | 機能のスコープ縮小 |
-| `/ecl-discuss-phase --assumptions [N]` | Claude の意図するアプローチをプレビュー | プランニング前に方向性を確認 |
-| `/ecl-plan-phase --research-phase [N]` | エコシステムの深いリサーチのみ | 複雑または不慣れなドメイン |
-
-### ブラウンフィールドとユーティリティ
-
-| コマンド | 用途 | 使用タイミング |
-|---------|---------|-------------|
-| `/ecl-map-codebase` | 既存コードベースを分析 | 既存コードに対する `/ecl-new-project` の前 |
-| `/ecl-quick` | eCL 保証付きのアドホックタスク | バグ修正、小機能、設定変更 |
-| `/ecl-debug [desc]` | 永続状態を持つ体系的デバッグ | 何かが壊れた時 |
-| `/ecl-forensics` | ワークフロー障害の診断レポート | 状態、アーティファクト、git 履歴が破損していると思われる場合 |
-| `/ecl-capture [desc]` | 後でやるアイデアを記録 | セッション中にアイデアが浮かんだ時 |
-| `/ecl-capture --list` | 保留中の TODO を一覧表示 | 記録したアイデアのレビュー |
-| `/ecl-settings` | ワークフロートグルとモデルプロファイルを設定 | モデル変更、エージェントのトグル |
-| `/ecl-config --profile <profile>` | クイックプロファイル切り替え | コスト/品質トレードオフの変更 |
-| `/ecl-update --reapply` | アップデート後にローカル変更を復元 | ローカル編集がある場合の `/ecl-update` 後 |
-
-### コード品質とレビュー
-
-| コマンド | 用途 | 使用タイミング |
-|---------|---------|-------------|
-| `/ecl-review --phase N` | 外部 CLI からのクロス AI ピアレビュー | 実行前にプランを検証 |
-| `/ecl-pr-branch` | `.planning/` コミットをフィルタリングしたクリーンな PR ブランチ | プランニングフリーの diff で PR を作成する前 |
-| `/ecl-audit-uat` | 全フェーズの検証負債を監査 | マイルストーン完了前 |
-
-### バックログとスレッド
-
-| コマンド | 用途 | 使用タイミング |
-|---------|---------|-------------|
-| `/ecl-capture --backlog <desc>` | バックログパーキングロットにアイデアを追加（999.x） | アクティブなプランニングの準備ができていないアイデア |
-| `/ecl-review-backlog` | バックログアイテムのプロモーション/保持/削除 | 新マイルストーン前の優先順位付け |
-| `/ecl-capture --seed <idea>` | トリガー条件付きの将来を見据えたアイデア | 将来のマイルストーンで表面化すべきアイデア |
-| `/ecl-thread [name]` | 永続コンテキストスレッド | フェーズ構造外のクロスセッション作業 |
+| 設定                   | デフォルト | 説明                                                 |
+| ------------------------- | ------- | ----------------------------------------------------------- |
+| `workflow.ui_phase`       | `true`  | フロントエンドフェーズ用の UI デザインコントラクトを生成する            |
+| `workflow.ui_safety_gate` | `true`  | プランフェーズでフロントエンドフェーズに対し /ecl-ui-phase の実行を促す |
 
 ---
 
-## 設定リファレンス
+## スパイクとスケッチ {#spiking--sketching}
 
-eCL はプロジェクト設定を `.planning/config.json` に保存します。`/ecl-new-project` 時に設定するか、後から `/ecl-settings` で更新できます。
+プランニング前に技術的な実現可能性を検証するには `/ecl-spike` を、デザイン前にビジュアルの方向性を探るには `/ecl-sketch` を使用してください。どちらもアーティファクトを `.planning/` に保存し、ラップアップコンパニオンを介してプロジェクトスキルシステムと統合されます。
 
-### 完全な config.json スキーマ
+完全なワークフローとフロー図は [スパイクとスケッチ](how-to/spike-and-sketch.md) を参照してください。
 
-```json
-{
-  "mode": "interactive",
-  "granularity": "standard",
-  "model_profile": "balanced",
-  "planning": {
-    "commit_docs": true,
-    "search_gitignored": false
-  },
-  "workflow": {
-    "research": true,
-    "plan_check": true,
-    "verifier": true,
-    "nyquist_validation": true,
-    "ui_phase": true,
-    "ui_safety_gate": true,
-    "research_before_questions": false,
-    "discuss_mode": "standard",
-    "skip_discuss": false
-  },
-  "resolve_model_ids": "anthropic",
-  "hooks": {
-    "context_warnings": true,
-    "workflow_guard": false
-  },
-  "git": {
-    "branching_strategy": "none",
-    "phase_branch_template": "ecl/phase-{phase}-{slug}",
-    "milestone_branch_template": "ecl/{milestone}-{slug}",
-    "quick_branch_template": null
-  }
-}
+**典型的なフロー:**
+
+```bash
+/ecl-spike "SSE vs WebSocket"     # Validate the approach
+/ecl-spike --wrap-up              # Package learnings
+
+/ecl-sketch "real-time feed UI"   # Explore the design
+/ecl-sketch --wrap-up             # Package decisions
+
+/ecl-discuss-phase N              # Lock in preferences (now informed by spike + sketch)
+/ecl-plan-phase N                 # Plan with confidence
 ```
-
-### コア設定
-
-| 設定 | オプション | デフォルト | 制御内容 |
-|---------|---------|---------|------------------|
-| `mode` | `interactive`, `yolo` | `interactive` | `yolo` は決定を自動承認、`interactive` は各ステップで確認 |
-| `granularity` | `coarse`, `standard`, `fine` | `standard` | フェーズの粒度：スコープの分割の細かさ（3-5、5-8、または 8-12 フェーズ） |
-| `model_profile` | `quality`, `balanced`, `budget`, `inherit` | `balanced` | 各エージェントのモデルティア（下表を参照） |
-
-### プランニング設定
-
-| 設定 | オプション | デフォルト | 制御内容 |
-|---------|---------|---------|------------------|
-| `planning.commit_docs` | `true`, `false` | `true` | `.planning/` ファイルを git にコミットするかどうか |
-| `planning.search_gitignored` | `true`, `false` | `false` | `.planning/` を含めるためにブロード検索に `--no-ignore` を追加 |
-
-> **注：** `.planning/` が `.gitignore` に含まれている場合、設定値に関係なく `commit_docs` は自動的に `false` になります。
-
-### ワークフロートグル
-
-| 設定 | オプション | デフォルト | 制御内容 |
-|---------|---------|---------|------------------|
-| `workflow.research` | `true`, `false` | `true` | プランニング前のドメイン調査 |
-| `workflow.plan_check` | `true`, `false` | `true` | プラン検証ループ（最大3回） |
-| `workflow.verifier` | `true`, `false` | `true` | 実行後のフェーズ目標に対する検証 |
-| `workflow.nyquist_validation` | `true`, `false` | `true` | plan-phase 時のバリデーションアーキテクチャリサーチ、8番目の plan-check 次元 |
-| `workflow.ui_phase` | `true`, `false` | `true` | フロントエンドフェーズ用の UI デザインコントラクトを生成 |
-| `workflow.ui_safety_gate` | `true`, `false` | `true` | plan-phase 時にフロントエンドフェーズで /ecl-ui-phase の実行を促す |
-| `workflow.research_before_questions` | `true`, `false` | `false` | ディスカッション質問の後ではなく前にリサーチを実行 |
-| `workflow.discuss_mode` | `standard`, `assumptions` | `standard` | ディスカッションスタイル：オープンエンドの質問 vs. コードベース駆動の前提確認 |
-| `workflow.skip_discuss` | `true`, `false` | `false` | 自律モードで discuss-phase を完全にスキップ、ROADMAP のフェーズ目標から最小限の CONTEXT.md を作成 |
-
-### フック設定
-
-| 設定 | オプション | デフォルト | 制御内容 |
-|---------|---------|---------|------------------|
-| `hooks.context_warnings` | `true`, `false` | `true` | コンテキストウィンドウ使用量の警告 |
-| `hooks.workflow_guard` | `true`, `false` | `false` | eCL ワークフローコンテキスト外でのファイル編集の警告 |
-
-慣れたドメインやトークン節約時に、ワークフロートグルを無効にしてフェーズを高速化できます。
-
-### Git ブランチ戦略
-
-| 設定 | オプション | デフォルト | 制御内容 |
-|---------|---------|---------|------------------|
-| `git.branching_strategy` | `none`, `phase`, `milestone` | `none` | ブランチ作成のタイミングと方法 |
-| `git.phase_branch_template` | テンプレート文字列 | `ecl/phase-{phase}-{slug}` | phase 戦略のブランチ名 |
-| `git.milestone_branch_template` | テンプレート文字列 | `ecl/{milestone}-{slug}` | milestone 戦略のブランチ名 |
-| `git.quick_branch_template` | テンプレート文字列 または `null` | `null` | `/ecl-quick` タスク用のオプションブランチ名 |
-
-**ブランチ戦略の説明：**
-
-| 戦略 | ブランチ作成 | スコープ | 最適な用途 |
-|----------|---------------|-------|----------|
-| `none` | なし | N/A | ソロ開発、シンプルなプロジェクト |
-| `phase` | 各 `execute-phase` 時 | フェーズごとに1ブランチ | フェーズごとのコードレビュー、粒度の細かいロールバック |
-| `milestone` | 最初の `execute-phase` 時 | 全フェーズで1ブランチを共有 | リリースブランチ、バージョンごとの PR |
-
-**テンプレート変数：** `{phase}` = ゼロパディングされた番号（例："03"）、`{slug}` = 小文字ハイフン区切りの名前、`{milestone}` = バージョン（例："v1.0"）、`{num}` / `{quick}` = quick タスク ID（例："260317-abc"）。
-
-quick タスクのブランチ設定例：
-
-```json
-"git": {
-  "quick_branch_template": "ecl/quick-{num}-{slug}"
-}
-```
-
-### モデルプロファイル（エージェント別の内訳）
-
-| エージェント | `quality` | `balanced` | `budget` | `inherit` |
-|-------|-----------|------------|----------|-----------|
-| ecl-planner | Opus | Opus | Sonnet | Inherit |
-| ecl-roadmapper | Opus | Sonnet | Sonnet | Inherit |
-| ecl-executor | Opus | Sonnet | Sonnet | Inherit |
-| ecl-phase-researcher | Opus | Sonnet | Haiku | Inherit |
-| ecl-project-researcher | Opus | Sonnet | Haiku | Inherit |
-| ecl-research-synthesizer | Sonnet | Sonnet | Haiku | Inherit |
-| ecl-debugger | Opus | Sonnet | Sonnet | Inherit |
-| ecl-codebase-mapper | Sonnet | Haiku | Haiku | Inherit |
-| ecl-verifier | Sonnet | Sonnet | Haiku | Inherit |
-| ecl-plan-checker | Sonnet | Sonnet | Haiku | Inherit |
-| ecl-integration-checker | Sonnet | Sonnet | Haiku | Inherit |
-
-**プロファイルの方針：**
-- **quality** -- すべての意思決定エージェントに Opus、読み取り専用の検証に Sonnet。クォータに余裕があり、重要な作業に使用。
-- **balanced** -- プランニング（アーキテクチャの決定が行われる場所）にのみ Opus、それ以外は Sonnet。正当な理由があるデフォルト。
-- **budget** -- コードを書くものには Sonnet、リサーチと検証には Haiku。大量作業や重要度の低いフェーズに使用。
-- **inherit** -- すべてのエージェントが現在のセッションモデルを使用。モデルを動的に切り替える場合（例：OpenCode または Kilo の `/model`）や、Claude Code を非 Anthropic プロバイダー（OpenRouter、ローカルモデル）で使用する場合に最適で、予期しない API コストを回避できます。非 Claude ランタイム（Codex、OpenCode、Gemini CLI、Kilo）では、インストーラーが自動的に `resolve_model_ids: "omit"` を設定します -- [非 Claude ランタイムの使用](#非-claude-ランタイムの使用codexopencodegemini-clikilo)を参照。
 
 ---
 
-## 使用例
+## バックログとスレッド {#backlog--threads}
+
+### バックログ駐車場
+
+まだアクティブなプランニングの準備ができていないアイデアは、999.x 番号付けを使用してバックログに追加し、アクティブなフェーズシーケンスの外に置きます。
+
+```bash
+/ecl-capture --backlog "GraphQL API layer"     # Creates 999.1-graphql-api-layer/
+/ecl-capture --backlog "Mobile responsive"     # Creates 999.2-mobile-responsive/
+```
+
+バックログアイテムは完全なフェーズディレクトリを持つため、`/ecl-discuss-phase 999.1` でアイデアをさらに探索したり、準備ができたら `/ecl-plan-phase 999.1` を使用できます。
+
+**レビューとプロモーション** は `/ecl-review-backlog` で行います — すべてのバックログアイテムが表示され、プロモート（アクティブシーケンスに移動）、保持（バックログに残す）、または削除（削除）を選択できます。
+
+### シード
+
+シードはトリガー条件を持つ将来志向のアイデアです。バックログアイテムと異なり、適切なマイルストーンが来ると自動的に浮上します。
+
+```bash
+/ecl-capture --seed "Add real-time collab when WebSocket infra is in place"
+```
+
+`/ecl-new-milestone` はすべてのシードをスキャンしてマッチを提示します。**保存場所:** `.planning/seeds/SEED-NNN-slug.md`
+
+### 永続コンテキストスレッド
+
+スレッドは、複数のセッションにまたがるが特定のフェーズに属さない作業のための軽量なクロスセッション知識ストアです。
+
+```bash
+/ecl-thread                              # List all threads
+/ecl-thread fix-deploy-key-auth          # Resume existing thread
+/ecl-thread "Investigate TCP timeout"    # Create new thread
+```
+
+スレッドが成熟したら、フェーズ（`/ecl-phase`）またはバックログアイテム（`/ecl-capture --backlog`）に昇格できます。**保存場所:** `.planning/threads/{slug}.md`
+
+---
+
+## ワークストリームとワークスペース {#workstreams--workspaces}
+
+ワークストリームとワークスペースはどちらも分離を提供しますが、異なるレベルで動作します。
+
+**ワークストリーム** は同じコードベースと git 履歴を共有しながら、プランニングアーティファクトを分離します — より軽量で、複数のマイルストーン領域を並行して作業するのに適しています。[ワークストリームで並行作業する](how-to/work-in-parallel-with-workstreams.md) を参照してください。
+
+**ワークスペース** は独自の `.planning/` を持つ独立したリポジトリのワークツリーを作成します — より重量があり、フィーチャーブランチまたはマルチリポジトリの分離に適しています。[ワークスペースで作業を分離する](how-to/isolate-work-with-workspaces.md) を参照してください。
+
+| コマンド                            | 目的                                              |
+| ---------------------------------- | ---------------------------------------------------- |
+| `/ecl-workstreams create <name>`   | 分離されたプランニング状態を持つ新しいワークストリームを作成する |
+| `/ecl-workstreams switch <name>`   | アクティブコンテキストを別のワークストリームに切り替える      |
+| `/ecl-workstreams list`            | すべてのワークストリームとアクティブなものを表示する           |
+| `/ecl-workstreams complete <name>` | ワークストリームを完了としてマークし状態をアーカイブする      |
+
+```bash
+# Workspace example — feature branch isolation
+/ecl-workspace --new --name feature-b --repos .
+cd ~/ecl-workspaces/feature-b
+/ecl-new-project
+
+/ecl-workspace --list
+/ecl-workspace --remove feature-b
+```
+
+---
+
+## セキュリティ {#security}
+
+### 多層防御（v1.27）
+
+eCL は LLM のシステムプロンプトになるマークダウンファイルを生成します。これは、プランニングアーティファクトに流れ込むユーザー制御のテキストが、間接的なプロンプトインジェクションベクターになり得ることを意味します。v1.27 では集中的なセキュリティ強化が導入されました。
+
+**パストラバーサル防止:** ユーザーが指定したファイルパス（`--text-file`、`--prd`）はすべてプロジェクトディレクトリ内で解決されるよう検証されます。macOS の `/var` → `/private/var` シンボリックリンク解決も処理されます。
+
+**プロンプトインジェクション検出:** `security.cjs` モジュールは、ユーザーが指定したテキストがプランニングアーティファクトに入力される前に既知のインジェクションパターンをスキャンします。
+
+**ランタイムフック:**
+
+- `ecl-prompt-guard.js` — `.planning/` への Write/Edit 呼び出しでインジェクションパターンをスキャンする（常時有効、アドバイザリーのみ）
+- `ecl-workflow-guard.js` — eCL ワークフローコンテキスト外でのファイル編集を警告する（`hooks.workflow_guard` 経由でオプトイン）
+
+**CI スキャナー:** `prompt-injection-scan.test.cjs` はすべてのエージェント、ワークフロー、コマンドファイルに埋め込まれたインジェクションベクターをスキャンします。
+
+---
+
+### パッケージ正当性ゲート（v1.42.1）
+
+AI コーディングツールはパッケージ名を幻覚することがあります。攻撃者はそれらの名前を npm、PyPI、crates.io に悪意のあるインストール後スクリプトとともにあらかじめ登録します — これは *スロップスクワッティング* と呼ばれる手法です。v1.42.1 では、これがシェルに到達する前に停止させる 3 層ゲートが追加されました。
+
+**RESEARCH.md 内** — 外部パッケージを推奨する各フェーズには `## Package Legitimacy Audit` テーブルが含まれます:
+
+```markdown
+## Package Legitimacy Audit
+
+| Package | Registry | Age | Downloads | Source Repo | slopcheck | Disposition |
+|---------|----------|-----|-----------|-------------|-----------|-------------|
+| express | npm | 13 yrs | 100M+/wk | github.com/expressjs/express | [OK] | Approved |
+| some-new-util | npm | 3 days | 47 | none | [SLOP] | REMOVED |
+| api-bridge | npm | 6 mo | 1.2k/wk | github.com/user/api-bridge | [SUS] | Flagged |
+```
+
+`[SLOP]` パッケージは RESEARCH.md から完全に削除され、プランナーに到達することはありません。
+
+**PLAN.md 内** — `[SUS]` または `[ASSUMED]` パッケージはインストール前に `checkpoint:human-verify` タスクをトリガーします。
+
+**実行中** — インストールが失敗した場合、エグゼキューターはチェックポイントを提示して停止し、代替案をサイレントに試みません。
+
+**スロップチェックの判定:**
+
+| 判定 | 意味 | eCL のアクション |
+|---------|---------|------------|
+| `[OK]` | すべての正当性チェックに合格 | 進行 — チェックポイントは追加されない |
+| `[SUS]` | 疑わしいシグナル | フラグ付き; プランナーが `checkpoint:human-verify` を追加 |
+| `[SLOP]` | 高確信度の幻覚 | RESEARCH.md から削除; プランナーに到達しない |
+
+slopcheck を手動でインストールするには:
+
+```bash
+pip install slopcheck
+# verify: slopcheck install express --json
+```
+
+---
+
+## コードレビューワークフロー
+
+フェーズを実行した後、UAT の前に構造化されたコードレビューを実行してください。完全なワークフローは [クロス AI レビューのセットアップ](how-to/set-up-cross-ai-review.md) を参照してください。
+
+```bash
+/ecl-code-review 3               # Review all changed files in phase 3
+/ecl-code-review 3 --depth=deep  # Deep cross-file review
+/ecl-code-review 3 --fix         # Fix Critical + Warning findings atomically
+/ecl-code-review 3 --fix --auto  # Fix and re-review until clean (max 3 iterations)
+/ecl-audit-fix                   # Audit + classify + fix (medium+ severity, max 5)
+```
+
+レビューステップは実行後、UAT 前に位置します:
+
+```text
+/ecl-execute-phase N  ->  /ecl-code-review N  ->  /ecl-code-review N --fix  ->  /ecl-verify-work N
+```
+
+---
+
+## コマンドおよび設定リファレンス
+
+- **コマンドリファレンス:** すべての安定版コマンドのフラグ、サブコマンド、例については [`docs/COMMANDS.md`](COMMANDS.md) を参照してください。
+- **設定リファレンス:** 完全な `config.json` スキーマ、モデルプロファイルテーブル、git ブランチ戦略、セキュリティ設定については [`docs/CONFIGURATION.md`](CONFIGURATION.md) を参照してください。
+- **ディスカッションモード:** インタビューモードと前提条件モードについては [`docs/workflow-discuss-mode.md`](workflow-discuss-mode.md) を参照してください。
+
+---
+
+## 使用例 {#usage-examples}
 
 ### 新規プロジェクト（フルサイクル）
 
 ```bash
 claude --dangerously-skip-permissions
-/ecl-new-project            # 質問に回答、設定、ロードマップを承認
+/ecl-new-project            # Answer questions, configure, approve roadmap
 /clear
-/ecl-discuss-phase 1        # 好みを確定
-/ecl-ui-phase 1             # デザインコントラクト（フロントエンドフェーズ）
-/ecl-plan-phase 1           # リサーチ + プラン + 検証
-/ecl-execute-phase 1        # 並列実行
-/ecl-verify-work 1          # 手動 UAT
-/ecl-ship 1                 # 検証済み作業から PR を作成
-/ecl-ui-review 1            # ビジュアル監査（フロントエンドフェーズ）
+/ecl-discuss-phase 1        # Lock in your preferences
+/ecl-ui-phase 1             # Design contract (frontend phases)
+/ecl-plan-phase 1           # Research + plan + verify
+/ecl-execute-phase 1        # Parallel execution
+/ecl-verify-work 1          # Manual UAT
+/ecl-ship 1                 # Create PR from verified work
+/ecl-ui-review 1            # Visual audit (frontend phases)
 /clear
-/ecl-progress --next                   # 自動検出して次のステップを実行
+/ecl-progress --next                   # Auto-detect and run next step
 ...
-/ecl-audit-milestone        # すべて出荷されたか確認
-/ecl-complete-milestone     # アーカイブ、タグ付け、完了
-/ecl-pause-work --report         # セッションサマリーを生成
+/ecl-audit-milestone        # Check everything shipped
+/ecl-complete-milestone     # Archive, tag, done
+/ecl-pause-work --report         # Generate session summary
 ```
 
 ### 既存ドキュメントからの新規プロジェクト
 
 ```bash
-/ecl-new-project --auto @prd.md   # ドキュメントからリサーチ/要件/ロードマップを自動実行
+/ecl-new-project --auto @prd.md   # Auto-runs research/requirements/roadmap from your doc
 /clear
-/ecl-discuss-phase 1               # ここから通常のフロー
+/ecl-discuss-phase 1               # Normal flow from here
 ```
 
-### 既存コードベース
+### 既存のコードベース
 
 ```bash
-/ecl-map-codebase           # 既存のコードを分析（並列エージェント）
-/ecl-new-project            # 追加する内容に焦点を当てた質問
-# （ここから通常のフェーズワークフロー）
+/ecl-map-codebase           # Analyse what exists (parallel agents)
+/ecl-new-project            # Questions focus on what you're ADDING
+# (normal phase workflow from here)
 ```
+
+**実行後のドリフト検出（#2003）。** `/ecl-execute-phase` を実行するたびに、eCL はフェーズが `.planning/codebase/STRUCTURE.md` を古くするほどの構造的変更を導入したかどうかを確認します。次のコマンドで動作を切り替えられます:
+
+```bash
+/ecl-settings workflow.drift_action auto-remap       # remap automatically
+/ecl-settings workflow.drift_threshold 5             # tune sensitivity
+```
+
+### プランドリフトガード
+
+**デフォルトオン。** プランドリフトガード（`plan_review.source_grounding: true`）はプランレビュー中に実行され、プランが引用するすべてのシンボル（デコレーター、クラス、関数、CLI フラグ）がレビュー時にソースツリーに実際に存在するかを検証します。これにより、実行エージェントが実行される前に幻覚された名前を検出します。
+
+**検出内容:**
+
+- PLAN.md のステップで参照されているが、ソースに存在しない関数
+- プランが書かれた後にリネームまたは削除されたクラスまたはデコレーター名
+- プランに記述されているが引数パーサーに定義されていない CLI フラグ
+- 実装ステップで引用されているがファイルに解決されないモジュールパス
+
+**needs-acknowledgement の動作。** ガードが欠損シンボルを発見すると、ハードブロックではなく `needs-acknowledgement` 通知をプランレビュー出力に出力します。承認して続行（シンボルが意図的に新規の場合）するか、プランの修正を要求できます。ガードはプランを自動拒否しません — 人間の判断のためのシグナルを提示します。
+
+**intel なしでも動作。** デフォルトではガードは `grep`/`ripgrep` を使用してソースファイルを検索します — 事前インデックスは不要です。`intel.enabled: true` で `/ecl:map-codebase` を実行済みの場合、`plan_review.source_grounding_authority: intel` を設定すると、より高速な事前構築済みの `api-map.json` インデックスを使用できます。
+
+```bash
+# Enable/disable (default: on)
+/ecl-settings plan_review.source_grounding true
+/ecl-settings plan_review.source_grounding false
+
+# Switch resolver authority
+/ecl-settings plan_review.source_grounding_authority grep   # live grep (default)
+/ecl-settings plan_review.source_grounding_authority intel  # pre-indexed api-map.json
+```
+
+プロジェクト設定時（`/ecl:new-project` がワークフロー設定中に尋ねます）または `/ecl:settings`（Planning セクション → Drift Guard）経由でいつでも切り替えられます。
 
 ### クイックバグ修正
 
@@ -631,100 +523,159 @@ claude --dangerously-skip-permissions
 ### 休憩後の再開
 
 ```bash
-/ecl-progress               # 前回の続きと次のステップを確認
-# または
-/ecl-resume-work            # 前回のセッションからフルコンテキストを復元
+/ecl-progress               # See where you left off and what's next
+# or
+/ecl-resume-work            # Full context restoration from last session
 ```
 
 ### リリース準備
 
 ```bash
-/ecl-audit-milestone        # 要件カバレッジを確認、スタブを検出
-/ecl-complete-milestone     # アーカイブ、タグ付け、完了
+/ecl-audit-milestone        # Check requirements coverage, detect stubs
+/ecl-complete-milestone     # Archive, tag, done
 ```
 
-### スピード vs 品質プリセット
+### スピードと品質のプリセット
 
-| シナリオ | モード | 粒度 | プロファイル | リサーチ | プランチェック | ベリファイア |
-|----------|------|-------|---------|----------|------------|----------|
-| プロトタイピング | `yolo` | `coarse` | `budget` | オフ | オフ | オフ |
-| 通常開発 | `interactive` | `standard` | `balanced` | オン | オン | オン |
-| プロダクション | `interactive` | `fine` | `quality` | オン | オン | オン |
+| シナリオ    | モード          | 粒度 | プロファイル    | リサーチ | プランチェック | ベリファイア |
+| ----------- | ------------- | ----------- | ---------- | -------- | ---------- | -------- |
+| プロトタイピング | `yolo`        | `coarse`    | `budget`   | off      | off        | off      |
+| 通常の開発  | `interactive` | `standard`  | `balanced` | on       | on         | on       |
+| 本番環境  | `interactive` | `fine`      | `quality`  | on       | on         | on       |
 
-**自律モードでの discuss-phase スキップ：** `yolo` モードで実行中に、PROJECT.md に既に十分な設定が記録されている場合は、`/ecl-settings` で `workflow.skip_discuss: true` を設定してください。これにより discuss-phase を完全にバイパスし、ROADMAP のフェーズ目標から最小限の CONTEXT.md を作成します。PROJECT.md と規約がディスカッションで新しい情報を追加しないほど包括的な場合に有用です。
+**自律モードでのディスカッションフェーズのスキップ:** `yolo` モードで実行する場合、`/ecl-settings` で `workflow.skip_discuss: true` を設定してください。
 
-### マイルストーン中のスコープ変更
+### マイルストーン途中でのスコープ変更
 
 ```bash
-/ecl-phase              # ロードマップに新しいフェーズを追加
-# または
-/ecl-phase --insert 3         # フェーズ 3 と 4 の間に緊急作業を挿入
-# または
-/ecl-phase --remove 7         # フェーズ 7 をスコープ外にして番号を振り直す
+/ecl-phase                  # Append a new phase to the roadmap (default mode)
+/ecl-phase --insert 3       # Insert urgent work between phases 3 and 4
+/ecl-phase --remove 7       # Descope phase 7 and renumber
+/ecl-phase --edit 4         # Edit any field of phase 4 in place
 ```
-
-### マルチプロジェクトワークスペース
-
-独立した eCL 状態を持つ複数のリポジトリや機能で並行作業できます。
-
-```bash
-# モノレポからリポジトリを含むワークスペースを作成
-/ecl-workspace --new --name feature-b --repos hr-ui,ZeymoAPI
-
-# フィーチャーブランチの分離 — 独自の .planning/ を持つ現在のリポジトリのワークツリー
-/ecl-workspace --new --name feature-b --repos .
-
-# ワークスペースに移動して eCL を初期化
-cd ~/ecl-workspaces/feature-b
-/ecl-new-project
-
-# ワークスペースの一覧と管理
-/ecl-workspace --list
-/ecl-workspace --remove feature-b
-```
-
-各ワークスペースには以下が含まれます：
-- 独自の `.planning/` ディレクトリ（ソースリポジトリから完全に独立）
-- 指定されたリポジトリの Git ワークツリー（デフォルト）またはクローン
-- メンバーリポジトリを追跡する `WORKSPACE.md` マニフェスト
 
 ---
 
-## トラブルシューティング
+## トラブルシューティング {#troubleshooting}
 
-### 「Project already initialized」
+包括的なトラブルシューティングガイドは [リカバリーとトラブルシューティング](how-to/recover-and-troubleshoot.md) を参照してください。最も一般的な問題を以下に要約します。
 
-`/ecl-new-project` を実行したが、`.planning/PROJECT.md` が既に存在しています。これは安全チェックです。やり直したい場合は、まず `.planning/` ディレクトリを削除してください。
+### プログラマティック CLI（`ecl-tools query` vs `ecl-tools.cjs`）
 
-### 長時間セッションでのコンテキスト劣化
+自動化には、登録済みサブコマンドを使用する **`ecl-tools query`** を推奨します（[CLI-TOOLS.md — SDK とプログラマティックアクセス](CLI-TOOLS.md#sdk-and-programmatic-access) と QUERY-HANDLERS.md を参照）。レガシーの `node $HOME/.claude/evolv-coder-lite/bin/ecl-tools.cjs` CLI は引き続きサポートされています。
 
-主要なコマンド間でコンテキストウィンドウをクリアしてください：Claude Code では `/clear` を使用します。eCL はフレッシュなコンテキストを前提に設計されています — すべてのサブエージェントはクリーンな 200K ウィンドウを取得します。メインセッションで品質が低下している場合は、クリアして `/ecl-resume-work` または `/ecl-progress` で状態を復元してください。
+### STATE.md の同期ずれ
 
-### プランが誤っている、または方向性がずれている
+```bash
+node "$HOME/.claude/evolv-coder-lite/bin/ecl-tools.cjs" state validate          # Detect drift
+node "$HOME/.claude/evolv-coder-lite/bin/ecl-tools.cjs" state sync --verify     # Preview changes
+node "$HOME/.claude/evolv-coder-lite/bin/ecl-tools.cjs" state sync              # Reconstruct STATE.md
+```
 
-プランニング前に `/ecl-discuss-phase [N]` を実行してください。プランの品質問題のほとんどは、CONTEXT.md があれば防げたはずの前提を Claude が置いてしまうことに起因します。`/ecl-discuss-phase --assumptions [N]` を使用して、プランにコミットする前に Claude の意図を確認することもできます。
+### 「Spawning...」の後にコマンドがフリーズしているように見える
 
-### 実行が失敗する、またはスタブが生成される
+eCL サブエージェントは独立したコンテキストウィンドウで実行されます — その作業は進行中は親セッションからは見えません。セッションを中断しないでください。リサーチおよびプランニングエージェントは通常 1〜5 分かかります。結果を待ってください。
 
-プランが野心的すぎなかったか確認してください。プランは最大2-3タスクにすべきです。タスクが大きすぎると、単一のコンテキストウィンドウで確実に生成できる範囲を超えてしまいます。より小さなスコープで再プランニングしてください。
+### 長いセッション中のコンテキスト劣化
 
-### 現在地がわからなくなった
+主要なコマンド間でコンテキストウィンドウをクリアしてください: Claude Code では `/clear`。eCL はフレッシュなコンテキストを前提に設計されています — すべてのサブエージェントはクリーンな 200K ウィンドウを取得します。クリア後に状態を復元するには `/ecl-resume-work` または `/ecl-progress` を使用してください。
 
-`/ecl-progress` を実行してください。すべての状態ファイルを読み込み、現在地と次にやるべきことを正確に教えてくれます。
+### プランが間違っているまたは方向性がずれている
 
-### 実行後に変更が必要
+プランニング前に `/ecl-discuss-phase [N]` を実行してください。プランの品質問題のほとんどは、`CONTEXT.md` があれば防げた前提をモデルが立てることから来ています。
 
-`/ecl-execute-phase` を再実行しないでください。ターゲットを絞った修正には `/ecl-quick` を使用するか、`/ecl-verify-work` で体系的に問題を特定し UAT を通じて修正してください。
+### 実行が失敗するかスタブを生成する
 
-### モデルのコストが高すぎる
+プランが野心的すぎなかったか確認してください。プランは最大 2〜3 タスクであるべきです。より小さなスコープで再プランしてください。
 
-budget プロファイルに切り替えてください：`/ecl-config --profile budget`。ドメインに慣れている場合（またはClaude が慣れている場合）は、`/ecl-settings` でリサーチエージェントと plan-check エージェントを無効にしてください。
+### どこにいるかわからなくなった
+
+`/ecl-progress` を実行してください。すべての状態ファイルを読み込み、現在地と次にすべきことを正確に伝えます。
+
+### モデルコストが高すぎる
+
+budget プロファイルに切り替えてください: `/ecl-config --profile budget`。ドメインが既知の場合は `/ecl-settings` でリサーチおよびプランチェックエージェントを無効化してください。
+
+### フェーズ別のモデルコスト調整（`models`）— v1.40 追加
+
+`.planning/config.json` に `models` ブロックを追加してください:
+
+```json
+{
+  "model_profile": "balanced",
+  "models": {
+    "planning": "opus",
+    "discuss": "opus",
+    "research": "sonnet",
+    "execution": "opus",
+    "verification": "sonnet",
+    "completion": "sonnet"
+  }
+}
+```
+
+エージェント単位の例外が必要な場合は、`model_overrides` を併記してください — これが `models` より優先されます:
+
+```json
+{
+  "models": { "research": "sonnet" },
+  "model_overrides": {
+    "ecl-codebase-mapper": "haiku"
+  }
+}
+```
+
+完全なマッピングテーブルと解決優先順位のルールは [フェーズタイプ別モデル](CONFIGURATION.md#per-phase-type-models-models--added-in-v140) を参照してください。
+
+### `dynamic_routing` によるデフォルトで低コスト — v1.40 追加
+
+```json
+{
+  "dynamic_routing": {
+    "enabled": true,
+    "tier_models": {
+      "light":    "haiku",
+      "standard": "sonnet",
+      "heavy":    "opus"
+    },
+    "escalate_on_failure": true,
+    "max_escalations": 1
+  }
+}
+```
+
+完全なエージェント → ティアマッピングは [ダイナミックルーティング](CONFIGURATION.md#dynamic-routing-with-failure-tier-escalation-dynamic_routing--added-in-v140) を参照してください。
+
+### MCP サーバーのトリミングによるターンあたりのコスト削減
+
+`model_profile` や `models.<phase_type>` を調整する前に、ハーネスで有効になっている **MCP サーバー** を監査してください。有効になっている各 MCP サーバーはすべてのターンにそのツールスキーマを注入します — 重量級のサーバーはそれぞれ 20k+ トークンかかることがあります。
+
+これは **ハーネスの設定** であり、eCL の設定ではありません。トグルは `.claude/settings.json` にあります:
+
+```json
+{
+  "enabledMcpjsonServers": ["context7"],
+  "disabledMcpjsonServers": ["playwright", "mac-tools"]
+}
+```
+
+長いフェーズの前のクイック監査:
+
+- このフェーズに UI 作業がないのに、ブラウザ / playwright ツールが有効になっていますか？
+- 不要なプラットフォーム固有ツールが有効になっていますか？
+- 別のプロジェクトのプロジェクト固有 MCP がここでまだ有効になっていますか？
+
+サーバーを無効にすると、以降のすべてのターンからそのスキーマが削除されます。MCP のトリミングは `model_profile` の調整と**複合効果があります** — 両方のレバーは相加的であり、MCP の節約はオーケストレーターが生成するすべてのサブエージェントにわたってすぐに現れます。
+
+完全な監査、ハーネスリファレンス、`model_profile` との組み合わせに関するノートは、バンドルされた `context-budget.md` リファレンスの [MCP ツールスキーマコスト](../../evolv-coder-lite/references/context-budget.md#mcp-tool-schema-cost-harness-concern) を参照してください。
 
 ### 非 Claude ランタイムの使用（Codex、OpenCode、Gemini CLI、Kilo）
 
-非 Claude ランタイム用に eCL をインストールした場合、インストーラーがモデル解決を設定済みのため、すべてのエージェントがランタイムのデフォルトモデルを使用します。手動設定は不要です。具体的には、インストーラーが設定に `resolve_model_ids: "omit"` を設定し、eCL に Anthropic モデル ID の解決をスキップしてランタイム独自のデフォルトモデルを使用するよう指示します。
+> **Codex CLI の最小サポートバージョン: `0.130.0`**（イシュー [#3562](https://github.com/evolvconsulting/evolv-coder-lite/issues/3562)）。
 
-非 Claude ランタイムで異なるエージェントに異なるモデルを割り当てるには、ランタイムが認識する完全修飾モデル ID を使用して `.planning/config.json` に `model_overrides` を追加します：
+非 Claude ランタイム向けに eCL をインストールした場合、インストーラーがすでにモデル解決を設定しています。手動設定は不要です — `resolve_model_ids: "omit"` が自動的に設定され、eCL に Anthropic モデル ID の解決をスキップしてランタイムが独自のデフォルトモデルを選ぶよう指示します。
+
+非 Claude ランタイムで異なるモデルを割り当てるには:
 
 ```json
 {
@@ -737,102 +688,200 @@ budget プロファイルに切り替えてください：`/ecl-config --profile
 }
 ```
 
-インストーラーは Gemini CLI、OpenCode、Kilo、Codex 用に `resolve_model_ids: "omit"` を自動設定します。非 Claude ランタイムを手動で設定する場合は、`.planning/config.json` に自分で追加してください。
+#### 設定変更 1 つで Claude から Codex へ切り替え（#2517）
 
-完全な説明は[設定リファレンス](../CONFIGURATION.md#non-claude-runtimes-codex-opencode-gemini-cli-kilo)をご覧ください。
+```json
+{
+  "runtime": "codex",
+  "model_profile": "balanced"
+}
+```
 
-### 非 Anthropic プロバイダーでの Claude Code の使用（OpenRouter、ローカル）
+[ランタイム対応プロファイル](CONFIGURATION.md#runtime-aware-profiles-2517) を参照してください。
 
-eCL サブエージェントが Anthropic モデルを呼び出し、OpenRouter やローカルプロバイダーを通じて支払っている場合は、`inherit` プロファイルに切り替えてください：`/ecl-config --profile inherit`。これにより、すべてのエージェントが特定の Anthropic モデルの代わりに現在のセッションモデルを使用します。`/ecl-settings` → モデルプロファイル → Inherit も参照してください。
+### 手動インストール / Node.js なしのセットアップ
 
-### 機密/プライベートプロジェクトでの作業
+eCL インストーラーを実行できない場合、`agents/` のソースファイルを直接使用することはできません — これらは Claude Code のネイティブフロントマター形式です。OpenCode では 2 つの変換が必要です:
 
-`/ecl-new-project` 時または `/ecl-settings` で `commit_docs: false` を設定してください。`.planning/` を `.gitignore` に追加してください。プランニングアーティファクトはローカルに保持され、git に含まれません。
+| フィールド | eCL ソース形式 | OpenCode 対応形式 | アクション |
+|---|---|---|---|
+| `tools:` | `Read, Bash, Grep`（カンマ区切り文字列） | フロントマターフィールドではない | `tools:` 行を完全に削除する |
+| `color:` | プレーン CSS カラー名 | 16 進数または OpenCode セマンティック名 | 16 進数に変換するか削除する |
 
-### eCL アップデートがローカル変更を上書きした
+**代替案:** Node.js がある任意のマシンでインストーラーを実行します:
 
-v1.17 以降、インストーラーはローカルで変更されたファイルを `ecl-local-patches/` にバックアップします。`/ecl-update --reapply` を実行して変更をマージし直してください。
+```bash
+npx @evolvconsulting/evolv-coder-lite@latest --opencode --global
+```
 
-### ワークフロー診断 (`/ecl-forensics`)
+### Cline へのインストール
 
-ワークフローが明確でない形で失敗した場合 -- プランが存在しないファイルを参照する、実行が予期しない結果を生成する、状態が破損しているように見える -- `/ecl-forensics` を実行して診断レポートを生成してください。
+```bash
+npx @evolvconsulting/evolv-coder-lite --cline --global   # applies to all projects
+npx @evolvconsulting/evolv-coder-lite --cline --local    # this project only
+```
 
-**チェック内容：**
-- Git 履歴の異常（孤立コミット、予期しないブランチ状態、rebase アーティファクト）
-- アーティファクトの整合性（欠落または不正なプランニングファイル、壊れた相互参照）
-- 状態の不整合（ROADMAP のステータスと実際のファイル存在の不一致、設定のドリフト）
+### CodeBuddy へのインストール
 
-**出力：** `.planning/forensics/` に書き出される診断レポート。検出事項と推奨される修復手順が含まれます。
+```bash
+npx @evolvconsulting/evolv-coder-lite --codebuddy --global
+```
 
-### サブエージェントが失敗したように見えるが作業は完了している
+### Qwen Code へのインストール
 
-Claude Code の分類バグに対する既知の回避策があります。eCL のオーケストレーター（execute-phase、quick）は、失敗を報告する前に実際の出力をスポットチェックします。失敗メッセージが表示されてもコミットが作成されている場合は、`git log` を確認してください -- 作業は成功している可能性があります。
+```bash
+npx @evolvconsulting/evolv-coder-lite --qwen --global
+```
 
-### 並列実行によるビルドロックエラー
+### プレリリースエディションへのインストール
 
-並列ウェーブ実行中に pre-commit フックの失敗、cargo ロックの競合、30分以上の実行時間が発生した場合、これは複数のエージェントが同時にビルドツールをトリガーすることが原因です。eCL は v1.26 以降これを自動的に処理します — 並列エージェントはコミット時に `--no-verify` を使用し、オーケストレーターが各ウェーブ後にフックを1回実行します。古いバージョンを使用している場合は、プロジェクトの `CLAUDE.md` に以下を追加してください：
+インストーラーを実行する前に、ランタイムの `*_CONFIG_DIR` 環境変数をプレリリースディレクトリに設定してください:
+
+```bash
+WINDSURF_CONFIG_DIR=~/.codeium/windsurf-next npx @evolvconsulting/evolv-coder-lite@latest --windsurf --global
+```
+
+**サポートされているランタイムの環境変数リファレンス:**
+
+| ランタイム | 安定版デフォルト | オーバーライド環境変数 |
+|---|---|---|
+| Claude Code | `~/.claude` | `CLAUDE_CONFIG_DIR` |
+| Gemini CLI | `~/.gemini` | `GEMINI_CONFIG_DIR` |
+| OpenCode | `XDG_CONFIG_HOME/opencode` | `OPENCODE_CONFIG_DIR` |
+| Codex | （Codex CLI による） | `--config-dir` フラグ |
+| Copilot | `~/.copilot` | `COPILOT_CONFIG_DIR` |
+| Cursor | `~/.cursor` | `CURSOR_CONFIG_DIR` |
+| Windsurf | `~/.codeium/windsurf` | `WINDSURF_CONFIG_DIR` |
+| Antigravity | 自動検出 | `ANTIGRAVITY_CONFIG_DIR` |
+| Augment | `~/.augment` | `AUGMENT_CONFIG_DIR` |
+| Trae | `~/.trae` | `TRAE_CONFIG_DIR` |
+| Qwen Code | `~/.qwen` | `QWEN_CONFIG_DIR` |
+| Kilo | `~/.config/kilo` | `KILO_CONFIG_DIR` |
+| CodeBuddy | `~/.codebuddy` | `CODEBUDDY_CONFIG_DIR` |
+| Cline | `~/.cline` | `CLINE_CONFIG_DIR` |
+
+### 非 Anthropic プロバイダーでの Claude Code の使用
+
+`inherit` プロファイルに切り替えてください: `/ecl-config --profile inherit`。これにより、すべてのエージェントが現在のセッションモデルを使用します。
+
+### 機密 / プライベートプロジェクトの作業
+
+`/ecl-new-project` 中または `/ecl-settings` 経由で `commit_docs: false` を設定してください。`.planning/` を `.gitignore` に追加してください。
+
+### eCL の更新でローカル変更が上書きされた
+
+v1.17 以降、インストーラーはローカルで変更されたファイルを `ecl-local-patches/` にバックアップします。変更を元に戻すには `/ecl-update --reapply` を実行してください。
+
+### npm 経由で更新できない
+
+手順ごとの手動更新手順は [docs/manual-update.md](../manual-update.md) を参照してください。
+
+### ワークフロー診断（`/ecl-forensics`）
+
+ワークフローが明らかでない方法で失敗した場合、`/ecl-forensics` を実行して git 履歴の異常、アーティファクトの整合性、状態の不整合を網羅する診断レポートを生成してください。出力は `.planning/forensics/` に保存されます。
+
+### エグゼキューターサブエージェントが Bash コマンドで「Permission denied」になる
+
+必要なパターンを `~/.claude/settings.json` に追加してください。すべてのスタックに必要なコアパターン:
+
+```json
+"Bash(git add:*)",
+"Bash(git commit:*)",
+"Bash(git merge:*)",
+"Bash(git worktree:*)",
+"Bash(git rebase:*)",
+"Bash(git reset:*)",
+"Bash(git checkout:*)",
+"Bash(git switch:*)",
+"Bash(git restore:*)",
+"Bash(git stash:*)",
+"Bash(git rm:*)",
+"Bash(git mv:*)",
+"Bash(git fetch:*)",
+"Bash(git cherry-pick:*)",
+"Bash(git apply:*)",
+"Bash(gh:*)"
+```
+
+**プロジェクト単位の権限:** `~/.claude/settings.json` の代わりに、プロジェクトルートの `.claude/settings.local.json` に同じ `permissions.allow` ブロックを追加してください。
+
+### 並列実行でビルドロックエラーが発生する
+
+eCL は v1.26 以降これを自動的に処理します。古いバージョンを使用している場合は、プロジェクトの `CLAUDE.md` に追加してください:
 
 ```markdown
 ## Git Commit Rules for Agents
 All subagent/executor commits MUST use `--no-verify`.
 ```
 
-並列実行を完全に無効にするには：`/ecl-settings` → `parallelization.enabled` を `false` に設定。
-
-### Windows：保護されたディレクトリでインストールがクラッシュする
-
-Windows でインストーラーが `EPERM: operation not permitted, scandir` でクラッシュした場合、これは OS で保護されたディレクトリ（例：Chromium ブラウザプロファイル）が原因です。v1.24 以降修正済み — 最新バージョンに更新してください。回避策として、インストーラー実行前に問題のあるディレクトリを一時的にリネームしてください。
+並列実行を完全に無効にするには: `/ecl-settings` → `parallelization.enabled` を `false` に設定してください。
 
 ---
 
-## リカバリークイックリファレンス
+## リカバリークイックリファレンス {#recovery-quick-reference}
 
-| 問題 | 解決策 |
-|---------|----------|
-| コンテキストの喪失 / 新セッション | `/ecl-resume-work` または `/ecl-progress` |
-| フェーズが失敗した | フェーズのコミットを `git revert` して再プランニング |
-| スコープ変更が必要 | `/ecl-phase`、`/ecl-phase --insert`、または `/ecl-phase --remove` |
-| 何かが壊れた | `/ecl-debug "description"` |
-| ワークフロー状態が破損している可能性 | `/ecl-forensics` |
-| ターゲットを絞った修正 | `/ecl-quick` |
-| プランがビジョンに合わない | `/ecl-discuss-phase [N]` で再プランニング |
-| コストが高い | `/ecl-config --profile budget` と `/ecl-settings` でエージェントをオフ |
-| アップデートがローカル変更を壊した | `/ecl-update --reapply` |
-| ステークホルダー向けセッションサマリーが欲しい | `/ecl-pause-work --report` |
-| 次のステップがわからない | `/ecl-progress --next` |
-| 並列実行でビルドエラー | eCL を更新するか `parallelization.enabled: false` を設定 |
+| 問題                              | 解決策                                                                 |
+| ------------------------------------ | ------------------------------------------------------------------------ |
+| コンテキスト喪失 / 新しいセッション           | `/ecl-resume-work` または `/ecl-progress`                                    |
+| フェーズが失敗した                     | フェーズのコミットを `git revert` してから再プランする                             |
+| スコープを変更する必要がある                 | `/ecl-phase`（デフォルト）、`/ecl-phase --insert`、または `/ecl-phase --remove`  |
+| 何かが壊れた                      | `/ecl-debug "description"`（分析のみで修正なしは `--diagnose` を追加） |
+| STATE.md の同期ずれ                 | `state validate` してから `state sync`                                       |
+| ワークフロー状態が破損しているように見える       | `/ecl-forensics`                                                         |
+| クイックなターゲット修正                   | `/ecl-quick`                                                             |
+| プランがビジョンと一致しない       | `/ecl-discuss-phase [N]` してから再プランする                                    |
+| コストが高騰している                   | `/ecl-config --profile budget` と `/ecl-settings` でエージェントをオフに  |
+| 更新でローカル変更が壊れた           | `/ecl-update --reapply`                                                  |
+| ステークホルダー向けセッションサマリーが欲しい | `/ecl-pause-work --report`                                               |
+| 次のステップがわからない         | `/ecl-progress --next`                                                   |
+| 並列実行でビルドエラーが発生する      | eCL を更新するか `parallelization.enabled: false` を設定する                       |
 
 ---
 
-## プロジェクトファイル構造
+## プロジェクトファイル構造 {#project-file-structure}
 
-参考として、eCL がプロジェクトに作成するファイル構造を示します：
-
-```
+```text
 .planning/
-  PROJECT.md              # プロジェクトのビジョンとコンテキスト（常に読み込まれる）
-  REQUIREMENTS.md         # スコープ付き v1/v2 要件（ID 付き）
-  ROADMAP.md              # ステータス追跡付きフェーズ分割
-  STATE.md                # 決定事項、ブロッカー、セッションメモリ
-  config.json             # ワークフロー設定
-  MILESTONES.md           # 完了したマイルストーンのアーカイブ
-  HANDOFF.json            # 構造化セッション引き継ぎ（/ecl-pause-work から）
-  research/               # /ecl-new-project からのドメインリサーチ
-  reports/                # セッションレポート（/ecl-pause-work --report から）
+  PROJECT.md              # Project vision and context (always loaded)
+  REQUIREMENTS.md         # Scoped v1/v2 requirements with IDs
+  ROADMAP.md              # Phase breakdown with status tracking
+  STATE.md                # Decisions, blockers, session memory
+  config.json             # Workflow configuration
+  MILESTONES.md           # Completed milestone archive
+  HANDOFF.json            # Structured session handoff (from /ecl-pause-work)
+  research/               # Domain research from /ecl-new-project
+  reports/                # Session reports (from /ecl-pause-work --report)
   todos/
-    pending/              # 作業待ちのキャプチャされたアイデア
-    done/                 # 完了した TODO
-  debug/                  # アクティブなデバッグセッション
-    resolved/             # アーカイブされたデバッグセッション
-  codebase/               # ブラウンフィールドコードベースマッピング（/ecl-map-codebase から）
+    pending/              # Captured ideas awaiting work
+    done/                 # Completed todos
+  debug/                  # Active debug sessions
+    resolved/             # Archived debug sessions
+  spikes/                 # Feasibility experiments (from /ecl-spike)
+    NNN-name/             # Experiment code + README with verdict
+    MANIFEST.md           # Index of all spikes
+  sketches/               # HTML mockups (from /ecl-sketch)
+    NNN-name/             # index.html (2-3 variants) + README
+    themes/
+      default.css         # Shared CSS variables for all sketches
+    MANIFEST.md           # Index of all sketches with winners
+  codebase/               # Brownfield codebase mapping (from /ecl-map-codebase)
   phases/
     XX-phase-name/
-      XX-YY-PLAN.md       # アトミック実行プラン
-      XX-YY-SUMMARY.md    # 実行結果と決定事項
-      CONTEXT.md          # 実装の好み
-      RESEARCH.md         # エコシステムリサーチの成果
-      VERIFICATION.md     # 実行後の検証結果
-      XX-UI-SPEC.md       # UI デザインコントラクト（/ecl-ui-phase から）
-      XX-UI-REVIEW.md     # ビジュアル監査スコア（/ecl-ui-review から）
-  ui-reviews/             # /ecl-ui-review からのスクリーンショット（gitignore 対象）
+      XX-YY-PLAN.md       # Atomic execution plans
+      XX-YY-SUMMARY.md    # Execution outcomes and decisions
+      CONTEXT.md          # Your implementation preferences
+      RESEARCH.md         # Ecosystem research findings
+      VERIFICATION.md     # Post-execution verification results
+      XX-UI-SPEC.md       # UI design contract (from /ecl-ui-phase)
+      XX-UI-REVIEW.md     # Visual audit scores (from /ecl-ui-review)
+  ui-reviews/             # Screenshots from /ecl-ui-review (gitignored)
 ```
+
+---
+
+## 関連 {#related}
+
+- [ドキュメント索引](README.md)
+- [コマンド](COMMANDS.md)
+- [設定](CONFIGURATION.md)
+- [フェーズループ](explanation/the-phase-loop.md)
