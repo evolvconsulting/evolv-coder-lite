@@ -131,6 +131,81 @@ const PATCHES = [
     replace: `  const matches = content.match(/\\becl-[a-z][a-z-]*/g);`,
   },
   {
+    id: 'feat-3594-parser-test-require-path',
+    file: 'tests/feat-3594-parser-property-style.test.cjs',
+    issue: 'evolvconsulting/evolv-coder-lite#17',
+    upstream: {
+      status: 'inappropriate',
+      detail: 'test-fixture-rebrand-adjustment: null-byte fixture skips the rebrand map',
+    },
+    note: [
+      'Upstream embeds a single null byte in this test fixture, so the bake',
+      'classifies the file as binary and copies it verbatim — the rebrand map',
+      'never rewrites the require path on line 24, which stays',
+      '"../gsd-core/bin/lib/frontmatter.cjs". The real module compiles to',
+      'evolv-coder-lite/bin/lib/frontmatter.cjs (from src/frontmatter.cts), so',
+      'rewrite the path. Drop when the bake handles single-null source files',
+      'or upstream removes the embedded null byte.',
+    ].join(' '),
+    find: `const { extractFrontmatter } = require('../gsd-core/bin/lib/frontmatter.cjs');`,
+    replace: `const { extractFrontmatter } = require('../evolv-coder-lite/bin/lib/frontmatter.cjs');`,
+  },
+  {
+    id: 'installer-migration-670-baseline-checksum-rebrand',
+    file: 'tests/installer-migrations.test.cjs',
+    issue: 'evolvconsulting/evolv-coder-lite#upstream-sync-v1.4.0',
+    upstream: {
+      status: 'inappropriate',
+      detail: 'test-fixture-rebrand-adjustment: rebranded migration body changes its sha256',
+    },
+    note: [
+      'The #670 guardrail locks shipped installer-migration bodies to committed',
+      'sha256 baselines (EXPECTED_CHECKSUMS). eCL rebrands every migration body',
+      '(gsd to ecl), so all four hashes differ from the upstream committed',
+      'values. Re-pin the baselines to the rebranded body hashes. If a migration',
+      'body or the rebrand rules change, the guardrail fails loudly with the new',
+      'actual hash and the affected baseline must be re-pinned here.',
+    ].join(' '),
+    find: `  const EXPECTED_CHECKSUMS = {
+    '2026-05-11-first-time-baseline-scan':
+      'sha256:4ec58d35b30dbf39cc56e3972146086d8d31861ecd800cf0b37a7aa94fe74c2a',
+    '2026-05-11-legacy-orphan-files':
+      'sha256:e492698748a2436a12a55f0940f539b9bf651d8ffcac6f60cd856a6dabd6788c',
+    '2026-05-11-codex-legacy-hooks-json':
+      'sha256:5ce55294aa02f25758f604a569c899a6d2d060299189f5f447f68d8033157058',
+    '2026-06-02-rename-evolv-coder-lite-to-evolv-coder-lite':
+      'sha256:3a9f1d97f64097fb313203d19c6d93a187a38df61dd299afa5eef73e16124e95',
+  };`,
+    replace: `  const EXPECTED_CHECKSUMS = {
+    '2026-05-11-first-time-baseline-scan':
+      'sha256:b7696d0f5469487afd4f80e4764206dbc6fcf38823ca7f2039e9167a8877380a',
+    '2026-05-11-legacy-orphan-files':
+      'sha256:65ac35e6cecd20cbd81d4941e03a8c8f95558d9d7708268719b4b701d1b2e7bb',
+    '2026-05-11-codex-legacy-hooks-json':
+      'sha256:3e2fa98915bbd272182ebe7ede9e1fc4137c2067d386ba190fa0d37aafa15f77',
+    '2026-06-02-rename-evolv-coder-lite-to-evolv-coder-lite':
+      'sha256:f8331badfebb311e43d264a52d479f414152a994da57dd1a1f637315fe39f535',
+  };`,
+  },
+  {
+    id: 'changelog-1777-augment-auggie-parenthetical',
+    file: 'CHANGELOG.md',
+    issue: 'evolvconsulting/evolv-coder-lite#upstream-sync-v1.4.0',
+    upstream: {
+      status: 'inappropriate',
+      detail: 'brand: drop parenthetical product description (#1777 purity guard)',
+    },
+    note: [
+      'v1.4.0 CHANGELOG adds an entry starting "Augment (Auggie) installs".',
+      'The #1777 product-name-purity guard forbids parenthetical product',
+      'descriptions in the CHANGELOG; "Augment (Auggie)" trips it. Drop the',
+      'parenthetical. Drop this patch when upstream removes it or the next sync',
+      'rewrites the entry (anchor mismatch will surface the change).',
+    ].join(' '),
+    find: `**Augment (Auggie) installs now emit slash command definitions`,
+    replace: `**Augment installs now emit slash command definitions`,
+  },
+  {
     id: 'enh-2792-namespace-skills-test-routing-regex-1',
     file: 'tests/enh-2792-namespace-skills.test.cjs',
     issue: 'evolvconsulting/evolv-coder-lite#pre-release-remediation',
