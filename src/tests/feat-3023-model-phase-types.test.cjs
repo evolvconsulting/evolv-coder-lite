@@ -35,7 +35,7 @@ const {
 } = require('../evolv-coder-lite/bin/lib/model-profiles.cjs');
 const { isValidConfigKey } = require('../evolv-coder-lite/bin/lib/config-schema.cjs');
 
-const { createTempDir } = require('./helpers.cjs');
+const { createTempDir, cleanup } = require('./helpers.cjs');
 const makeTmp = (prefix) => createTempDir(`ecl-3023-${prefix}-`);
 
 function writeConfig(projectDir, config) {
@@ -45,7 +45,7 @@ function writeConfig(projectDir, config) {
 }
 
 function rmr(p) {
-  try { fs.rmSync(p, { recursive: true, force: true }); } catch { /* noop */ }
+  cleanup(p);
 }
 
 // ─── Schema: AGENT_TO_PHASE_TYPE table + VALID_PHASE_TYPES ──────────────────

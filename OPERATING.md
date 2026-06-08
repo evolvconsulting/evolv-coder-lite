@@ -84,9 +84,16 @@ Manually:
 node scripts/sync-upstream.mjs    # always fetches "latest"; respects UPSTREAM.lock idempotency
 ```
 
-To pin an older tag explicitly, edit `UPSTREAM.lock` (set `ref`) and
-remove `upstream/`, then re-run sync. There is no flag for "fetch this
-specific tag" yet — add one if it becomes a recurring need.
+To pin a specific tag (older or newer than the repo's "latest" release),
+set `UPSTREAM_TAG`:
+
+```sh
+UPSTREAM_TAG=v1.3.1 node scripts/sync-upstream.mjs        # full re-sync to a pinned tag
+UPSTREAM_TAG=v1.3.1 node scripts/sync-and-patch.mjs       # incremental diff/patch to a pinned tag
+```
+
+Both honour `UPSTREAM_TAG` by fetching `releases/tags/<tag>` instead of
+`releases/latest`; unset, they behave exactly as before.
 
 ## Bumping eCL itself
 

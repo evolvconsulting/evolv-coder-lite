@@ -1,6 +1,6 @@
 # eCL CLI Tools Reference
 
-> Surface-area reference for `evolv-coder-lite/bin/ecl-tools.cjs` (Node CLI). For slash commands and user flows, see [Command Reference](COMMANDS.md).
+> Reference for the `ecl-tools` CLI (`evolv-coder-lite/bin/ecl-tools.cjs`). For slash commands and user flows, see [Command Reference](COMMANDS.md). Return to [docs index](README.md).
 
 ---
 
@@ -421,6 +421,34 @@ node ecl-tools.cjs websearch <query> [--limit N] [--freshness day|week|month]
 
 ---
 
+## Worktree Commands
+
+Diagnose and configure the worktree fork base used by Claude Code's `isolation="worktree"` executor dispatch. These commands address the branch-divergence condition described in [Fix the worktree base-mismatch (exit 42) error](how-to/fix-worktree-base-mismatch.md).
+
+```bash
+# Check whether the current HEAD has diverged from the worktree fork base.
+# Returns JSON: { shouldDegrade, reason, message, headSha, forkRef, forkSha }
+node ecl-tools.cjs worktree base-check
+
+# Write worktree.baseRef:"head" into .claude/settings.local.json (no-clobber).
+# Returns JSON: { changed, skipped, previous, baseRef, file }
+node ecl-tools.cjs worktree set-baseref
+```
+
+**`worktree base-check`** reads `worktree.baseRef` from `.claude/settings.local.json` (then `.claude/settings.json`) and compares the current `HEAD` SHA against `origin/HEAD`. The `shouldDegrade` field is `true` when the execute-phase orchestrator will fall back to sequential execution. Possible `reason` values:
+
+| `reason` | `shouldDegrade` | Meaning |
+|---|---|---|
+| `baseref-head` | `false` | `worktree.baseRef:"head"` is set; no mismatch possible |
+| `head-matches-fork` | `false` | HEAD and `origin/HEAD` are the same commit |
+| `head-diverged-from-fork` | `true` | Branch is ahead of or diverged from `origin/HEAD` |
+| `fork-ref-unknown` | `true` | `origin/HEAD` could not be resolved |
+| `no-head` | `false` | Not in a git repo (no `HEAD`) |
+
+**`worktree set-baseref`** applies a no-clobber write of `worktree.baseRef:"head"` to `.claude/settings.local.json`. If the file already contains an explicit `baseRef` value other than `"head"`, the existing value is preserved and `skipped:"explicit-other"` is returned. Malformed JSON causes an error rather than a silent overwrite. Both fresh installs and upgrades of eCL Core run this automatically when `workflow.use_worktrees` is enabled (the default); the command is also available for manual use — for example, to apply the setting when worktrees were toggled on after installation, or to re-apply it after a settings change.
+
+---
+
 ## Graphify
 
 Build, query, and inspect the project knowledge graph in `.planning/graphs/`. Requires `graphify.enabled: true` in `config.json` (see [Configuration Reference](CONFIGURATION.md#graphify-settings)).
@@ -471,6 +499,7 @@ User-facing entry point: `/ecl-graphify` (see [Command Reference](COMMANDS.md#ec
 | Audit | `lib/audit.cjs` | Phase/milestone audit queue handlers; `audit-open` helper |
 | GSD2 Import | `lib/ecl2-import.cjs` | Reverse-migration importer from eCL-2 projects (backs `/ecl-import --from-ecl2`) |
 | Intel | `lib/intel.cjs` | Queryable codebase intelligence index (backs `/ecl-map-codebase --query`) |
+| Worktree Base Ref | `lib/worktree-base-ref.cjs` | Worktree fork-base detection and `worktree base-check` / `set-baseref` commands (#683) |
 
 ---
 
@@ -493,7 +522,10 @@ API keys configured via `/ecl-settings` (`brave_search`, `firecrawl`, `exa_searc
 
 ---
 
-## See also
+## Related
 
-- [Architecture](ARCHITECTURE.md) — orchestration and runtime layering
-- [Command Reference](COMMANDS.md) — user-facing `/ecl-` commands
+- [Commands](COMMANDS.md)
+- [Configuration](CONFIGURATION.md)
+- [Architecture](ARCHITECTURE.md)
+- [Fix the worktree base-mismatch (exit 42) error](how-to/fix-worktree-base-mismatch.md)
+- [docs index](README.md)

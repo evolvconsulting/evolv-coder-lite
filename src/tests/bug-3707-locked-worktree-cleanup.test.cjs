@@ -12,10 +12,10 @@ const fs = require('node:fs');
 const path = require('node:path');
 const os = require('node:os');
 const { execFileSync, spawnSync } = require('node:child_process');
+const { cleanup } = require('./helpers.cjs');
 
 const {
   executeWorktreeWaveCleanupPlan,
-  planWorktreeWaveCleanup,
   reapOrphanWorktrees,
 } = require('../evolv-coder-lite/bin/lib/worktree-safety.cjs');
 
@@ -135,7 +135,7 @@ describe('bug-3707: executeWorktreeWaveCleanupPlan unlocks and retries on locked
   });
 
   afterEach(() => {
-    fs.rmSync(tmpBase, { recursive: true, force: true });
+    cleanup(tmpBase);
   });
 
   test('removes a locked worktree after unlock-retry (real-fs)', () => {
@@ -221,7 +221,7 @@ describe('bug-3707: reapOrphanWorktrees', () => {
   });
 
   afterEach(() => {
-    fs.rmSync(tmpBase, { recursive: true, force: true });
+    cleanup(tmpBase);
   });
 
   // ── Dead PID + merged branch → reap ────────────────────────────────────────
@@ -424,7 +424,7 @@ describe('bug-3707: reapOrphanWorktrees — adversarial edge cases', () => {
   });
 
   afterEach(() => {
-    fs.rmSync(tmpBase, { recursive: true, force: true });
+    cleanup(tmpBase);
   });
 
   // ── Gap 1: Non-numeric lock content (real Claude Code format) → ALIVE (fail-closed) ──

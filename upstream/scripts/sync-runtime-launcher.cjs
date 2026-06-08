@@ -2,7 +2,7 @@
 /**
  * sync-runtime-launcher.cjs
  *
- * Idempotent transform: for every get-shit-done/workflows/*.md (and subdirs),
+ * Idempotent transform: for every gsd-core/workflows/*.md (and subdirs),
  * rewrite all bash/sh/shell fenced blocks to:
  *   1. Strip ALL old resolver forms from every bash block (GSD_TOOLS=,
  *      GSD_SDK=, the if/elif/else/fi resolver, _GSD_SHIM_NAME=, and any
@@ -19,7 +19,7 @@
 const fs = require('node:fs');
 const path = require('node:path');
 
-const WORKFLOWS_DIR = path.join(__dirname, '..', 'get-shit-done', 'workflows');
+const WORKFLOWS_DIR = path.join(__dirname, '..', 'gsd-core', 'workflows');
 const SNIPPET_FILE = path.join(WORKFLOWS_DIR, '_runtime-launcher.snippet.sh');
 
 // Read canonical preamble (full content of snippet file)
@@ -95,9 +95,6 @@ function stripAndReplace(lines, preamble) {
 function removeResolverLines(lines, preamble) {
   const result = [];
   let i = 0;
-
-  // Build a set of preamble lines for fast lookup (to strip previously-inserted preambles)
-  const preambleLineSet = new Set(preamble);
 
   while (i < lines.length) {
     const line = lines[i];

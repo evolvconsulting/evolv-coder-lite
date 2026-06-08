@@ -83,6 +83,7 @@
     "features.global_learnings",
     "learnings.max_inject",
     "project_code",
+    "phase_id_convention",
     "phase_naming",
     "manager.flags.discuss",
     "manager.flags.plan",
@@ -100,7 +101,13 @@
     "effort.default",
     "fast_mode.enabled",
     "plan_review.source_grounding",
-    "plan_review.source_grounding_authority"
+    "plan_review.source_grounding_authority",
+    "model_policy.provider",
+    "model_policy.budget",
+    "model_policy.high",
+    "model_policy.medium",
+    "model_policy.low",
+    "agent_skills_security.trusted_global_roots"
   ],
   "runtimeStateKeys": [
     "workflow._auto_chain_active"
@@ -137,6 +144,11 @@
       "description": "models.<planning|discuss|research|execution|verification|completion>"
     },
     {
+      "topLevel": "granularities",
+      "source": "^granularities\\.(planning|discuss|research|execution|verification|completion)$",
+      "description": "granularities.<planning|discuss|research|execution|verification|completion>"
+    },
+    {
       "topLevel": "dynamic_routing",
       "source": "^dynamic_routing\\.(enabled|escalate_on_failure|max_escalations|tier_models\\.(light|standard|heavy))$",
       "description": "dynamic_routing.<enabled|escalate_on_failure|max_escalations|tier_models.<light|standard|heavy>>"
@@ -170,6 +182,11 @@
       "topLevel": "review",
       "source": "^review\\.max_prompt_tokens_per_reviewer\\.[a-zA-Z0-9_-]+$",
       "description": "review.max_prompt_tokens_per_reviewer.<reviewer-slug>"
+    },
+    {
+      "topLevel": "model_policy",
+      "source": "^model_policy\\.runtime_tiers\\.[a-zA-Z0-9_-]+\\.(opus|sonnet|haiku)$",
+      "description": "model_policy.runtime_tiers.<runtime>.<opus|sonnet|haiku>"
     }
   ]
 }

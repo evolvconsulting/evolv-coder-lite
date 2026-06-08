@@ -75,6 +75,25 @@ If multiple runtime installs are detected and the invoking runtime cannot be det
 **If VERSION file missing (version resolves to `0.0.0`):** report the installed version as Unknown and proceed to install (treated as `0.0.0` for comparison).
 </step>
 
+<step name="parse_update_channel">
+Determine the release channel from `$ARGUMENTS`. This selects which npm dist-tag the entire update flow targets — `latest` (stable) by default, or `next` (the RC channel established by ADR #660) when the user opts in with `--next`/`--rc`:
+
+```bash
+case " $ARGUMENTS " in
+  *" --next "*|*" --rc "*)
+    TAG="next"
+    CHANNEL_LABEL="next (RC)"
+    ;;
+  *)
+    TAG="latest"
+    CHANNEL_LABEL="latest (stable)"
+    ;;
+esac
+```
+
+`TAG` is restricted to `latest`/`next` by `check-latest-version.cjs` (it rejects any other value with exit 2), so no arbitrary dist-tag can leak through. Omitting `--next`/`--rc` reproduces the prior behavior exactly: `TAG=latest`.
+</step>
+
 <step name="check_latest_version">
 Check npm for latest version via the deterministic script. **Do NOT run `npm view` or `npm search` directly** — the package name must come from the script, not from a free choice at execution time. (#2992: LLM-driven prescriptions of npm package names produced wrong-package queries; moving the package name into a script constant closes that gap.)
 
@@ -91,7 +110,7 @@ if [ -z "$ECL_DIR" ]; then
   LATEST_VERSION=""
   LATEST_REASON="no_install_detected"
 else
-  LATEST_RESULT="$(node "$ECL_DIR/evolv-coder-lite/bin/check-latest-version.cjs" --json 2>/dev/null)"
+  LATEST_RESULT="$(node "$ECL_DIR/evolv-coder-lite/bin/check-latest-version.cjs" --json --tag "$TAG" 2>/dev/null)"
   LATEST_STATUS=$?
   # #2993 CR: when node is missing or the script doesn't exist, LATEST_RESULT
   # is empty and piping it to `jq` produces a parse error on stderr while
@@ -114,7 +133,7 @@ fi
 ```text
 Couldn't check for updates (reason: {LATEST_REASON}, exit: {LATEST_STATUS}).
 
-To update manually: `npx -y --package=@evolvconsulting/evolv-coder-lite@latest -- evolv-coder-lite --global`
+To update manually: `npx -y --package=@evolvconsulting/evolv-coder-lite@{TAG} -- evolv-coder-lite --global`
 ```
 
 Exit.
@@ -122,6 +141,14 @@ Exit.
 
 <step name="compare_versions">
 Compare installed vs latest:
+
+**Only when `TAG=next`** (the user passed `--next`/`--rc`), prepend a channel banner so they know they are leaving the stable line — add this line immediately after the `**Latest:**` line in whichever output block renders:
+
+**Channel:** {CHANNEL_LABEL}
+
+On the default stable channel (`TAG=latest`), do NOT add a channel line — the output must match the prior stable behavior exactly.
+
+When `TAG=next`, the "latest" value is the release candidate published under `@next` (e.g. `1.4.0-rc.1`). Apply standard semver precedence for prereleases (`1.4.0-rc.1` is newer than `1.3.1` but older than the final `1.4.0`). Do NOT treat an `-rc.N` suffix as a dev install or as "behind" — offer it as an available update.
 
 **If installed == latest:**
 ```
@@ -174,7 +201,6 @@ EXTRACT_JSON=$(node "$ECL_DIR/evolv-coder-lite/scripts/changeset/cli.cjs" extrac
   --changelog "$CHANGELOG_TMP" \
   --json 2>/dev/null)
 EXTRACT_EXIT=$?
-rm -f "$CHANGELOG_TMP"
 
 if [ "$EXTRACT_EXIT" -eq 2 ]; then
   # Exit 2 = no releases in range (e.g. versions are equal or changelog is sparse)
@@ -188,6 +214,8 @@ else
     --to "$LATEST_VERSION" \
     --changelog "$CHANGELOG_TMP" 2>/dev/null || echo "(changelog unavailable)")
 fi
+# Clean up temp changelog now that both extract runs are done
+rm -f "$CHANGELOG_TMP"
 ```
 
 3. Display preview and ask for confirmation, using `$CHANGELOG_PREVIEW` from the extract step above:
@@ -326,17 +354,17 @@ RUNTIME_FLAG="--$TARGET_RUNTIME"
 
 **If LOCAL install:**
 ```bash
-npx -y --package=@evolvconsulting/evolv-coder-lite@latest -- evolv-coder-lite "$RUNTIME_FLAG" --local
+npx -y --package=@evolvconsulting/evolv-coder-lite@"$TAG" -- evolv-coder-lite "$RUNTIME_FLAG" --local
 ```
 
 **If GLOBAL install:**
 ```bash
-npx -y --package=@evolvconsulting/evolv-coder-lite@latest -- evolv-coder-lite "$RUNTIME_FLAG" --global
+npx -y --package=@evolvconsulting/evolv-coder-lite@"$TAG" -- evolv-coder-lite "$RUNTIME_FLAG" --global
 ```
 
 **If UNKNOWN install:**
 ```bash
-npx -y --package=@evolvconsulting/evolv-coder-lite@latest -- evolv-coder-lite --claude --global
+npx -y --package=@evolvconsulting/evolv-coder-lite@"$TAG" -- evolv-coder-lite --claude --global
 ```
 
 Capture output. If install fails, show error and exit.
@@ -379,22 +407,47 @@ fi
 if [ -n "$CODEX_HOME" ]; then
   CACHE_DIRS+=( "$(expand_home "$CODEX_HOME")" )
 fi
+if [ -n "$CURSOR_CONFIG_DIR" ]; then
+  CACHE_DIRS+=( "$(expand_home "$CURSOR_CONFIG_DIR")" )
+fi
+if [ -n "$WINDSURF_CONFIG_DIR" ]; then
+  CACHE_DIRS+=( "$(expand_home "$WINDSURF_CONFIG_DIR")" )
+fi
+if [ -n "$AUGMENT_CONFIG_DIR" ]; then
+  CACHE_DIRS+=( "$(expand_home "$AUGMENT_CONFIG_DIR")" )
+fi
+if [ -n "$TRAE_CONFIG_DIR" ]; then
+  CACHE_DIRS+=( "$(expand_home "$TRAE_CONFIG_DIR")" )
+fi
+if [ -n "$QWEN_CONFIG_DIR" ]; then
+  CACHE_DIRS+=( "$(expand_home "$QWEN_CONFIG_DIR")" )
+fi
+if [ -n "$HERMES_HOME" ]; then
+  CACHE_DIRS+=( "$(expand_home "$HERMES_HOME")" )
+fi
+if [ -n "$CODEBUDDY_CONFIG_DIR" ]; then
+  CACHE_DIRS+=( "$(expand_home "$CODEBUDDY_CONFIG_DIR")" )
+fi
+if [ -n "$CLINE_CONFIG_DIR" ]; then
+  CACHE_DIRS+=( "$(expand_home "$CLINE_CONFIG_DIR")" )
+fi
 
 for dir in "${CACHE_DIRS[@]}"; do
   if [ -n "$dir" ]; then
-    rm -f "$dir/cache/ecl-update-check.json"
+    rm -f "$dir/cache/ecl-update-check"*.json
   fi
 done
 
-for dir in .claude .config/opencode .opencode .gemini/antigravity-ide .gemini/antigravity-cli .gemini/antigravity .agent .gemini .config/kilo .kilo .codex; do
-  rm -f "./$dir/cache/ecl-update-check.json"
-  rm -f "$HOME/$dir/cache/ecl-update-check.json"
+for dir in .claude .config/opencode .opencode .gemini/antigravity-ide .gemini/antigravity-cli .gemini/antigravity .agent .gemini .config/kilo .kilo .codex .cursor .codeium/windsurf .augment .trae .qwen .hermes .codebuddy .cline; do
+  rm -f "./$dir/cache/ecl-update-check"*.json
+  rm -f "$HOME/$dir/cache/ecl-update-check"*.json
 done
 
 # Clear the shared tool-agnostic cache written by ecl-check-update.js hook (#2784).
-# The hook uses ~/.cache/ecl/ecl-update-check.json regardless of runtime; clear it
-# so the statusline stops showing the stale "⬆ /ecl:update" indicator after update.
-rm -f "$HOME/.cache/ecl/ecl-update-check.json"
+# The hook uses ~/.cache/ecl/ecl-update-check.json (legacy) or a per-package name
+# like ecl-update-check-opengsd-evolv-coder-lite.json; the glob clears all variants so the
+# statusline stops showing the stale "⬆ /ecl:update" indicator after update.
+rm -f "$HOME/.cache/ecl/ecl-update-check"*.json
 ```
 
 The SessionStart hook (`ecl-check-update.js`) writes to the detected runtime's cache directory, so preferred/env-derived paths and default paths must all be cleared to prevent stale update indicators.

@@ -49,14 +49,6 @@ const COMMANDS_DIR = path.join(ROOT, 'commands', 'ecl');
 //
 // Expand this list only if a new runtime-emitter module is introduced AND the
 // bug-3584 test is updated to cover it.
-const RUNTIME_EMITTER_EXCLUDES = new Set([
-  // Primary runtime-slash emitter (bug-3584 canonical contract):
-  path.join(ROOT, 'evolv-coder-lite', 'bin', 'lib', 'runtime-slash.cjs'),
-  // phase-lifecycle-policy.ts emits runtime-persisted slash references (bug-3584):
-  path.join(ROOT, 'evolv-coder-lite', 'bin', 'lib', 'phase-lifecycle-policy.ts'),
-  // Generated CJS files match the TS source's emitted form — never hand-edited:
-  // (matched below by .generated.cjs extension — see collectFiles exclusion)
-]);
 
 const SEARCH_DIRS = [
   // NOTE: evolv-coder-lite/bin/lib is intentionally EXCLUDED from SEARCH_DIRS.

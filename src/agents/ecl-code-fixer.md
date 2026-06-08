@@ -2,7 +2,7 @@
 name: ecl-code-fixer
 description: Applies fixes to code review findings from REVIEW.md. Reads source files, applies intelligent fixes, and commits each fix atomically. Spawned by /ecl:code-review --fix.
 tools: Read, Edit, Write, Bash, Grep, Glob
-color: "#10B981"
+color: green
 # hooks:
 #   - before_write
 ---

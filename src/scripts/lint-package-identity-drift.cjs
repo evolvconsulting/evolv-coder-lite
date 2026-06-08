@@ -4,7 +4,7 @@
 /**
  * Drift-guard lint for the Package Identity seam (issue #498).
  *
- * The seam (`evolv-coder-lite/bin/lib/package-identity.cjs`, derived from
+ * The seam (`evolv-coder-lite/bin/lib/package-identity.cjs`, derived from // ecl-allow-legacy-name
  * package.json) is the single source of eCL's published coordinates. Many
  * runtime surfaces still carry a literal copy of those coordinates because
  * they cannot `require()` the seam at runtime: the bash launcher snippet (and
@@ -19,7 +19,7 @@
  * literal is reported until updated. That is what turns a repoint into a
  * one-line change with mechanical enforcement.
  *
- * Scope: the runtime/code surface (bin/, hooks/, scripts/, evolv-coder-lite/).
+ * Scope: the runtime/code surface (bin/, hooks/, scripts/, evolv-coder-lite/). // ecl-allow-legacy-name
  * Pure-prose docs and localized READMEs are intentionally out of scope.
  */
 
@@ -27,11 +27,11 @@ const fs = require('node:fs');
 const path = require('node:path');
 
 // A eCL package coordinate: a scoped npm name whose package part contains
-// "evolv-coder-lite" (so @evolvconsulting/ecl-sdk and unrelated scopes never match).
-const PACKAGE_RE = /@[A-Za-z0-9._-]+\/[A-Za-z0-9._-]*evolv-coder-lite[A-Za-z0-9._-]*/g;
+// "evolv-coder-lite" (so @evolvconsulting/ecl-sdk and unrelated scopes never match). // ecl-allow-legacy-name
+const PACKAGE_RE = /@[A-Za-z0-9._-]+\/[A-Za-z0-9._-]*evolv-coder-lite[A-Za-z0-9._-]*/g; // ecl-allow-legacy-name
 // A eCL repo slug, only inside a GitHub URL context so it never overlaps the
 // scoped package literal above. The `.git` suffix is trimmed before compare.
-const SLUG_RE = /(?:github\.com[/:]|raw\.githubusercontent\.com\/)([A-Za-z0-9._-]+\/[A-Za-z0-9._-]*evolv-coder-lite[A-Za-z0-9._-]*)/g;
+const SLUG_RE = /(?:github\.com[/:]|raw\.githubusercontent\.com\/)([A-Za-z0-9._-]+\/[A-Za-z0-9._-]*evolv-coder-lite[A-Za-z0-9._-]*)/g; // ecl-allow-legacy-name
 
 function lineOf(text, index) {
   let line = 1;

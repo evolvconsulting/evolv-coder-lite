@@ -37,14 +37,16 @@ jobs:
       - name: Bake src/ from upstream/ + overlay
         run: node overlay/bake.mjs
 
-      - name: Build hooks + package identity + npm pack (stages tarball at repo root)
+      - name: Install src/ deps + build hooks/lib/identity + npm pack (stages tarball at repo root)
         # run-e2e.sh does this too, but pre-staging here lets the docker build
         # step be a clean cached step independent of the test run. Mirrors
-        # steps 2-3 of run-e2e.sh. v1.2.0 (ADR-0174) retired the separate sdk/
-        # workspace; the build now lives at the package root (generate:identity +
-        # build:hooks) and populates hooks/. npm pack does NOT run prepublishOnly
-        # (npm 7+), so we run the build explicitly before packing.
+        # steps 2-3 of run-e2e.sh. The v1.4.0 upstream TS migration means
+        # `npm run build` now runs build:lib (tsc), which needs devDeps
+        # (@types/node, typescript) installed first — so `npm ci` before build.
+        # npm pack does NOT run prepublishOnly (npm 7+), so we run build
+        # explicitly before packing.
         run: |
+          ( cd src && npm ci --no-audit --no-fund || npm install --no-audit --no-fund )
           ( cd src && npm run build --silent )
           ( cd src && rm -f evolvconsulting-evolv-coder-lite-*.tgz && npm pack --silent )
           cp src/evolvconsulting-evolv-coder-lite-*.tgz ./

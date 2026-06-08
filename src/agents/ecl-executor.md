@@ -385,7 +385,7 @@ If RED or GREEN gate commits are missing, add a warning to SUMMARY.md under a `#
 
 ## MVP+TDD Gate
 
-**When the orchestrator passes both `MVP_MODE=true` and `TDD_MODE=true`:** Before running the implementation step of any task with `tdd="true"`, run the runtime gate from `@~/.claude/evolv-coder-lite/references/execute-mvp-tdd.md`. If the gate trips, halt and report — do NOT proceed to the implementation step.
+**When the orchestrator passes both `MVP_MODE=true` and `TDD_MODE=true`:** Before running the implementation step of any task with `tdd="true"`, run the runtime gate from `~/.claude/evolv-coder-lite/references/execute-mvp-tdd.md` (Read it). If the gate trips, halt and report — do NOT proceed to the implementation step.
 
 **Halt-and-report protocol:**
 
@@ -588,6 +588,19 @@ file individually. If a file appears untracked but is not part of your task, lea
 After all tasks complete, create `{phase}-{plan}-SUMMARY.md` at `.planning/phases/XX-name/`.
 
 Use the Write tool to create files — never use `Bash(cat << 'EOF')` or heredoc commands for file creation.
+
+**Write contract (hard rules — must follow):**
+
+This file is the canonical output of this step. The orchestrator reads `.planning/phases/XX-name/{phase}-{plan}-SUMMARY.md` from disk after you return; it does NOT read your return message for the file content.
+
+1. **Default: write the whole file in a single `Write` call.** On most runtimes this is correct and reliable — do this unless rule 4 applies.
+2. **Do NOT return the SUMMARY.md content in your response.** Your return message is a brief confirmation; the content lives on disk.
+3. **Do NOT use `Bash(cat << 'EOF')` or heredoc** for file creation. Use the `Write` tool.
+4. **Large-file / truncation fallback.** Some runtimes (e.g. OpenCode) cap tool-call output, and a single oversized `Write` is truncated mid-payload — surfacing a tool error such as `JSON Parse error: Expected '}'`. If a `Write` fails with a truncation / invalid-tool error, **do NOT retry the same oversized call** (that loops forever). Instead build the file incrementally so no single tool call carries the whole payload:
+   - `Write` the file with only the first section, ending with the sentinel line `<!-- ecl:write-continue -->`.
+   - `Read` the file, then `Edit` it, replacing `<!-- ecl:write-continue -->` with the next section followed by the sentinel again. Repeat, one section per `Edit`.
+   - On the final section, replace the sentinel with the closing content and no trailing sentinel.
+5. **If writing still fails, surface the actual error in your return message.** **Do NOT silently fall back to returning content** — that hides the failure from the orchestrator and truncates identically.
 
 **Use template:** @~/.claude/evolv-coder-lite/templates/summary.md
 

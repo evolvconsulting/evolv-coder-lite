@@ -75,8 +75,15 @@ function run(cmd, args, opts = {}) {
   });
 }
 
+// Resolve the upstream release to sync to. Defaults to the repo's "latest"
+// release; set UPSTREAM_TAG=v<X.Y.Z> to pin a specific tag (e.g. to sync to an
+// older release than the current latest, or to reproduce a historical sync).
 async function fetchLatestRelease() {
-  const res = await fetch(`https://api.github.com/repos/${UPSTREAM_REPO}/releases/latest`, { headers: ghHeaders() });
+  const pinned = process.env.UPSTREAM_TAG;
+  const endpoint = pinned
+    ? `https://api.github.com/repos/${UPSTREAM_REPO}/releases/tags/${encodeURIComponent(pinned)}`
+    : `https://api.github.com/repos/${UPSTREAM_REPO}/releases/latest`;
+  const res = await fetch(endpoint, { headers: ghHeaders() });
   if (!res.ok) throw new Error(`GitHub releases API ${res.status}: ${await res.text()}`);
   return res.json();
 }

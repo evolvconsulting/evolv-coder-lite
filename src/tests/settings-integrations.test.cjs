@@ -41,10 +41,6 @@ const WORKFLOW_PATH = path.join(REPO_ROOT, 'evolv-coder-lite', 'workflows', 'set
 const SKILL_PATH = path.join(REPO_ROOT, '.claude', 'skills', 'ecl-settings-integrations.md');
 const SETTINGS_WORKFLOW_PATH = path.join(REPO_ROOT, 'evolv-coder-lite', 'workflows', 'settings.md');
 
-function readIfExists(p) {
-  try { return fs.readFileSync(p, 'utf-8'); } catch { return null; }
-}
-
 // ─── Artifacts ───────────────────────────────────────────────────────────────
 
 describe('#2529 artifacts', () => {

@@ -46,8 +46,6 @@ const { test, describe, beforeEach, afterEach } = require('node:test');
 const assert = require('node:assert/strict');
 const fs = require('node:fs');
 const path = require('node:path');
-const os = require('node:os');
-
 const {
   resolveModelInternal,
   resolveModelForTier,
@@ -60,14 +58,14 @@ const {
 } = require('../evolv-coder-lite/bin/lib/model-profiles.cjs');
 const { isValidConfigKey } = require('../evolv-coder-lite/bin/lib/config-schema.cjs');
 
-const { createTempDir } = require('./helpers.cjs');
+const { createTempDir, cleanup } = require('./helpers.cjs');
 const makeTmp = (prefix) => createTempDir(`ecl-3024-${prefix}-`);
 function writeConfig(dir, config) {
   const planningDir = path.join(dir, '.planning');
   fs.mkdirSync(planningDir, { recursive: true });
   fs.writeFileSync(path.join(planningDir, 'config.json'), JSON.stringify(config, null, 2));
 }
-function rmr(p) { try { fs.rmSync(p, { recursive: true, force: true }); } catch { /* noop */ } }
+function rmr(p) { cleanup(p); }
 
 // ─── Schema: AGENT_DEFAULT_TIERS coverage + valid tier set ──────────────────
 

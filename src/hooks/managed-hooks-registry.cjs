@@ -18,7 +18,10 @@
 const MANAGED_HOOKS = [
   'ecl-check-update-worker.js',
   'ecl-check-update.js',
+  'ecl-config-reload.js',
   'ecl-context-monitor.js',
+  'ecl-cursor-post-tool.js',
+  'ecl-cursor-session-start.js',
   'ecl-graphify-update.sh',
   'ecl-phase-boundary.sh',
   'ecl-prompt-guard.js',
@@ -29,6 +32,7 @@ const MANAGED_HOOKS = [
   'ecl-update-banner.js',
   'ecl-validate-commit.sh',
   'ecl-workflow-guard.js',
+  'ecl-worktree-path-guard.js',
 ];
 
 module.exports = { MANAGED_HOOKS };

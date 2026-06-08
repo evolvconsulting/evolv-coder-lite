@@ -63,7 +63,7 @@ Then re-run: /ecl:plan-review-convergence {PHASE}
 ## 2. Initialize
 
 ```bash
-INIT=$(node "$HOME/.claude/evolv-coder-lite/bin/ecl-tools.cjs" init plan-phase "$PHASE")
+INIT=$(ecl_run init plan-phase "$PHASE")
 if [[ "$INIT" == @file:* ]]; then INIT=$(cat "${INIT#@file:}"); fi
 ```
 
@@ -76,7 +76,7 @@ Set `TEXT_MODE=true` if `--text` is present in $ARGUMENTS OR `text_mode` from in
 ## 3. Validate Phase + Pre-flight Gate
 
 ```bash
-PHASE_INFO=$(node "$HOME/.claude/evolv-coder-lite/bin/ecl-tools.cjs" roadmap get-phase "${PHASE}")
+PHASE_INFO=$(ecl_run roadmap get-phase "${PHASE}")
 ```
 
 **If `found` is false:** Error with available phases. Exit.
@@ -98,7 +98,7 @@ Display startup banner:
 
 **If `has_plans` is false:**
 
-Display: `◆ No plans found — spawning initial planning agent...`
+Display: `◆ No plans found — spawning initial planning agent... (runs in a subagent — no output until it returns, ~1–5 min; expected, not a freeze)`
 
 ```text
 Agent(
@@ -134,7 +134,7 @@ prev_high_count = Infinity
 
 Increment `cycle`.
 
-Display: `◆ Cycle {cycle}/{MAX_CYCLES} — spawning review agent...`
+Display: `◆ Cycle {cycle}/{MAX_CYCLES} — spawning review agent... (runs in a subagent — no output until it returns, ~1–5 min; expected, not a freeze)`
 
 ```text
 Agent(
@@ -230,7 +230,7 @@ fi
 **If HIGH_COUNT == 0 (converged):**
 
 ```bash
-node "$HOME/.claude/evolv-coder-lite/bin/ecl-tools.cjs" state planned-phase --phase "${PHASE}" --name "${phase_name}" --plans "${PLAN_COUNT}"
+ecl_run state planned-phase --phase "${PHASE}" --name "${phase_name}" --plans "${PLAN_COUNT}"
 ```
 
 Display:
@@ -308,7 +308,7 @@ Exit workflow.
 
 Update `prev_high_count = HIGH_COUNT`.
 
-Display: `◆ Spawning replan agent with review feedback...`
+Display: `◆ Spawning replan agent with review feedback... (runs in a subagent — no output until it returns, ~1–5 min; expected, not a freeze)`
 
 ```text
 Agent(
