@@ -26,13 +26,24 @@ const STAGE_DIR = path.join(HOOKS_DIR, `.dist-staging-${process.pid}`);
 const HOOKS_TO_COPY = [
   'ecl-check-update-worker.js',
   'ecl-check-update.js',
+  // Required by ecl-check-update-worker.js at runtime — must ship alongside it
+  // so require('./managed-hooks-registry.cjs') resolves in the installed hooks/ dir.
+  'managed-hooks-registry.cjs',
   'ecl-context-monitor.js',
+  // Cursor lifecycle hooks (issue #777): sessionStart context injection + postToolUse monitor
+  'ecl-cursor-session-start.js',
+  'ecl-cursor-post-tool.js',
+  // Claude Code FileChanged hook (#770) — hot-reloads ecl config when
+  // .planning/config.json changes mid-session. Must ship to dist so the
+  // installer can copy it to the target hooks/ dir and register FileChanged.
+  'ecl-config-reload.js',
   'ecl-prompt-guard.js',
   'ecl-read-guard.js',
   'ecl-read-injection-scanner.js',
   'ecl-statusline.js',
   'ecl-update-banner.js',
   'ecl-workflow-guard.js',
+  'ecl-worktree-path-guard.js',
   // Community hooks (bash, opt-in via .planning/config.json hooks.community)
   'ecl-session-state.sh',
   'ecl-validate-commit.sh',
@@ -233,4 +244,4 @@ if (require.main === module) {
   build();
 }
 
-module.exports = { HOOKS_TO_COPY };
+module.exports = { HOOKS_TO_COPY, HOOKS_SUBDIRS_TO_COPY };

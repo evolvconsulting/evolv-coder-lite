@@ -34,7 +34,7 @@ const path = require('node:path');
 const { cleanup, createTempDir } = require('./helpers.cjs');
 
 const ROOT = path.join(__dirname, '..');
-const { convertClaudeCommandToClaudeSkill, installRuntimeArtifacts, uninstallRuntimeArtifacts, skillFrontmatterName } =
+const { convertClaudeCommandToClaudeSkill, installRuntimeArtifacts, skillFrontmatterName } =
   require(path.join(ROOT, 'bin', 'install.js'));
 
 const {
@@ -128,7 +128,19 @@ describe('bug-2808: SKILL.md name: uses hyphen form', () => {
     for (const f of workflowFiles) {
       const src = fs.readFileSync(f, 'utf-8');
       // Strip HTML comments to avoid matching commented-out examples.
-      const stripped = src.replace(/<!--[\s\S]*?-->/g, '');
+      // regex-free HTML-comment stripper (CodeQL: avoid incomplete-multi-character-sanitization)
+      let stripped = '';
+      {
+        let rest = src;
+        let idx;
+        while ((idx = rest.indexOf('<!--')) !== -1) {
+          stripped += rest.slice(0, idx);
+          const end = rest.indexOf('-->', idx + 4);
+          if (end === -1) { rest = ''; break; }
+          rest = rest.slice(end + 3);
+        }
+        stripped += rest;
+      }
       // Scan each line for Skill() calls using the colon form.
       // Parsing line-by-line is more precise than a multi-line regex
       // and avoids false positives from incidental matches in prose.

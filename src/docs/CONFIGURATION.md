@@ -1,5 +1,7 @@
 # eCL Configuration Reference
 
+Complete schema reference for `.planning/config.json`. For setup walkthroughs and task-oriented guides see the [docs index](README.md).
+
 > Full configuration schema, workflow toggles, model profiles, and git branching options. For feature context, see [Feature Reference](FEATURES.md).
 
 ---
@@ -113,6 +115,9 @@ eCL stores project settings in `.planning/config.json`. Created during `/ecl-new
   },
   "project_code": null,
   "agent_skills": {},
+  "agent_skills_security": {
+    "trusted_global_roots": []
+  },
   "response_language": null,
   "features": {
     "thinking_partner": false,
@@ -135,16 +140,24 @@ eCL stores project settings in `.planning/config.json`. Created during `/ecl-new
 | Setting | Type | Options | Default | Description |
 |---------|------|---------|---------|-------------|
 | `mode` | enum | `interactive`, `yolo` | `interactive` | `yolo` auto-approves decisions; `interactive` confirms at each step |
-| `granularity` | enum | `coarse`, `standard`, `fine` | `standard` | Controls phase count: `coarse` (3-5), `standard` (5-8), `fine` (8-12) |
+| `granularity` | enum | `coarse`, `standard`, `fine` | `standard` | Controls phase count: `coarse` (2-4), `standard` (4-6), `fine` (6-10) |
 | `model_profile` | enum | `quality`, `balanced`, `budget`, `adaptive`, `inherit` | `balanced` | Model tier for each agent (see [Model Profiles](#model-profiles)). `adaptive` was added per [#1713](https://github.com/evolvconsulting/evolv-coder-lite/issues/1713) / [#1806](https://github.com/evolvconsulting/evolv-coder-lite/issues/1806) and resolves the same way as the other tiers under runtime-aware profiles. |
 | `runtime` | string | `claude`, `codex`, or any string | (none) | Active runtime for [runtime-aware profile resolution](#runtime-aware-profiles-2517). When set, profile tiers (opus/sonnet/haiku) resolve to runtime-native model IDs. Today only the Codex install path emits per-agent model IDs from this resolver; other runtimes (`opencode`, `gemini`, `qwen`, `copilot`, …) consume the resolver at spawn time and gain dedicated install-path support in [#2612](https://github.com/evolvconsulting/evolv-coder-lite/issues/2612). When unset (default), behavior is unchanged from prior versions. Added in v1.39 |
 | `model_profile_overrides.<runtime>.<tier>` | string \| object | per-runtime tier override | (none) | Override the runtime-aware tier mapping for a specific `(runtime, tier)`. Tier is one of `opus`, `sonnet`, `haiku`. Value is either a model ID string (e.g. `"gpt-5-pro"`) or `{ model, reasoning_effort }`. See [Runtime-Aware Profiles](#runtime-aware-profiles-2517). Added in v1.39 |
+| `model_policy.provider` | string | `openai`, `anthropic`, `google`, `qwen`, `generic` | (none) | Declares the model provider. Known providers (`openai`, `anthropic`, `google`, `qwen`) unlock catalog-backed presets. `generic` treats all model IDs as opaque strings — no prefix inference, no reasoning-effort defaults. `model_policy.runtime_tiers` resolves before legacy `model_profile_overrides`. See [Model Policy Presets](#model-policy-presets-model_policy--added-in-v142). Added in v1.42 ([#49](https://github.com/evolvconsulting/evolv-coder-lite/issues/49)) |
+| `model_policy.budget` | enum | `high`, `medium`, `low` | (none) | Selects a budget tier when using a known provider. eCL materializes the matching catalog preset into explicit tier mappings at resolve time. Ignored when `provider` is `generic` or `custom`. Added in v1.42 ([#49](https://github.com/evolvconsulting/evolv-coder-lite/issues/49)) |
+| `model_policy.high` | string | model ID | (none) | High-cost tier model ID for `generic`/`custom` provider. Used when `provider: "generic"` or `"custom"`. Added in v1.42 ([#49](https://github.com/evolvconsulting/evolv-coder-lite/issues/49)) |
+| `model_policy.medium` | string | model ID | (none) | Medium-cost tier model ID for `generic`/`custom` provider. Added in v1.42 ([#49](https://github.com/evolvconsulting/evolv-coder-lite/issues/49)) |
+| `model_policy.low` | string | model ID | (none) | Low-cost tier model ID for `generic`/`custom` provider. Added in v1.42 ([#49](https://github.com/evolvconsulting/evolv-coder-lite/issues/49)) |
+| `model_policy.runtime_tiers.<runtime>.<tier>` | object | `{ model, reasoning_effort? }` | (none) | Explicit per-runtime, per-tier model entry. `tier` is one of `opus`, `sonnet`, `haiku` (matching the existing profile tier names). `reasoning_effort` is forwarded only to runtimes that support it; unsupported runtimes never receive the field. Takes precedence over `model_profile_overrides`. Added in v1.42 ([#49](https://github.com/evolvconsulting/evolv-coder-lite/issues/49)) |
 | `models.<phase_type>` | enum | `opus`, `sonnet`, `haiku`, `inherit` | (none) | Per-phase-type model tier. Six accepted slots: `planning`, `discuss`, `research`, `execution`, `verification`, `completion`. Lets you tune at the phase level ("Opus for planning, Sonnet for the rest") without learning agent names. Resolves between `model_overrides` (higher) and `model_profile` (lower); see [Per-Phase-Type Models](#per-phase-type-models-models--added-in-v140). Added in v1.40 ([#3023](https://github.com/evolvconsulting/evolv-coder-lite/pull/3030)) |
+| `granularities.<phase_type>` | enum | `coarse`, `standard`, `fine` | (none) | Per-phase-type granularity override. Six accepted slots: `planning`, `discuss`, `research`, `execution`, `verification`, `completion`. Lets you tune phase count at the phase level without changing the global `granularity`. Precedence: `granularities[phaseType]` (highest, enum-guarded) → `granularity` (global) → `planning.granularity` → `'standard'` (hard default). Added in v1.43 ([#68](https://github.com/evolvconsulting/evolv-coder-lite/issues/68)) |
 | `dynamic_routing.enabled` | boolean | `true`, `false` | `false` | Master switch for [dynamic routing with failure-tier escalation](#dynamic-routing-with-failure-tier-escalation-dynamic_routing--added-in-v140). When `true`, agents resolve to `tier_models[default_tier]` and escalate one tier up on orchestrator-detected soft failure. Added in v1.40 ([#3024](https://github.com/evolvconsulting/evolv-coder-lite/pull/3031)) |
 | `dynamic_routing.tier_models.<tier>` | enum | `opus`, `sonnet`, `haiku` | (none) | Tier alias for `light`, `standard`, or `heavy`. Used when `dynamic_routing.enabled: true`. Added in v1.40 |
 | `dynamic_routing.escalate_on_failure` | boolean | `true`, `false` | `true` | When `false`, escalation is disabled even if `enabled: true` — every attempt uses the default tier. Added in v1.40 |
 | `dynamic_routing.max_escalations` | integer | `0`, `1`, `2`, … | `1` | Hard cap on retries per agent invocation. Beyond the cap the resolver returns the cap-tier model. Added in v1.40 |
 | `project_code` | string | any short string | (none) | Prefix for phase directory names (e.g., `"ABC"` produces `ABC-01-setup/`). Added in v1.31 |
+| `phase_id_convention` | enum | `"milestone-prefixed"`, `null` | `null` | Phase ID naming convention. `null` = legacy numeric IDs (`Phase 1`, `Phase 2`). `"milestone-prefixed"` = globally unique IDs that encode the enclosing milestone (`Phase 1-01`, `Phase 1-02`). Run `ecl-tools roadmap upgrade --convention milestone-prefixed` to migrate an existing ROADMAP.md. |
 | `response_language` | string | language code | (none) | Language for agent responses (e.g., `"pt"`, `"ko"`, `"ja"`). Propagates to all spawned agents for cross-phase language consistency. Added in v1.32 |
 | `context_window` | number | any integer | `200000` | Context window size in tokens. Set `1000000` for 1M-context models (e.g., `claude-opus-4-7[1m]`). Values `>= 500000` enable adaptive context enrichment (full-body reads of prior SUMMARY.md, deeper anti-pattern reads). Configured via `/ecl-config --advanced`. |
 | `context_profile` | string | `dev`, `research`, `review` | (none) | Execution context preset that applies a pre-configured bundle of mode, model, and workflow settings for the current type of work. Added in v1.34 |
@@ -235,7 +248,7 @@ All workflow toggles follow the **absent = enabled** pattern. If a key is missin
 | `workflow.max_discuss_passes` | number | `3` | Maximum number of question rounds in discuss-phase before the workflow stops asking. Useful in headless/auto mode to prevent infinite discussion loops. |
 | `workflow.skip_discuss` | boolean | `false` | When `true`, `/ecl-autonomous` bypasses the discuss-phase entirely, writing minimal CONTEXT.md from the ROADMAP phase goal. Useful for projects where developer preferences are fully captured in PROJECT.md/REQUIREMENTS.md. Added in v1.28 |
 | `workflow.text_mode` | boolean | `false` | Replaces AskUserQuestion TUI menus with plain-text numbered lists. Required for Claude Code remote sessions (`/rc` mode) where TUI menus don't render. Can also be set per-session with `--text` flag on discuss-phase. Added in v1.28 |
-| `workflow.use_worktrees` | boolean | `true` | When `false`, disables git worktree isolation for parallel execution. Users who prefer sequential execution or whose environment does not support worktrees can disable this. Added in v1.31 |
+| `workflow.use_worktrees` | boolean | `true` | When `false`, disables git worktree isolation for parallel execution. Users who prefer sequential execution or whose environment does not support worktrees can disable this. Added in v1.31. **Branch-divergence note:** when your branch is ahead of `origin/HEAD`, eCL auto-degrades to sequential and prints a warning. Set `worktree.baseRef:"head"` in `.claude/settings.local.json` (run `node ecl-tools.cjs worktree set-baseref`) to restore parallel execution. See [Fix the worktree base-mismatch (exit 42) error](how-to/fix-worktree-base-mismatch.md). |
 | `workflow.worktree_skip_hooks` | boolean | `false` | When `true`, executor agents in worktree mode pass `--no-verify` (skipping pre-commit hooks) and post-wave hook validation runs against the merged result instead. Opt-in escape hatch for projects whose hooks cannot run in agent worktrees. Default `false` runs hooks on every commit (#2924). |
 | `workflow.code_review` | boolean | `true` | Enable `/ecl-code-review` and `/ecl-code-review --fix` commands. When `false`, the commands exit with a configuration gate message. Added in v1.34 |
 | `workflow.code_review_depth` | string | `standard` | Default review depth for `/ecl-code-review`: `quick` (pattern-matching only), `standard` (per-file analysis), or `deep` (cross-file with import graphs). Can be overridden per-run with `--depth=`. Added in v1.34 |
@@ -324,7 +337,9 @@ Example:
 }
 ```
 
-### Recommended Presets
+### Common Setting Combinations
+
+The following combinations of `mode`, `granularity`, `model_profile`, and workflow toggles are commonly used together. See [Configure model profiles](how-to/configure-model-profiles.md) for setup guidance.
 
 | Scenario | mode | granularity | profile | research | plan_check | verifier |
 |----------|------|-------------|---------|----------|------------|----------|
@@ -372,11 +387,7 @@ The prompt injection guard hook (`ecl-prompt-guard.js`) is always active and can
 
 ### Private Planning Setup
 
-To keep planning artifacts out of git:
-
-1. Set `planning.commit_docs: false` and `planning.search_gitignored: true`
-2. Add `.planning/` to `.gitignore`
-3. If previously tracked: `git rm -r --cached .planning/ && git commit -m "chore: stop tracking planning docs"`
+When `planning.commit_docs` is `false` and `.planning/` is listed in `.gitignore`, eCL treats planning artefacts as local-only. `planning.search_gitignored: true` ensures broad searches still include the `.planning/` directory in this configuration. See [Configure private planning](how-to/configure-model-profiles.md) for setup steps.
 
 ---
 
@@ -387,6 +398,7 @@ Inject custom skill files into eCL subagent prompts. Skills are read by agents a
 | Setting | Type | Default | Description |
 |---------|------|---------|-------------|
 | `agent_skills` | object | `{}` | Map of agent types to skill directory paths |
+| `agent_skills_security.trusted_global_roots` | array of strings | `[]` | Opt-in allowlist of additional trusted directories for `global:` skills. See [Trusted global skill roots](#trusted-global-skill-roots-agent_skills_securitytrusted_global_roots) |
 
 ### Configuration
 
@@ -446,6 +458,50 @@ ecl-tools query config-set agent_skills.ecl-executor '["skills/my-skill"]'
 
 ---
 
+## Trusted Global Skill Roots (`agent_skills_security.trusted_global_roots`)
+
+Widen the symlink-safety boundary for `global:` skills by declaring additional trusted root directories.
+
+### Purpose
+
+By default, a `global:<name>` skill whose `SKILL.md` real path (after resolving symlinks) escapes the runtime's global skills directory (e.g. `~/.claude/skills/`) is rejected as a symlink-escape. `agent_skills_security.trusted_global_roots` lets you declare additional trusted root directories so symlinked skills whose real target lives under one of them are accepted.
+
+Common use case: a single source-of-truth skills directory elsewhere on disk (e.g. `~/shared/skills`) symlinked into `~/.claude/skills/` so `git pull` or `rsync` keeps a team's skills up to date without maintaining copies.
+
+### Configuration
+
+```json
+{
+  "agent_skills_security": {
+    "trusted_global_roots": [
+      "~/shared/skills",
+      "/opt/shared-skills"
+    ]
+  }
+}
+```
+
+### How It Works
+
+- **Default `[]`** — behavior is byte-identical to omitting the option entirely: only skills whose real `SKILL.md` path resolves inside the default global skills directory are accepted.
+- **Absolute or tilde-prefixed paths only.** Each entry must be an absolute path (`/opt/shared-skills`) or a `~`/`~/`-prefixed path (tilde expands to your home directory). Project-relative paths are rejected, so an untrusted repo's `.planning/config.json` cannot point trust at a directory inside itself.
+- **`realpathSync` at load time.** Each declared root is resolved with `realpathSync` on every run, so trust follows the real target and cannot silently drift if a root itself later becomes a symlink. Non-existent or unreadable roots are dropped without error.
+- **Dangerously broad roots are refused.** The filesystem root (`/`), drive or UNC roots, and your home directory itself cannot be declared as trusted roots — these would make the allowlist meaningless.
+- **Acceptance rule.** A skill is accepted if and only if its real `SKILL.md` path lies inside the default global skills directory OR inside one of the resolved trusted roots. Skills resolving outside all of these are still rejected.
+- **Audit note.** When a skill is accepted via a trusted root rather than the default global skills directory, a `[agent-skills] NOTE:` line is written to stderr so the widened boundary remains visible.
+
+> **Security note:** `trusted_global_roots` is read from the project-local `.planning/config.json`. Only add roots you control and trust. Declaring a broad shared directory widens which symlinked global skills will load for every agent in this project.
+
+### CLI
+
+```bash
+ecl config-set agent_skills_security.trusted_global_roots '["~/shared/skills"]'
+```
+
+Setting the parent object (`agent_skills_security`) directly is not supported; use the dot-notation leaf form shown above.
+
+---
+
 ## Feature Flags
 
 Toggle optional capabilities via the `features.*` config namespace. Feature flags default to `false` (disabled) — enabling a flag opts into new behavior without affecting existing workflows.
@@ -478,19 +534,7 @@ The `plan_review.*` namespace controls the plan drift guard, which verifies that
 
 #### Multi-developer setup
 
-If multiple developers will rebuild the graph in the same repo, run once per
-clone after enabling graphify:
-
-```bash
-graphify hook install
-```
-
-This installs a git merge driver that union-merges concurrent `graph.json`
-writes (no conflict markers in the knowledge graph), plus the post-commit
-rebuild hook. It writes `.gitattributes` and registers `graphify
-merge-driver` in `.git/config`. Solo projects can skip this step; running it
-anyway is harmless. Introduced upstream in graphify v0.7.0 alongside the
-`built_at_commit` freshness signal that `/ecl-graphify status` surfaces.
+When multiple developers rebuild the graph in the same repository, `graphify hook install` (run once per clone) installs a git merge driver that union-merges concurrent `graph.json` writes, eliminating conflict markers. It also registers the post-commit rebuild hook, writes `.gitattributes`, and adds `graphify merge-driver` to `.git/config`. Solo projects may skip this step. Introduced upstream in graphify v0.7.0 alongside the `built_at_commit` freshness signal surfaced by `/ecl-graphify status`.
 
 #### Commit-based staleness
 
@@ -549,7 +593,7 @@ The `features.*` namespace is a dynamic key pattern — new feature flags can be
 | `next_phases` | YAML flow array | Phases the `next_action` applies to (e.g. `["4.5"]`) |
 | `progress` | block | Nested `total_phases` / `completed_phases` / `percent` for the milestone progress bar |
 
-All four fields are **optional and additive** — STATE.md files without them keep rendering exactly as in v1.38.x. See [`STATE-MD-LIFECYCLE.md`](STATE-MD-LIFECYCLE.md) for the full field reference, parser constraints, and rendering scenes.
+All four fields are **optional and additive** — STATE.md files without them keep rendering exactly as in v1.38.x. See [STATE.md schema](reference/state-md.md) for the full field reference, parser constraints, and rendering scenes.
 
 ---
 
@@ -1217,6 +1261,84 @@ This resolves `ecl-planner` → `gpt-5.5` (xhigh), `ecl-executor` → `gpt-5.3-c
 
 ---
 
+## Model Policy Presets (`model_policy`) — Added in v1.42
+
+> **[#49](https://github.com/evolvconsulting/evolv-coder-lite/issues/49)** — provider-neutral model policy config surface. Resolves before legacy `model_profile_overrides`.
+
+`model_policy` provides a simpler, provider-neutral way to configure model tiers across runtimes. It is the preferred surface for non-Anthropic runtimes where `model_profile_overrides` would require manually knowing the right model IDs. Configure it via `/ecl:settings` → Section 8 (Model Policy).
+
+### Known provider preset
+
+Choose a provider and budget level via the settings workflow; eCL writes the canonical model IDs for that provider/budget combination:
+
+```json
+{
+  "runtime": "codex",
+  "model_policy": {
+    "provider": "openai",
+    "budget": "medium",
+    "high":   "gpt-5.5",
+    "medium": "gpt-5.3-codex",
+    "low":    "gpt-5.4-mini"
+  }
+}
+```
+
+Known providers: `openai`, `anthropic`, `google`, `qwen`. Budget levels: `high`, `medium`, `low`.
+
+For advanced per-runtime control, `runtime_tiers` accepts explicit entries using the internal profile tier names (`opus`, `sonnet`, `haiku`):
+
+```json
+{
+  "runtime": "codex",
+  "model_policy": {
+    "provider": "openai",
+    "runtime_tiers": {
+      "codex": {
+        "opus":   { "model": "gpt-5.5",        "reasoning_effort": "high" },
+        "sonnet": { "model": "gpt-5.3-codex",  "reasoning_effort": "medium" },
+        "haiku":  { "model": "gpt-5.4-mini",   "reasoning_effort": "low" }
+      }
+    }
+  }
+}
+```
+
+### Generic provider (escape hatch)
+
+Use `provider: "generic"` (or `"custom"`) for OpenRouter, LiteLLM, local gateways, or any runtime where you supply exact model IDs. eCL treats model IDs as opaque strings — no prefix inference, no provider-specific defaults:
+
+```json
+{
+  "runtime": "opencode",
+  "model_policy": {
+    "provider": "generic",
+    "high":   "openrouter/anthropic/claude-opus-4-5",
+    "medium": "openrouter/anthropic/claude-sonnet-4-5",
+    "low":    "openrouter/anthropic/claude-haiku-4-5"
+  }
+}
+```
+
+### Reasoning effort gating
+
+`reasoning_effort` within a `runtime_tiers` entry is forwarded only to runtimes that declare support for it (currently: `codex`). Any runtime not on the allowlist receives the tier entry without the `reasoning_effort` field — it is silently stripped, never leaked.
+
+### Precedence
+
+`model_policy` resolution sits above `model_profile_overrides` in the resolver:
+
+1. `model_overrides[<agent>]` — per-agent explicit ID (highest)
+2. `model_policy.runtime_tiers[<runtime>][<tier>]` — explicit runtime/tier entry
+3. `model_policy` flat `high`/`medium`/`low` keys — for `generic`/`custom` provider
+4. `model_profile_overrides[<runtime>][<tier>]` — legacy per-runtime override
+5. Built-in runtime catalog default
+6. `model_profile` tier alias
+
+**Backwards compatibility.** Configs without `model_policy` are unaffected. Existing `model_profile_overrides` blocks continue to work exactly as before.
+
+---
+
 ## Environment Variables
 
 | Variable | Purpose |
@@ -1286,3 +1408,12 @@ ECL_AUDIT_ARGS=1 ECL_AUDIT=1 ecl plan --tdd
 ```
 
 `ECL_AUDIT_ARGS` applies to both the stderr error line and the audit file simultaneously.
+
+---
+
+## Related
+
+- [Commands](COMMANDS.md)
+- [Configure model profiles](how-to/configure-model-profiles.md)
+- [STATE.md schema](reference/state-md.md)
+- [Docs index](README.md)

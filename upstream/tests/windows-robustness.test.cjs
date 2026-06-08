@@ -22,7 +22,7 @@ const assert = require('node:assert/strict');
 const fs = require('fs');
 const path = require('path');
 
-const WORKFLOWS_DIR = path.join(__dirname, '..', 'get-shit-done', 'workflows');
+const WORKFLOWS_DIR = path.join(__dirname, '..', 'gsd-core', 'workflows');
 const HOOKS_DIR = path.join(__dirname, '..', 'hooks');
 
 /**
@@ -85,9 +85,6 @@ function findUnguardedInfoCommands(code) {
 // ─── Workflow Shell Robustness ────────────────────────────────────────────────
 
 describe('workflow shell robustness', () => {
-  const workflowFiles = fs.readdirSync(WORKFLOWS_DIR)
-    .filter(f => f.endsWith('.md'));
-
   // Key workflow files that must have || true guards on informational commands
   const criticalWorkflows = [
     'resume-project.md',

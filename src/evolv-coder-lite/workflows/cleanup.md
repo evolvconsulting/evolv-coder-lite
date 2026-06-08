@@ -85,17 +85,38 @@ These phase directories will be archived:
 Destination: .planning/milestones/v{X.Z}-phases/
 ```
 
-If no phase directories remain to archive (all already moved or deleted):
+**Stale local branches (upstream gone):**
+
+First, update remote-tracking refs so the candidate list matches the execution list exactly:
+
+```bash
+git fetch --prune 2>/dev/null || true
+```
+
+Then enumerate candidates (protected branch names are excluded even if their upstream is gone):
+
+```bash
+git branch -vv | awk '/: gone\]/ { if ($1 !~ /^\*$|^main$|^next$|^trunk$|^develop$/) print $1 }'
+```
+
+Show each branch name. If none, show:
+
+```
+No stale local branches detected.
+```
+
+If no phase directories remain to archive (all already moved or deleted) AND no stale branches exist:
 
 ```
 No phase directories found to archive. Phases may have been removed or archived previously.
+No stale local branches detected either.
 ```
 
 Stop here.
 
 
 **Text mode (`workflow.text_mode: true` in config or `--text` flag):** Set `TEXT_MODE=true` if `--text` is present in `$ARGUMENTS` OR `text_mode` from init JSON is `true`. When TEXT_MODE is active, replace every `AskUserQuestion` call with a plain-text numbered list and ask the user to type their choice number. This is required for non-Claude runtimes (OpenAI Codex, Gemini CLI, etc.) where `AskUserQuestion` is not available.
-AskUserQuestion: "Proceed with archiving?" with options: "Yes — archive listed phases" | "Cancel"
+AskUserQuestion: "Proceed with archiving and pruning?" with options: "Yes — archive phases and prune stale branches" | "Cancel"
 
 If "Cancel": Stop.
 
@@ -119,6 +140,22 @@ Repeat for all milestones in the cleanup set.
 
 </step>
 
+<step name="prune_local_branches">
+
+After phase archival, prune local branches whose upstream has been deleted. Use the same filter as the dry-run so the execution list matches exactly what the user confirmed:
+
+```bash
+git branch -vv | awk '/: gone\]/ { if ($1 !~ /^\*$|^main$|^next$|^trunk$|^develop$/) print $1 }' | xargs -r git branch -D
+```
+
+Notes:
+- `git fetch --prune` already ran in `show_dry_run` — the tracking refs are current and this step enumerates from the same state the user confirmed.
+- `!~ /^\*$/` skips the currently checked-out branch (prefixed with `* ` in `git branch -vv` output, so `$1` yields `*`).
+- `!~ /^main$|^next$|^trunk$|^develop$/` excludes protected branch names even if their upstream is gone — matches the dry-run exclusion exactly.
+- `xargs -r` prevents `git branch -D` from running with no arguments when no stale branches exist.
+
+</step>
+
 <step name="commit">
 
 Commit the changes:
@@ -137,6 +174,8 @@ Archived:
 {For each milestone}
 - v{X.Y}: {N} phase directories → .planning/milestones/v{X.Y}-phases/
 
+Pruned: {N} local branches whose upstream is gone.
+
 .planning/phases/ cleaned up.
 ```
 
@@ -148,8 +187,9 @@ Archived:
 
 - [ ] All completed milestones without existing phase archives identified
 - [ ] Phase membership determined from archived ROADMAP snapshots
-- [ ] Dry-run summary shown and user confirmed
+- [ ] Dry-run summary shown and user confirmed (covers both archival and pruning)
 - [ ] Phase directories moved to `.planning/milestones/v{X.Y}-phases/`
+- [ ] Stale local branches pruned (branches whose upstream is gone)
 - [ ] Changes committed
 
 </success_criteria>

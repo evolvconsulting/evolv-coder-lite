@@ -1,0 +1,23 @@
+{
+  "name": "evolv-coder-lite",
+  "displayName": "eCL Core",
+  "version": "1.4.0",
+  "description": "eCL Core is a meta-prompting, context engineering, and spec-driven development system for AI coding agents.",
+  "author": {
+    "name": "evolvconsulting",
+    "url": "https://github.com/evolvconsulting"
+  },
+  "homepage": "https://github.com/evolvconsulting/evolv-coder-lite",
+  "repository": "https://github.com/evolvconsulting/evolv-coder-lite",
+  "license": "MIT",
+  "keywords": [
+    "spec-driven-development",
+    "planning",
+    "workflow",
+    "context-engineering",
+    "claude-code",
+    "ecl"
+  ],
+  "commands": "./commands/ecl/",
+  "hooks": "./hooks/hooks.json"
+}

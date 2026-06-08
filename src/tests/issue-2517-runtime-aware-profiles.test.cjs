@@ -68,7 +68,7 @@ function isolateHome() {
 function restoreHome() {
   if (_origHome === undefined) delete process.env.HOME; else process.env.HOME = _origHome;
   if (_origGsdHome === undefined) delete process.env.ECL_HOME; else process.env.ECL_HOME = _origGsdHome;
-  if (_isolatedHome) fs.rmSync(_isolatedHome, { recursive: true, force: true });
+  cleanup(_isolatedHome);
   _isolatedHome = null;
 }
 

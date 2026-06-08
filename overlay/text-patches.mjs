@@ -105,7 +105,10 @@ function validatePatches(patches) {
 const PATCHES = [
   {
     id: 'install-profiles-parse-calls-agents-prefix',
-    file: 'evolv-coder-lite/bin/lib/install-profiles.cjs',
+    // v1.4.0 (upstream TS migration): the lib ships as a tsc build artifact at
+    // pack time, so we patch the .cts SOURCE (src/install-profiles.cts) — the
+    // fix compiles through to evolv-coder-lite/bin/lib/install-profiles.cjs.
+    file: 'src/install-profiles.cts',
     issue: 'evolvconsulting/evolv-coder-lite#17',
     upstream: {
       status: 'inappropriate',
@@ -126,28 +129,6 @@ const PATCHES = [
     ].join(' '),
     find: `  const matches = content.match(/\\bgsd-[a-z][a-z-]*/g);`,
     replace: `  const matches = content.match(/\\becl-[a-z][a-z-]*/g);`,
-  },
-  {
-    id: 'feat-3594-parser-test-require-path',
-    file: 'tests/feat-3594-parser-property-style.test.cjs',
-    issue: 'evolvconsulting/evolv-coder-lite#pre-release-remediation',
-    upstream: {
-      status: 'inappropriate',
-      detail: 'test-fixture-rebrand-adjustment: require path',
-    },
-    note: [
-      'This upstream test file embeds a single \\x00 byte in a string literal',
-      '(line 58 fixture: "null_byte: before\\x00after"). The bake\'s',
-      'looksLikeText() rejects any file with a null byte in the first 8KB',
-      'as binary, so the file is copied verbatim from upstream and the',
-      'name:gsd:k rebrand-rule never sees it. The require path on line 24',
-      'stays "../get-shit-done/bin/lib/frontmatter.cjs", which does not',
-      'exist in src/. Patch: rewrite the require path to the eCL location.',
-      'Drop this patch when the bake handles single-null source-code files',
-      'directly or upstream removes the embedded null byte.',
-    ].join(' '),
-    find: `const { extractFrontmatter } = require('../get-shit-done/bin/lib/frontmatter.cjs');`,
-    replace: `const { extractFrontmatter } = require('../evolv-coder-lite/bin/lib/frontmatter.cjs');`,
   },
   {
     id: 'enh-2792-namespace-skills-test-routing-regex-1',
@@ -315,70 +296,6 @@ const PATCHES = [
     replace: `    assert.ok(!out.match(/\\becl:[a-z]/), 'no colon-form command reference may survive');`,
   },
   {
-    id: 'readme-translation-preamble-ja',
-    file: 'README.ja-JP.md',
-    issue: 'evolvconsulting/evolv-coder-lite#pre-release-remediation',
-    upstream: {
-      status: 'inappropriate',
-      detail: 'brand: translation README preamble (eCL is a rebrand, not a fork)',
-    },
-    note: 'Drop the upstream "active fork" pointer from translations; eCL is a rebrand, not a fork.',
-    find: `> ⚠️ This is an active fork. See the [English README](README.md) for the full notice about the original repo.
-
-<div align="center">`,
-    replace: `> evolv Coder Lite (eCL) is the evolv Consulting rebrand of an upstream open-source project. See the [English README](README.md) for details.
-
-<div align="center">`,
-  },
-  {
-    id: 'readme-translation-preamble-ko',
-    file: 'README.ko-KR.md',
-    issue: 'evolvconsulting/evolv-coder-lite#pre-release-remediation',
-    upstream: {
-      status: 'inappropriate',
-      detail: 'brand: translation README preamble (eCL is a rebrand, not a fork)',
-    },
-    note: 'Drop the upstream "active fork" pointer from translations; eCL is a rebrand, not a fork.',
-    find: `> ⚠️ This is an active fork. See the [English README](README.md) for the full notice about the original repo.
-
-<div align="center">`,
-    replace: `> evolv Coder Lite (eCL) is the evolv Consulting rebrand of an upstream open-source project. See the [English README](README.md) for details.
-
-<div align="center">`,
-  },
-  {
-    id: 'readme-translation-preamble-pt',
-    file: 'README.pt-BR.md',
-    issue: 'evolvconsulting/evolv-coder-lite#pre-release-remediation',
-    upstream: {
-      status: 'inappropriate',
-      detail: 'brand: translation README preamble (eCL is a rebrand, not a fork)',
-    },
-    note: 'Drop the upstream "active fork" pointer from translations; eCL is a rebrand, not a fork.',
-    find: `> ⚠️ This is an active fork. See the [English README](README.md) for the full notice about the original repo.
-
-<div align="center">`,
-    replace: `> evolv Coder Lite (eCL) is the evolv Consulting rebrand of an upstream open-source project. See the [English README](README.md) for details.
-
-<div align="center">`,
-  },
-  {
-    id: 'readme-translation-preamble-zh',
-    file: 'README.zh-CN.md',
-    issue: 'evolvconsulting/evolv-coder-lite#pre-release-remediation',
-    upstream: {
-      status: 'inappropriate',
-      detail: 'brand: translation README preamble (eCL is a rebrand, not a fork)',
-    },
-    note: 'Drop the upstream "active fork" pointer from translations; eCL is a rebrand, not a fork.',
-    find: `> ⚠️ This is an active fork. See the [English README](README.md) for the full notice about the original repo.
-
-<div align="center">`,
-    replace: `> evolv Coder Lite (eCL) is the evolv Consulting rebrand of an upstream open-source project. See the [English README](README.md) for details.
-
-<div align="center">`,
-  },
-  {
     id: 'install-uninstall-removes-check-update-worker',
     file: 'bin/install.js',
     issue: 'evolvconsulting/evolv-coder-lite#upstream-sync-v1.2.0',
@@ -398,6 +315,28 @@ const PATCHES = [
     replace: `  'ecl-check-update.js',
   'ecl-check-update.cmd',
   'ecl-check-update-worker.js',`,
+  },
+  {
+    id: 'install-uninstall-removes-worktree-path-guard',
+    file: 'bin/install.js',
+    issue: 'evolvconsulting/evolv-coder-lite#upstream-sync-v1.4.0',
+    upstream: {
+      status: 'pending',
+      detail: 'no upstream issue filed yet (GSD_UNINSTALL_HOOKS missing the worktree path guard added in v1.3.x)',
+    },
+    note: [
+      'v1.3.x/v1.4.0 added the worktree-path-guard SessionStart hook',
+      '(ecl-worktree-path-guard.js, written during install) but upstream',
+      'never added it to GSD_UNINSTALL_HOOKS, so uninstall leaves it behind',
+      '(caught by e2e 07 — same bug class as the check-update worker above).',
+      'Add it next to its sibling guard hooks. Drop this patch when upstream',
+      'adds the hook to GSD_UNINSTALL_HOOKS.',
+    ].join(' '),
+    find: `  'ecl-workflow-guard.js',
+  'ecl-session-state.sh',`,
+    replace: `  'ecl-workflow-guard.js',
+  'ecl-worktree-path-guard.js',
+  'ecl-session-state.sh',`,
   },
   {
     id: 'install-uninstall-removes-install-state',
@@ -446,7 +385,10 @@ const PATCHES = [
   },
   {
     id: 'installer-migration-classifier-bundled-bin-and-hook-lib',
-    file: 'evolv-coder-lite/bin/lib/installer-migration-report.cjs',
+    // v1.4.0 (upstream TS migration): patch the .cts SOURCE; the injected eCL
+    // whitelist Sets + classifier branches compile through to the shipped
+    // evolv-coder-lite/bin/lib/installer-migration-report.cjs build artifact.
+    file: 'src/installer-migration-report.cts',
     issue: 'evolvconsulting/evolv-coder-lite#50',
     upstream: {
       status: 'pending',
@@ -470,9 +412,7 @@ const PATCHES = [
       'must be deleted. If the bake still passes after deletion, upstream',
       'has not actually fixed it and the patch must be restored.',
     ].join(' '),
-    find: `]));
-
-// Classify a blocked prompt-user action into one of the safe-default
+    find: `// Classify a blocked prompt-user action into one of the safe-default
 // categories. Returns null when no safe default applies — caller must
 // fall back to the hard assertion / interactive prompt for those.
 //
@@ -480,7 +420,7 @@ const PATCHES = [
 // and are regenerated on every install, so removing them is lossless.
 // User-facing skill anchors are the .md files that surface as commands
 // to the user — these are user-owned and must be kept.
-function classifyPromptUserAction(action) {
+export function classifyPromptUserAction(action: MigrationAction): ClassifyResult | null {
   const relPath = action && action.relPath;
   if (typeof relPath !== 'string' || !relPath) return null;
   if (/^evolv-coder-lite\\/sdk\\/(dist|src)\\//.test(relPath)) {
@@ -501,14 +441,12 @@ function classifyPromptUserAction(action) {
   }
   return null;
 }`,
-    replace: `]));
-
-// eCL #50: bundled eCL CLI files shipped under evolv-coder-lite/bin/.
+    replace: `// eCL #50: bundled eCL CLI files shipped under evolv-coder-lite/bin/.
 // Same rationale as BUNDLED_GSD_HOOK_FILES (#3628): explicit whitelist,
 // not shape regex, to avoid silent data loss on user-authored files.
 // Patched in by overlay/text-patches.mjs (eCL #50). Drop when upstream
 // lands an equivalent classifier extension.
-const BUNDLED_ECL_BIN_FILES = Object.freeze(new Set([
+const BUNDLED_ECL_BIN_FILES: ReadonlySet<string> = Object.freeze(new Set([
   'evolv-coder-lite/bin/ecl-tools.cjs',
 ]));
 
@@ -516,7 +454,7 @@ const BUNDLED_ECL_BIN_FILES = Object.freeze(new Set([
 // Mirrors the canonical ECL_HOOK_LIB_FILES list in bin/install.js,
 // restricted to its ecl-prefixed members. (git-cmd.js is bundled too
 // but is already manifest-managed via the saveLocalPatches() seam.)
-const BUNDLED_ECL_HOOK_LIB_FILES = Object.freeze(new Set([
+const BUNDLED_ECL_HOOK_LIB_FILES: ReadonlySet<string> = Object.freeze(new Set([
   'hooks/lib/ecl-graphify-rebuild.sh',
 ]));
 
@@ -528,7 +466,7 @@ const BUNDLED_ECL_HOOK_LIB_FILES = Object.freeze(new Set([
 // and are regenerated on every install, so removing them is lossless.
 // User-facing skill anchors are the .md files that surface as commands
 // to the user — these are user-owned and must be kept.
-function classifyPromptUserAction(action) {
+export function classifyPromptUserAction(action: MigrationAction): ClassifyResult | null {
   const relPath = action && action.relPath;
   if (typeof relPath !== 'string' || !relPath) return null;
   if (/^evolv-coder-lite\\/sdk\\/(dist|src)\\//.test(relPath)) {
@@ -690,7 +628,9 @@ function classifyPromptUserAction(action) {
   },
   {
     id: 'shell-projection-bash-lc-win32',
-    file: 'evolv-coder-lite/bin/lib/shell-command-projection.cjs',
+    // v1.4.0 (upstream TS migration): patch the .cts SOURCE; the win32 `-lc`
+    // branch compiles through to evolv-coder-lite/bin/lib/shell-command-projection.cjs.
+    file: 'src/shell-command-projection.cts',
     issue: 'evolvconsulting/evolv-coder-lite#51',
     upstream: {
       status: 'pending',
@@ -703,7 +643,12 @@ function classifyPromptUserAction(action) {
       'string. Only applies to .sh hooks on win32; .js hooks use .cmd shims.',
     ].join(' '),
     find: [
-      `function projectManagedHookCommand({ absoluteRunner, scriptPath, runtime = 'generic', platform = process.platform }) {`,
+      `export function projectManagedHookCommand({ absoluteRunner, scriptPath, runtime = 'generic', platform = process.platform }: {`,
+      `  absoluteRunner?: string | null;`,
+      `  scriptPath?: string | null;`,
+      `  runtime?: string;`,
+      `  platform?: string;`,
+      `}): string | null {`,
       `  if (!absoluteRunner || !scriptPath) return null;`,
       `  const normalizedScriptPath = platform === 'win32' ? scriptPath.replace(/\\\\/g, '/') : scriptPath;`,
       `  return projectShellCommandText({`,
@@ -715,7 +660,12 @@ function classifyPromptUserAction(action) {
       `}`,
     ].join('\n'),
     replace: [
-      `function projectManagedHookCommand({ absoluteRunner, scriptPath, runtime = 'generic', platform = process.platform }) {`,
+      `export function projectManagedHookCommand({ absoluteRunner, scriptPath, runtime = 'generic', platform = process.platform }: {`,
+      `  absoluteRunner?: string | null;`,
+      `  scriptPath?: string | null;`,
+      `  runtime?: string;`,
+      `  platform?: string;`,
+      `}): string | null {`,
       `  if (!absoluteRunner || !scriptPath) return null;`,
       `  const normalizedScriptPath = platform === 'win32' ? scriptPath.replace(/\\\\/g, '/') : scriptPath;`,
       `  if (platform === 'win32' && scriptPath.endsWith('.sh')) {`,
@@ -737,43 +687,51 @@ function classifyPromptUserAction(action) {
   },
   {
     id: 'install-localShellCmd-bash-lc-win32',
-    file: 'bin/install.js',
+    // v1.4.0: upstream centralized the local-install path's hook-command
+    // construction into buildLocalShellHookCommand() (was an inline
+    // localShellCmd lambda in bin/install.js). Re-target the eCL #51 win32
+    // `-lc` fix onto that .cts builder, layered AFTER upstream's
+    // shellHookOmitsBashRunner() omit-guard so both behaviours compose.
+    // Compiles through to evolv-coder-lite/bin/lib/shell-command-projection.cjs.
+    file: 'src/shell-command-projection.cts',
     issue: 'evolvconsulting/evolv-coder-lite#51',
     upstream: {
       status: 'pending',
     },
     note: [
-      'Companion to shell-projection-bash-lc-win32: the local-install path',
-      'builds .sh hook commands via localShellCmd lambda which calls',
-      'projectShellCommandText directly (bypassing projectManagedHookCommand).',
-      'On Windows this also needs the -lc form to avoid the double-invocation.',
+      'Companion to shell-projection-bash-lc-win32 for the LOCAL-install path.',
+      'buildLocalShellHookCommand() builds `<bashRunner> <scriptPath>` for .sh',
+      'hooks; on win32 bash treats the bare path as a binary ("cannot execute',
+      'binary file"). Inject a win32 .sh branch using the `-lc` form with a',
+      'single-quoted, double-quote-stripped script path. Sits after upstream\'s',
+      'shellHookOmitsBashRunner() guard (#166/#377/#580) so the win32+claude',
+      'omit-bash-runner path is unaffected. Drop when upstream adopts -lc.',
     ].join(' '),
     find: [
-      `  const localShellCmd = (hookFile) => localBashRunner === null`,
-      `    ? null`,
-      `    : projectShellCommandText({`,
-      `      runnerToken: localBashRunner,`,
-      '      argTokens: [`${localPrefix}/hooks/${hookFile}`],',
-      `      runtime,`,
-      `      platform: process.platform,`,
-      `    });`,
+      `  if (!bashRunner) return null;`,
+      `  return projectShellCommandText({`,
+      `    runnerToken: bashRunner,`,
+      `    argTokens: [scriptPath],`,
+      `    runtime,`,
+      `    platform,`,
+      `  });`,
     ].join('\n'),
     replace: [
-      `  const localShellCmd = (hookFile) => localBashRunner === null`,
-      `    ? null`,
-      `    : process.platform === 'win32'`,
-      `      ? projectShellCommandText({`,
-      `        runnerToken: localBashRunner,`,
-      '        argTokens: [\'-lc\', `\'${localPrefix.replace(/"/g, \'\')}/hooks/${hookFile}\'`],',
-      `        runtime,`,
-      `        platform: process.platform,`,
-      `      })`,
-      `      : projectShellCommandText({`,
-      `        runnerToken: localBashRunner,`,
-      '        argTokens: [`${localPrefix}/hooks/${hookFile}`],',
-      `        runtime,`,
-      `        platform: process.platform,`,
-      `      });`,
+      `  if (!bashRunner) return null;`,
+      `  if (platform === 'win32' && hookFile.endsWith('.sh')) {`,
+      `    return projectShellCommandText({`,
+      `      runnerToken: bashRunner,`,
+      `      argTokens: ['-lc', "'" + scriptPath.replace(/"/g, '') + "'"],`,
+      `      runtime,`,
+      `      platform,`,
+      `    });`,
+      `  }`,
+      `  return projectShellCommandText({`,
+      `    runnerToken: bashRunner,`,
+      `    argTokens: [scriptPath],`,
+      `    runtime,`,
+      `    platform,`,
+      `  });`,
     ].join('\n'),
   },
   {

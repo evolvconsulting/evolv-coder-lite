@@ -18,6 +18,8 @@ const {
   convertClaudeToOpencodeFrontmatter,
   convertClaudeToKiloFrontmatter,
   convertClaudeToGeminiAgent,
+  convertClaudeCommandToOpencodeSkill,
+  convertClaudeCommandToKiloSkill,
   neutralizeAgentReferences,
 } = require('../bin/install.js');
 
@@ -343,4 +345,71 @@ describe('neutralizeAgentReferences', () => {
     assert.ok(result.includes('claude-ctx'), 'claude- prefix preserved');
     assert.ok(result.includes('claude-code'), 'claude-code preserved');
   });
+});
+
+// ─── OpenCode-family skill converters (SKILL.md) — #784 ──────────────────────
+
+const SKILL_SAMPLE_COMMAND = `---
+description: Show available eCL commands and usage guide
+argument-hint: "[topic]"
+allowed-tools:
+  - Read
+  - Bash
+---
+
+Run \`/ecl:help\` to see the guide. AskUserQuestion when unsure.
+`;
+
+const SKILL_BETA_COMMAND = `---
+description: "[BETA] Offload plan phase to the cloud and import back."
+---
+
+Body for /ecl:ultraplan-phase.
+`;
+
+describe('convertClaudeCommandToOpencodeSkill / convertClaudeCommandToKiloSkill (#784)', () => {
+  const cases = [
+    { label: 'opencode', convert: convertClaudeCommandToOpencodeSkill },
+    { label: 'kilo', convert: convertClaudeCommandToKiloSkill },
+  ];
+
+  for (const { label, convert } of cases) {
+    describe(`${label} skill conversion`, () => {
+      test('emits SKILL.md frontmatter with name matching the skill dir', () => {
+        const out = convert(SKILL_SAMPLE_COMMAND, 'ecl-help');
+        assert.ok(out.startsWith('---\n'), 'opens with frontmatter');
+        assert.match(out, /^name: ecl-help$/m, 'name equals the skill name');
+      });
+
+      test('preserves the description from the source command', () => {
+        const out = convert(SKILL_SAMPLE_COMMAND, 'ecl-help');
+        assert.match(out, /^description: "Show available eCL commands and usage guide"$/m);
+      });
+
+      test('drops the command tools/permission block (skills inherit perms)', () => {
+        const out = convert(SKILL_SAMPLE_COMMAND, 'ecl-help');
+        const fmEnd = out.indexOf('\n---', 4);
+        const fm = out.slice(0, fmEnd);
+        assert.ok(!/tools:/.test(fm), 'no tools block in skill frontmatter');
+        assert.ok(!/permission:/.test(fm), 'no permission block in skill frontmatter');
+      });
+
+      test('rewrites /ecl: colon refs to hyphen form in the body', () => {
+        const out = convert(SKILL_SAMPLE_COMMAND, 'ecl-help');
+        assert.ok(!/\/ecl:/.test(out), 'no /ecl: colon refs remain');
+        assert.match(out, /\/ecl-help/, 'colon ref rewritten to hyphen form');
+      });
+
+      test('quotes descriptions with leading YAML flow indicators ([BETA])', () => {
+        const out = convert(SKILL_BETA_COMMAND, 'ecl-ultraplan-phase');
+        assert.match(out, /^description: "\[BETA\] /m, 'leading [BETA] safely quoted');
+      });
+
+      test('falls back to a synthetic description when none present', () => {
+        const out = convert('Body only, no frontmatter.', 'ecl-mystery');
+        assert.match(out, /^name: ecl-mystery$/m);
+        assert.match(out, /^description: "Run eCL workflow ecl-mystery\."$/m);
+      });
+    });
+  }
 });

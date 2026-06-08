@@ -27,16 +27,15 @@ const { describe, test, beforeEach, afterEach } = require('node:test');
 const assert = require('node:assert/strict');
 const fs = require('node:fs');
 const path = require('node:path');
-const crypto = require('node:crypto');
 
 const {
   runInstallerMigrations,
-} = require('../get-shit-done/bin/lib/installer-migrations.cjs');
+} = require('../gsd-core/bin/lib/installer-migrations.cjs');
 const {
   assertInstallerMigrationsUnblocked,
   resolveInstallerMigrationPromptsForNonTty,
   classifyPromptUserAction,
-} = require('../get-shit-done/bin/lib/installer-migration-report.cjs');
+} = require('../gsd-core/bin/lib/installer-migration-report.cjs');
 const { createTempDir, cleanup } = require('./helpers.cjs');
 
 function writeFile(root, relPath, content) {

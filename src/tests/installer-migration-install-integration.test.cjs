@@ -133,6 +133,7 @@ function withSdkDistPresent(fn) {
 }
 
 function stripAnsi(value) {
+  // eslint-disable-next-line no-control-regex -- \x1b (ESC) is the required leading byte of ANSI SGR color sequences; matching it is the purpose of stripping ANSI codes from captured CLI/console output
   return value.replace(/\x1b\[[0-9;]*m/g, '');
 }
 
@@ -171,14 +172,6 @@ function assertHasGsdDirectory(root, relPath) {
   assert.ok(
     listDirNames(root, relPath).some((name) => name.startsWith('ecl-')),
     `${relPath} should contain generated eCL entries`
-  );
-}
-
-function assertNoGsdDirectoryEntries(root, relPath) {
-  assert.equal(
-    listDirNames(root, relPath).some((name) => name.startsWith('ecl-')),
-    false,
-    `${relPath} should not contain generated eCL entries`
   );
 }
 
@@ -239,10 +232,11 @@ function assertFreshInstallContract(runtime, targetDir) {
       `${runtime} should install commands/ecl entries`
     );
   } else if (contract.surface === 'clinerules') {
+    // #787: Cline now uses the .clinerules/ directory form (rules at ecl.md).
     assert.match(
-      fs.readFileSync(path.join(targetDir, '.clinerules'), 'utf8'),
+      fs.readFileSync(path.join(targetDir, '.clinerules', 'ecl.md'), 'utf8'),
       /eCL workflows live in `evolv-coder-lite\/workflows\/`/,
-      'Cline should install root .clinerules guidance'
+      'Cline should install .clinerules/ecl.md guidance'
     );
   }
 
@@ -307,7 +301,7 @@ describe('installer migration install integration', { concurrency: false }, () =
     assert.match(plainOutput, /Installer migrations/);
     assert.match(plainOutput, /removed\s+hooks\/statusline\.js/);
     assert.ok(
-      plainOutput.indexOf('Installer migrations') < plainOutput.indexOf('Installed evolv-coder-lite'),
+      plainOutput.indexOf('Installer migrations') < plainOutput.indexOf('Installed workflow assets'),
       'migration report should appear before package materialization'
     );
     assert.equal(fs.existsSync(path.join(codexHome, 'hooks/statusline.js')), false);
@@ -434,7 +428,7 @@ describe('installer migration install integration', { concurrency: false }, () =
       assert.match(output, /Installing for /);
       assert.match(output, /Installer migrations/);
       assert.match(output, /removed\s+hooks\/statusline\.js/);
-      assert.match(output, /Installed evolv-coder-lite/);
+      assert.match(output, /Installed workflow assets/);
       assert.match(output, /Done!/);
       assert.equal(fs.existsSync(path.join(targetDir, 'hooks/statusline.js')), false);
 

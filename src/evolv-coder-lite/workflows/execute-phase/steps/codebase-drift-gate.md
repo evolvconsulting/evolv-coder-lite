@@ -6,7 +6,17 @@ error here MUST fall through and continue to `verify_phase_goal`. The phase
 is never failed by this gate.
 
 ```bash
-DRIFT=$(ecl-tools verify codebase-drift 2>/dev/null || echo '{"skipped":true,"reason":"sdk-failed"}')
+# Resolve ecl-tools through the runtime shim launcher, NOT the bare PATH binary. On a
+# shim-only install (ecl-tools.cjs present, `ecl-tools` not on PATH) the bare call exits
+# 127, `2>/dev/null` hides it, and this non-blocking gate would silently skip drift
+# detection forever (#619). The canonical launcher preamble is defined once here — the
+# always-run drift check, the file's first launcher block — and the conditional auto-remap
+# block below reuses the launcher function from this shared shell scope (the single-preamble
+# pattern established by discuss-phase #614, enforced by tests/runtime-launcher-parity.test.cjs).
+# Non-blocking is preserved: an internal drift-command failure still falls through to the
+# skip JSON via the `|| echo` below.
+_GSD_SHIM_NAME="ecl-tools.cjs"; _GSD_RUNTIME_ROOT="${RUNTIME_DIR:-$(git rev-parse --show-toplevel 2>/dev/null || pwd)}"; ECL_TOOLS="${_GSD_RUNTIME_ROOT}/evolv-coder-lite/bin/${_GSD_SHIM_NAME}"; if [ -f "$ECL_TOOLS" ]; then ecl_run() { node "$ECL_TOOLS" "$@"; }; elif [ -f "${_GSD_RUNTIME_ROOT}/.claude/evolv-coder-lite/bin/${_GSD_SHIM_NAME}" ]; then ECL_TOOLS="${_GSD_RUNTIME_ROOT}/.claude/evolv-coder-lite/bin/${_GSD_SHIM_NAME}"; ecl_run() { node "$ECL_TOOLS" "$@"; }; elif command -v ecl-tools >/dev/null 2>&1; then ECL_TOOLS="$(command -v ecl-tools)"; ecl_run() { "$ECL_TOOLS" "$@"; }; elif [ -f "$HOME/.claude/evolv-coder-lite/bin/${_GSD_SHIM_NAME}" ]; then ECL_TOOLS="$HOME/.claude/evolv-coder-lite/bin/${_GSD_SHIM_NAME}"; ecl_run() { node "$ECL_TOOLS" "$@"; }; else echo "ERROR: ecl-tools.cjs not found at $ECL_TOOLS and ecl-tools is not on PATH. Run: npx -y @evolvconsulting/evolv-coder-lite@latest --claude --local" >&2; exit 1; fi
+DRIFT=$(ecl_run verify codebase-drift 2>/dev/null || echo '{"skipped":true,"reason":"sdk-failed"}')
 ```
 
 Parse JSON for: `skipped`, `reason`, `action_required`, `directive`,
@@ -45,11 +55,14 @@ First load the mapper agent's skill bundle (the executor's `AGENT_SKILLS`
 from step `init_context` is for `ecl-executor`, not the mapper):
 
 ```bash
-_GSD_SHIM_NAME="ecl-tools.cjs"; _GSD_RUNTIME_ROOT="${RUNTIME_DIR:-$(git rev-parse --show-toplevel 2>/dev/null || pwd)}"; ECL_TOOLS="${_GSD_RUNTIME_ROOT}/evolv-coder-lite/bin/${_GSD_SHIM_NAME}"; if [ -f "$ECL_TOOLS" ]; then ecl_run() { node "$ECL_TOOLS" "$@"; }; elif [ -f "${_GSD_RUNTIME_ROOT}/.claude/evolv-coder-lite/bin/${_GSD_SHIM_NAME}" ]; then ECL_TOOLS="${_GSD_RUNTIME_ROOT}/.claude/evolv-coder-lite/bin/${_GSD_SHIM_NAME}"; ecl_run() { node "$ECL_TOOLS" "$@"; }; elif command -v ecl-tools >/dev/null 2>&1; then ECL_TOOLS="$(command -v ecl-tools)"; ecl_run() { "$ECL_TOOLS" "$@"; }; elif [ -f "$HOME/.claude/evolv-coder-lite/bin/${_GSD_SHIM_NAME}" ]; then ECL_TOOLS="$HOME/.claude/evolv-coder-lite/bin/${_GSD_SHIM_NAME}"; ecl_run() { node "$ECL_TOOLS" "$@"; }; else echo "ERROR: ecl-tools.cjs not found at $ECL_TOOLS and ecl-tools is not on PATH. Run: npx -y @evolvconsulting/evolv-coder-lite@latest --claude --local" >&2; exit 1; fi
+# ecl_run is defined by the canonical preamble in the drift-check block above and reused
+# here via the workflow's shared shell scope — defining it once keeps the file compliant
+# with the single-canonical-preamble parity invariant (#619). This block only runs on the
+# `auto-remap` directive, which is always reached after the drift check above has run.
 AGENT_SKILLS_MAPPER=$(ecl_run query agent-skills ecl-codebase-mapper)
 ```
 
-Then spawn `ecl-codebase-mapper` agents with the `--paths` hint:
+Then spawn `ecl-codebase-mapper` agents with the `--paths` hint (runs in a subagent — no output until it returns, ~1–5 min; expected, not a freeze):
 
 ```text
 Agent(

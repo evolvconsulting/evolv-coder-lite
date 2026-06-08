@@ -25,7 +25,6 @@ const path = require('node:path');
 const ROOT = path.join(__dirname, '..');
 const WORKFLOW = path.join(ROOT, 'evolv-coder-lite', 'workflows', 'add-backlog.md');
 const COMMANDS_DIR = path.join(ROOT, 'commands', 'ecl');
-const WORKFLOWS_DIR = path.join(ROOT, 'evolv-coder-lite', 'workflows');
 
 // ─── #3135: add-backlog workflow ─────────────────────────────────────────────
 

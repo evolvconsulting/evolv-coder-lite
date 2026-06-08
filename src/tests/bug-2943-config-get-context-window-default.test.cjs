@@ -27,6 +27,7 @@ const { execFileSync } = require('node:child_process');
 
 const ECL_TOOLS = path.join(__dirname, '..', 'evolv-coder-lite', 'bin', 'ecl-tools.cjs');
 const { ERROR_REASON } = require(path.join(__dirname, '..', 'evolv-coder-lite', 'bin', 'lib', 'core.cjs'));
+const { cleanup } = require('./helpers.cjs');
 
 describe('bug-2943: config-get returns schema default for context_window', () => {
   let tmpDir;
@@ -39,7 +40,7 @@ describe('bug-2943: config-get returns schema default for context_window', () =>
   });
 
   afterEach(() => {
-    fs.rmSync(tmpDir, { recursive: true, force: true });
+    cleanup(tmpDir);
   });
 
   /**

@@ -2,6 +2,8 @@
 name: gsd:execute-phase
 description: Execute all plans in a phase with wave-based parallelization
 argument-hint: "<phase-number> [--wave N] [--gaps-only] [--interactive] [--tdd]"
+context: fork
+effort: xhigh
 allowed-tools:
   - Read
   - Write
@@ -32,8 +34,8 @@ Context budget: ~15% orchestrator, 100% fresh per subagent.
 </objective>
 
 <execution_context>
-@~/.claude/get-shit-done/workflows/execute-phase.md
-@~/.claude/get-shit-done/references/ui-brand.md
+@~/.claude/gsd-core/workflows/execute-phase.md
+@~/.claude/gsd-core/references/ui-brand.md
 </execution_context>
 
 <runtime_note>

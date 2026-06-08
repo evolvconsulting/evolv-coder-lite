@@ -33,7 +33,7 @@
  *   Non-interactive: --local --claude flags skip all prompts.
  *
  * Workflow-body checks (Cycle 3 — informational):
- *   - Scans all installed get-shit-done/workflows/*.md for /gsd:<known-cmd>
+ *   - Scans all installed gsd-core/workflows/*.md for /gsd:<known-cmd>
  *     colon-namespace leaks (WORKFLOW_BODY_COLON_LEAK).
  *   This check populates result.details with counters but does NOT return a
  *   failure code by default; it is informational until enforcement is enabled.
@@ -45,7 +45,8 @@ const { execFileSync, spawnSync } = require('child_process');
 const fs = require('fs');
 const os = require('os');
 const path = require('path');
-const { PACKAGE_NAME } = require('../get-shit-done/bin/lib/package-identity.cjs');
+const { PACKAGE_NAME } = require('../gsd-core/bin/lib/package-identity.cjs');
+const { ExitError, runMain } = require('./lib/cli-exit.cjs');
 // 120 s proved too tight on Windows GitHub-hosted runners: cold-cache
 // `npm install -g` with a 1499-file tarball took ~120 s exactly, causing
 // spawnSync to fire SIGTERM and return { status: null, stdout: '', stderr: '' }
@@ -182,15 +183,15 @@ function findInstallerBin(installPrefix) {
  * Structured parser — only inspects individual lines; never regexes on the
  * whole-file string. Two recognised forms (in priority order):
  *
- *   1. @-import line:  `@~/.claude/get-shit-done/workflows/<name>.md`
- *   2. Inline mention: any line containing `~/.claude/get-shit-done/workflows/<name>.md`
+ *   1. @-import line:  `@~/.claude/gsd-core/workflows/<name>.md`
+ *   2. Inline mention: any line containing `~/.claude/gsd-core/workflows/<name>.md`
  *      (takes the LAST occurrence so conditional-dispatch files resolve to the
  *       default / unconditional branch, e.g. discuss-phase.md)
  *
  * Returns the bare workflow filename (e.g. `"discuss-phase.md"`) or null.
  */
 function parseWorkflowRef(mdContent) {
-  const WORKFLOW_PREFIX = 'get-shit-done/workflows/';
+  const WORKFLOW_PREFIX = 'gsd-core/workflows/';
   let atImportResult = null;
   let lastInlineResult = null;
 
@@ -433,7 +434,7 @@ function runSmoke({
     // Verify expected dirs were created
     const expectedDirs = [
       path.join(fixtureDir, '.claude', 'commands'),
-      path.join(fixtureDir, '.claude', 'get-shit-done'),
+      path.join(fixtureDir, '.claude', 'gsd-core'),
     ];
     for (const dir of expectedDirs) {
       if (!fs.existsSync(dir) || !fs.statSync(dir).isDirectory()) {
@@ -472,9 +473,9 @@ function runSmoke({
 
     let workflowPath = null;
     if (workflowName) {
-      // Workflow files live at get-shit-done/workflows/<name> in the package.
+      // Workflow files live at gsd-core/workflows/<name> in the package.
       // Some live in subdirectories; try flat first then scan once.
-      const flat = path.join(pkg, 'get-shit-done', 'workflows', workflowName);
+      const flat = path.join(pkg, 'gsd-core', 'workflows', workflowName);
       workflowPath = fs.existsSync(flat) ? flat : null;
 
       if (!workflowPath) {
@@ -503,7 +504,7 @@ function runSmoke({
   // ─────────────────────────────────────────────────────────────────────────
 
   // --- Workflow-body checks (informational — #3668 not yet fixed) ----------
-  const workflowsDir = path.join(pkg, 'get-shit-done', 'workflows');
+  const workflowsDir = path.join(pkg, 'gsd-core', 'workflows');
   const installedCmdNames = readInstalledCmdNames(pkg);
 
   let workflowsScanned = 0;
@@ -587,23 +588,24 @@ function cliMain() {
         };
         if (isJson) process.stdout.write(JSON.stringify(result) + '\n');
         cleanup(packDir, installPrefix, fixtureDir);
-        process.exit(1);
+        throw new ExitError(1);
       }
     }
   } catch (err) {
+    if (err instanceof ExitError) throw err;
     const result = {
       code: SMOKE.PACK_FAILED,
       details: { error: err.message, stderr: err.stderr },
     };
     if (isJson) process.stdout.write(JSON.stringify(result) + '\n');
     cleanup(packDir, installPrefix, fixtureDir);
-    process.exit(1);
+    throw new ExitError(1);
   }
 
   const result = runSmoke({ tarballPath, installPrefix, expectedVersion, fixtureDir });
   if (isJson) process.stdout.write(JSON.stringify(result) + '\n');
   cleanup(packDir, installPrefix, fixtureDir);
-  process.exit(result.code === SMOKE.OK ? 0 : 1);
+  return result.code === SMOKE.OK ? 0 : 1;
 }
 
 function cleanup(...dirs) {
@@ -623,5 +625,5 @@ function cleanup(...dirs) {
 module.exports = { SMOKE, runSmoke, binInvocation };
 
 if (require.main === module) {
-  cliMain();
+  runMain(cliMain);
 }

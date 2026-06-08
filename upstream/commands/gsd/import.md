@@ -21,10 +21,10 @@ Import external plan files into the GSD planning system with conflict detection 
 </objective>
 
 <execution_context>
-@~/.claude/get-shit-done/workflows/import.md
-@~/.claude/get-shit-done/references/ui-brand.md
-@~/.claude/get-shit-done/references/gate-prompts.md
-@~/.claude/get-shit-done/references/doc-conflict-engine.md
+@~/.claude/gsd-core/workflows/import.md
+@~/.claude/gsd-core/references/ui-brand.md
+@~/.claude/gsd-core/references/gate-prompts.md
+@~/.claude/gsd-core/references/doc-conflict-engine.md
 </execution_context>
 
 <context>
@@ -33,8 +33,12 @@ $ARGUMENTS
 
 <process>
 If `--from-gsd2` is in $ARGUMENTS:
-Run: `node "$HOME/.claude/get-shit-done/bin/gsd-tools.cjs" from-gsd2`
-Pass `--path <dir>` if provided. Present the migration result to the user.
+Run the reverse-migration (append `--path <dir>` if provided):
+```bash
+_GSD_SHIM_NAME="gsd-tools.cjs"; _GSD_RUNTIME_ROOT="${RUNTIME_DIR:-$(git rev-parse --show-toplevel 2>/dev/null || pwd)}"; GSD_TOOLS="${_GSD_RUNTIME_ROOT}/gsd-core/bin/${_GSD_SHIM_NAME}"; if [ -f "$GSD_TOOLS" ]; then gsd_run() { node "$GSD_TOOLS" "$@"; }; elif [ -f "${_GSD_RUNTIME_ROOT}/.claude/gsd-core/bin/${_GSD_SHIM_NAME}" ]; then GSD_TOOLS="${_GSD_RUNTIME_ROOT}/.claude/gsd-core/bin/${_GSD_SHIM_NAME}"; gsd_run() { node "$GSD_TOOLS" "$@"; }; elif command -v gsd-tools >/dev/null 2>&1; then GSD_TOOLS="$(command -v gsd-tools)"; gsd_run() { "$GSD_TOOLS" "$@"; }; elif [ -f "$HOME/.claude/gsd-core/bin/${_GSD_SHIM_NAME}" ]; then GSD_TOOLS="$HOME/.claude/gsd-core/bin/${_GSD_SHIM_NAME}"; gsd_run() { node "$GSD_TOOLS" "$@"; }; else echo "ERROR: gsd-tools.cjs not found at $GSD_TOOLS and gsd-tools is not on PATH. Run: npx -y @opengsd/gsd-core@latest --claude --local" >&2; exit 1; fi
+gsd_run from-gsd2
+```
+Present the migration result to the user.
 Stop here (do not run the standard import workflow).
 
 Otherwise, execute the import workflow end-to-end.

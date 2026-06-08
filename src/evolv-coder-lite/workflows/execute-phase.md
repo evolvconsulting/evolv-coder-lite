@@ -92,6 +92,16 @@ if [ "$RUNTIME" = "codex" ] && [ "$USE_WORKTREES" != "false" ]; then
 fi
 # Sweep orphaned locked worktrees from prior crashed sessions before spawning executors (#3707).
 [ "$USE_WORKTREES" != "false" ] && ecl_run query worktree.reap-orphans 2>/dev/null || true
+# Auto-degrade to sequential if HEAD has diverged from the worktree fork base (#683).
+# Only applies to Claude Code (isolation="worktree" is Claude-Code-specific).
+if [ "$RUNTIME" = "claude" ] && [ "$USE_WORKTREES" != "false" ]; then
+  _SHOULD_DEGRADE=$(ecl_run query worktree.base-check --pick shouldDegrade 2>/dev/null || true)
+  if [ "$_SHOULD_DEGRADE" = "true" ]; then
+    _DEGRADE_MSG=$(ecl_run query worktree.base-check --pick message 2>/dev/null || true)
+    [ -n "$_DEGRADE_MSG" ] && printf '%s\n' "$_DEGRADE_MSG" >&2
+    USE_WORKTREES=false
+  fi
+fi
 ```
 Codex maps subagents to `spawn_agent`, which has no direct Codex mapping for Claude Code's `isolation="worktree"` parameter. Failing closed prevents main-checkout edits while the workflow believes agents are isolated.
 
@@ -110,6 +120,8 @@ fi
 `SUBMODULE_PATHS` is exported to the `execute_waves` step, where the per-plan decision actually happens (see "Per-plan worktree decision" sub-step inside `execute_waves`). The decision is per-plan because different plans in the same wave can touch different files — only plans whose paths intersect a submodule must drop worktree isolation; plans nowhere near a submodule keep parallel isolation.
 
 When `USE_WORKTREES` (project-level) is `false`, all executor agents run without `isolation="worktree"` — they execute sequentially on the main working tree instead of in parallel worktrees. The per-plan decision below has no effect when worktrees are project-disabled.
+
+`USE_WORKTREES` is also automatically set to `false` for the duration of a run when `worktree base-check` detects that the orchestrator HEAD has diverged from the worktree fork base (the #683 condition — e.g. an unmerged milestone or feature branch). This check runs only when `RUNTIME=claude` because `isolation="worktree"` is a Claude Code-specific feature; other runtimes do not use it. The auto-degrade prints a one-line warning to stderr and falls through to the sequential path so executors do not hit the exit-42 worktree-branch-check halt. To restore parallel worktree execution, set `worktree.baseRef:"head"` in `.claude/settings.local.json` (or run `ecl-tools worktree set-baseref`) — this makes the fork base track the live HEAD instead of a fixed remote ref. The `worktree-branch-check` exit-42 guard inside each executor remains in place as a backstop.
 
 Read context window size for adaptive prompt enrichment:
 
@@ -188,7 +200,7 @@ if [ "$MVP_MODE" = "true" ] && [ "$TDD_MODE" = "true" ]; then
   fi
 fi
 ```
-Pure doc-only / config-only / test-only tasks return `is_behavior_adding=false` and are exempt. See `execute-mvp-tdd.md` for the halt report format.
+Pure doc-only / config-only / test-only tasks return `is_behavior_adding=false` and are exempt. When the gate trips, Read `~/.claude/evolv-coder-lite/references/execute-mvp-tdd.md` for the exact halt report format.
 </step>
 
 <step name="check_blocking_antipatterns" priority="first">
@@ -416,6 +428,35 @@ CROSS_AI_TIMEOUT=$(ecl_run query config-get workflow.cross_ai_timeout 2>/dev/nul
 <step name="execute_waves">
 Execute each selected wave in sequence. Within a wave: parallel if `PARALLELIZATION=true`, sequential if `false`.
 
+**Orchestrator cwd-drift guard (FIRST ACTION at execute_waves entry — #48):**
+
+A prior `Agent(isolation="worktree")` dispatch can silently leave the orchestrator's
+cwd inside an agent worktree (or a subdirectory of one). Every subsequent
+orchestrator-side git call would then target the wrong tree — this is how a wrong-base
+merge nearly shipped ~1000 files. Resolve the *worktree root* (so a subdirectory cwd
+cannot skew the check) and refuse if it is an agent worktree. The discriminator is the
+per-agent branch namespace `worktree-agent-*`, NOT the `.claude/worktrees/` path: the
+orchestrator may itself be legitimately invoked from a feature worktree under
+`.claude/worktrees/`, so a path-substring refusal would break legitimate runs. Do NOT
+pin to `git worktree list`'s first entry — that is the main worktree, the wrong target
+when the orchestrator legitimately runs from a feature worktree.
+
+```bash
+ORCHESTRATOR_WT=$(git rev-parse --show-toplevel 2>/dev/null) || {
+  echo "FATAL: execute_waves entry is not inside a git worktree (#48)." >&2; exit 1; }
+ORCH_BRANCH=$(git rev-parse --abbrev-ref HEAD 2>/dev/null)
+if printf '%s' "$ORCH_BRANCH" | grep -Eq '^worktree-agent-'; then
+  echo "FATAL: orchestrator cwd is inside an agent worktree (branch '$ORCH_BRANCH', root '$ORCHESTRATOR_WT') — refusing to execute waves (#48). A prior isolation=\"worktree\" dispatch drifted the cwd; re-run from the orchestrator's own worktree." >&2
+  exit 1
+fi
+# Pin to the worktree root; each later orchestrator-side block re-pins the same way
+# (see the #3174 cleanup guard). Treat $ORCHESTRATOR_WT as the canonical root for the
+# rest of the phase — prefer `git -C "$ORCHESTRATOR_WT"` for cross-step git calls,
+# since a bare `cd` does not persist across separate tool invocations.
+export ORCHESTRATOR_WT
+cd "$ORCHESTRATOR_WT" || { echo "FATAL: cannot cd to orchestrator worktree '$ORCHESTRATOR_WT' (#48)." >&2; exit 1; }
+```
+
 **Stream-idle-timeout prevention — checkpoint heartbeats (#2410):**
 
 Multi-plan phases can accumulate enough subagent context that the Claude API
@@ -491,7 +532,7 @@ increases monotonically across waves. `{status}` is `complete` (success),
    **{Plan ID}: {Plan Name}**
    {2-3 sentences: what this builds, technical approach, why it matters}
 
-   Spawning {count} agent(s)...
+   Spawning {count} agent(s)... (runs in a subagent — no output until it returns, ~1–5 min; expected, not a freeze)
    ---
    ```
 
@@ -524,7 +565,12 @@ increases monotonically across waves. `{status}` is `complete` (success),
    EXPECTED_BRANCH=$(git rev-parse --abbrev-ref HEAD)
    if [ "${USE_WORKTREES_FOR_PLAN:-true}" != "false" ] && [ -z "${WAVE_WORKTREE_MANIFEST:-}" ]; then
      WAVE_WORKTREE_MANIFEST=$(mktemp "${TMPDIR:-/tmp}/ecl-worktree-wave-XXXXXX.json")
-     printf '{"worktrees":[]}\n' > "$WAVE_WORKTREE_MANIFEST"
+     # Persist the dispatch-time orchestrator worktree root so wave-cleanup can pin back to the
+     # orchestrator's OWN worktree — NOT `git worktree list`'s first entry (always the main
+     # checkout), which pins a non-primary (per-phase lane) orchestrator off its branch (#630).
+     # Dispatch runs from the orchestrator's lane, so show-toplevel here is the correct root.
+     ORCH_ROOT=$(git rev-parse --show-toplevel)
+     ORCH_ROOT="$ORCH_ROOT" MANIFEST="$WAVE_WORKTREE_MANIFEST" node -e 'const fs=require("fs");fs.writeFileSync(process.env.MANIFEST,JSON.stringify({orchestrator_root:process.env.ORCH_ROOT||null,worktrees:[]})+"\n")'
      export WAVE_WORKTREE_MANIFEST
    fi
    ```
@@ -556,29 +602,7 @@ increases monotonically across waves. `{status}` is `complete` (success),
        </objective>
 
        <worktree_branch_check>
-       FIRST ACTION: HEAD assertion MUST run before any reset/checkout. Worktrees
-       spawned by Claude Code's `isolation="worktree"` use the `worktree-agent-<id>`
-       namespace. If HEAD is on a protected ref (main/master/develop/trunk/release/*)
-       or detached, HALT — do NOT self-recover by force-rewinding via `git update-ref`,
-       that destroys concurrent commits in multi-active scenarios (#2924). Only after
-       Step 1 passes is `git reset --hard` safe (#2015 — affects all platforms).
-       ```bash
-       HEAD_REF=$(git symbolic-ref --quiet HEAD || echo "DETACHED")
-       ACTUAL_BRANCH=$(git rev-parse --abbrev-ref HEAD)
-       if [ "$HEAD_REF" = "DETACHED" ] || echo "$ACTUAL_BRANCH" | grep -Eq '^(main|master|develop|trunk|release/.*)$'; then
-         echo "FATAL: worktree HEAD on '$ACTUAL_BRANCH' (expected worktree-agent-*); refusing to self-recover via 'git update-ref' (#2924)." >&2
-         exit 1
-       fi
-       if ! echo "$ACTUAL_BRANCH" | grep -Eq '^worktree-agent-[A-Za-z0-9._/-]+$'; then
-         echo "FATAL: worktree HEAD '$ACTUAL_BRANCH' is not in the worktree-agent-* namespace; refusing to commit (#2924)." >&2
-         exit 1
-       fi
-       ACTUAL_BASE=$(git merge-base HEAD {EXPECTED_BASE})
-       if [ "$ACTUAL_BASE" != "{EXPECTED_BASE}" ]; then
-         git reset --hard {EXPECTED_BASE}
-         [ "$(git rev-parse HEAD)" != "{EXPECTED_BASE}" ] && { echo "ERROR: could not correct worktree base"; exit 1; }
-       fi
-       ```
+       ORCHESTRATOR build-time embed (NOT a sub-agent runtime step): before this dispatch, read `evolv-coder-lite/references/worktree-branch-check.md`, substitute `{EXPECTED_BASE}` with the base SHA captured above ({EXPECTED_BASE}), and replace this note with that fragment's `<worktree_branch_check>` block so the dispatched prompt carries the runnable guard verbatim — do not pass this instruction through in its place.
        Per-commit HEAD/cwd-drift/path-guard: `agents/ecl-executor.md` steps 0/0a/0b + `references/worktree-path-safety.md` (in <execution_context>).
        </worktree_branch_check>
 
@@ -647,6 +671,8 @@ increases monotonically across waves. `{status}` is `complete` (success),
    ```
 
    Immediately after each worktree `Agent()` spawn returns metadata, atomically append `{agent_id, worktree_path, branch, expected_base}` to `WAVE_WORKTREE_MANIFEST`. If any field is missing, stop and ask for recovery instead of scanning all agent worktrees.
+
+   > **ORCHESTRATOR FAIL-CLOSED RULE (#48):** `worktree_branch_check` is verify-only — an executor that hits a base/HEAD-namespace mismatch prints `FATAL:` and exits **42** instead of self-recovering. If any executor result reports a `FATAL:`/`exit 42` (or its commits never appear because it halted at the check), mark that plan **blocked**: do NOT merge or clean up its worktree (preserve it for inspection), do NOT count the wave as successful, and surface the mismatch with recovery guidance to the user. The orchestrator — the worktree lifecycle owner — performs any base correction (e.g. recreate the worktree on `{EXPECTED_BASE}`); the sub-agent never does. Never proceed past a halted executor on the assumption it succeeded.
 
    > **ORCHESTRATOR RULE — CODEX RUNTIME**: After calling Agent() above to spawn executor agent(s), stop working on this task immediately. Do not read more files, edit code, or run tests related to this task while the subagent is active. Wait for the subagent to return its result. This prevents duplicate work, conflicting edits, and wasted context. Only resume when the subagent result is available.
 
@@ -752,10 +778,15 @@ increases monotonically across waves. `{status}` is `complete` (success),
      exit 1
    }
 
-   # Guard: pin cleanup back to the primary worktree and fail on branch drift (#3174).
-   PRIMARY_WT=$(git worktree list --porcelain | awk '/^worktree /{print substr($0,10); exit}')
+   # Guard: pin cleanup back to the orchestrator's OWN worktree and fail on branch drift (#3174, #630).
+   # Resolve from the dispatch-time orchestrator root persisted in the manifest — NOT `git worktree
+   # list`'s first entry, which is always the main checkout and would pin a non-primary (per-phase
+   # lane) orchestrator off its own branch, tripping the #3174 assertion below (#630). Byte-identical
+   # for a primary orchestrator (its root IS the first entry); the fallback covers pre-#630 manifests.
+   PRIMARY_WT=$(MANIFEST="$WAVE_WORKTREE_MANIFEST" node -e 'const fs=require("fs");try{const j=JSON.parse(fs.readFileSync(process.env.MANIFEST,"utf8"));if(j&&j.orchestrator_root)process.stdout.write(String(j.orchestrator_root))}catch(e){}')
+   [ -n "$PRIMARY_WT" ] || PRIMARY_WT=$(git worktree list --porcelain | awk '/^worktree /{print substr($0,10); exit}')
    if [ -z "$PRIMARY_WT" ]; then
-     echo "FATAL: could not resolve primary worktree before cleanup" >&2
+     echo "FATAL: could not resolve orchestrator worktree before cleanup" >&2
      exit 1
    fi
    if [ -n "$PRIMARY_WT" ] && [ "$(pwd -P 2>/dev/null)" != "$(cd "$PRIMARY_WT" 2>/dev/null && pwd -P)" ]; then echo "⚠ Orchestrator CWD drifted to $(pwd) — pinning to $PRIMARY_WT before worktree cleanup (#3174)"; cd "$PRIMARY_WT" || { echo "FATAL: cannot cd to primary worktree $PRIMARY_WT" >&2; exit 1; }; fi
@@ -771,8 +802,11 @@ increases monotonically across waves. `{status}` is `complete` (success),
    If the orchestrator deviated from the standard wave merge path (e.g., custom inter-worktree base-update merges with `merge: bring …` style messages), run this snippet after the custom merges are complete. It reads only `WAVE_WORKTREE_MANIFEST`; do not discover unrelated `worktree-agent-*` worktrees.
 
    ```bash
-   # Cleanup-tail: pin orchestrator CWD to primary worktree before cleanup-tail (#3174).
-   PRIMARY_WT=$(git worktree list --porcelain | awk '/^worktree /{print substr($0,10); exit}')
+   # Cleanup-tail: pin orchestrator CWD to its OWN worktree before cleanup-tail (#3174, #630).
+   # Same fix as the templated path: resolve the dispatch-time orchestrator root from the manifest,
+   # not `git worktree list`'s first entry (always the main checkout — wrong for a lane orchestrator).
+   PRIMARY_WT=$(MANIFEST="$WAVE_WORKTREE_MANIFEST" node -e 'const fs=require("fs");try{const j=JSON.parse(fs.readFileSync(process.env.MANIFEST,"utf8"));if(j&&j.orchestrator_root)process.stdout.write(String(j.orchestrator_root))}catch(e){}')
+   [ -n "$PRIMARY_WT" ] || PRIMARY_WT=$(git worktree list --porcelain | awk '/^worktree /{print substr($0,10); exit}')
    if [ -n "$PRIMARY_WT" ] && [ "$(pwd -P 2>/dev/null)" != "$(cd "$PRIMARY_WT" 2>/dev/null && pwd -P)" ]; then echo "⚠ Orchestrator CWD drifted to $(pwd) — pinning to $PRIMARY_WT before cleanup-tail (#3174)"; cd "$PRIMARY_WT" || { echo "FATAL: cannot cd to primary worktree $PRIMARY_WT" >&2; exit 1; }; fi
    # Cleanup-tail: remove residual agent worktrees after a cross-wave-dependency deviation.
    # Uses only the current wave manifest to avoid touching unrelated active agents (#3384).
@@ -1391,26 +1425,25 @@ ${VERIFIER_SKILLS}",
 
 > **ORCHESTRATOR RULE — CODEX RUNTIME**: After calling Agent() above, stop working on this task immediately. Do not read more files, edit code, or run tests related to this task while the subagent is active. Wait for the subagent to return its result. This prevents duplicate work, conflicting edits, and wasted context. Only resume when the subagent result is available.
 
-Read status:
+Read status via the canonical query (scoped to frontmatter, covers missing/unknown cases):
 ```bash
-grep "^status:" "$PHASE_DIR"/*-VERIFICATION.md | cut -d: -f2 | tr -d ' '
+VERIFICATION=$(ecl_run query verification.status "$PHASE_DIR" 2>/dev/null)
+STATUS=$(printf '%s' "$VERIFICATION" | jq -r '.status' 2>/dev/null || echo "")
+NEXT_ACTION=$(printf '%s' "$VERIFICATION" | jq -r '.next_action' 2>/dev/null || echo "")
+NEXT_COMMAND=$(printf '%s' "$VERIFICATION" | jq -r '.next_command' 2>/dev/null || echo "")
 ```
 
-| Status | Action |
-|--------|--------|
-| `passed` | → update_roadmap |
-| `human_needed` | Persist and present human testing items; keep phase pending until verification reruns as `passed` |
-| `gaps_found` | Present gap summary, offer `/ecl:plan-phase {phase} --gaps ${ECL_WS}` |
+Route on `$STATUS`: if `passed`, proceed to update_roadmap. Otherwise keep the phase pending — present `$NEXT_ACTION` to the user and, when `$NEXT_COMMAND` is non-empty, show it as the next command to run. The query covers all cases including missing files (`missing`) and unexpected values (`unknown`), so no per-status arm needs to be listed here.
 
 **If human_needed:**
 
 **Step A: Persist human verification items as UAT file.**
 
-Create `{phase_dir}/{phase_num}-HUMAN-UAT.md` using UAT template format:
+Create `{phase_dir}/{phase_num}-UAT.md` using UAT template format:
 
 ```markdown
 ---
-status: partial
+status: testing
 phase: {phase_num}-{phase_name}
 source: [{phase_num}-VERIFICATION.md]
 started: [now ISO]
@@ -1419,7 +1452,11 @@ updated: [now ISO]
 
 ## Current Test
 
-[awaiting human testing]
+number: 1
+name: {first human_verification item description}
+expected: |
+  {expected behavior from VERIFICATION.md}
+awaiting: user response
 
 ## Tests
 
@@ -1443,26 +1480,32 @@ blocked: 0
 
 Commit the file:
 ```bash
-ecl_run query commit "test({phase_num}): persist human verification items as UAT" --files "{phase_dir}/{phase_num}-HUMAN-UAT.md"
+ecl_run query commit "test({phase_num}): persist human verification items as UAT" --files "{phase_dir}/{phase_num}-UAT.md"
 ```
 
 **Step B: Present to user:**
 
 ```
-## ✓ Phase {X}: {Name} — Human Verification Required
+## ◷ Phase {X}: {Name} — Human Verification Needed
 
-All automated checks passed. {N} items need human testing:
+All automated checks passed. {N} item(s) require human testing before this phase can be marked complete:
 
 {From VERIFICATION.md human_verification section}
 
-Items saved to `{phase_num}-HUMAN-UAT.md` — they will appear in `/ecl:progress` and `/ecl:audit-uat`.
+Tests saved to `{phase_num}-UAT.md`.
 
-"approved" → continue | Report issues → gap closure
+When ready to run the tests:
+
+`/ecl:verify-work {X} ${ECL_WS}`
+
+Verify-work will walk you through each item and mark the phase complete when all tests pass.
 ```
 
-**If user says "approved":** Proceed to `update_roadmap`. The HUMAN-UAT.md file persists with `status: partial` and will surface in future progress checks until the user runs `/ecl:verify-work` on it.
+**Do NOT advance the phase from this branch.** Phase completion is handled by verify-work's auto-transition after UAT passes.
 
-**If user reports issues:** Proceed to gap closure as currently implemented.
+**If user acknowledges without reporting issues (including "ok", "noted", "ack", "got it", "approved", "done", "yes", "pass", or similar):** Stop. The phase remains pending. No further orchestrator action — wait for the user to run `/ecl:verify-work`.
+
+**If user reports issues now (before running verify-work):** Proceed to gap closure as currently implemented.
 
 **If gaps_found:**
 ```
