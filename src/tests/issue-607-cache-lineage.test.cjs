@@ -23,7 +23,7 @@ describe('package-identity exports', () => {
   });
 
   test('updateCacheFileName is per-package filename', () => {
-    assert.equal(updateCacheFileName, 'ecl-update-check-opengsd-evolv-coder-lite.json');
+    assert.equal(updateCacheFileName, 'ecl-update-check-evolvconsulting-evolv-coder-lite.json');
   });
 });
 

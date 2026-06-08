@@ -1270,7 +1270,7 @@ describe('shared cache directory (#1421)', () => {
     // Per-package filename embeds the package identity — no generic fallback
     assert.strictEqual(
       updateCacheFileName,
-      'ecl-update-check-opengsd-evolv-coder-lite.json',
+      'ecl-update-check-evolvconsulting-evolv-coder-lite.json',
       'updateCacheFileName must be the per-package filename'
     );
 

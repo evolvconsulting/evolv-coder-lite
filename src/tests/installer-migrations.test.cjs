@@ -1458,13 +1458,13 @@ test('shipped installer-migration checksums are locked to a committed baseline (
   // it (root cause of #670) — add a NEW fix-forward migration id instead.
   const EXPECTED_CHECKSUMS = {
     '2026-05-11-first-time-baseline-scan':
-      'sha256:4ec58d35b30dbf39cc56e3972146086d8d31861ecd800cf0b37a7aa94fe74c2a',
+      'sha256:b7696d0f5469487afd4f80e4764206dbc6fcf38823ca7f2039e9167a8877380a',
     '2026-05-11-legacy-orphan-files':
-      'sha256:e492698748a2436a12a55f0940f539b9bf651d8ffcac6f60cd856a6dabd6788c',
+      'sha256:65ac35e6cecd20cbd81d4941e03a8c8f95558d9d7708268719b4b701d1b2e7bb',
     '2026-05-11-codex-legacy-hooks-json':
-      'sha256:5ce55294aa02f25758f604a569c899a6d2d060299189f5f447f68d8033157058',
+      'sha256:3e2fa98915bbd272182ebe7ede9e1fc4137c2067d386ba190fa0d37aafa15f77',
     '2026-06-02-rename-evolv-coder-lite-to-evolv-coder-lite':
-      'sha256:3a9f1d97f64097fb313203d19c6d93a187a38df61dd299afa5eef73e16124e95',
+      'sha256:f8331badfebb311e43d264a52d479f414152a994da57dd1a1f637315fe39f535',
   };
 
   const { DEFAULT_MIGRATIONS_DIR, migrationChecksum: computeChecksum } = require('../evolv-coder-lite/bin/lib/installer-migrations.cjs');

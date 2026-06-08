@@ -61,19 +61,19 @@ describe('Issue #498: deriveIdentity (pure, package.json -> coordinates)', () =>
   test('deriveIdentity returns cacheSlug for @evolvconsulting/evolv-coder-lite', () => {
     const real = require(path.join(ROOT, 'package.json'));
     const id = deriveIdentity(real);
-    assert.equal(id.cacheSlug, 'opengsd-evolv-coder-lite');
+    assert.equal(id.cacheSlug, 'evolvconsulting-evolv-coder-lite');
   });
 
   test('deriveIdentity returns updateCacheFileName for @evolvconsulting/evolv-coder-lite', () => {
     const real = require(path.join(ROOT, 'package.json'));
     const id = deriveIdentity(real);
-    assert.equal(id.updateCacheFileName, 'ecl-update-check-opengsd-evolv-coder-lite.json');
+    assert.equal(id.updateCacheFileName, 'ecl-update-check-evolvconsulting-evolv-coder-lite.json');
   });
 });
 
 describe('Issue #498: slugifyPackageName (pure helper for cache filename)', () => {
   test('slugifyPackageName strips leading @, replaces / with -, for @evolvconsulting/evolv-coder-lite', () => {
-    assert.equal(slugifyPackageName('@evolvconsulting/evolv-coder-lite'), 'opengsd-evolv-coder-lite');
+    assert.equal(slugifyPackageName('@evolvconsulting/evolv-coder-lite'), 'evolvconsulting-evolv-coder-lite');
   });
 
   test('slugifyPackageName returns empty string for empty input', () => {
@@ -128,12 +128,12 @@ describe('Issue #498: generated runtime module (baked, drift-checked)', () => {
 
   test('generated module exports cacheSlug matching @evolvconsulting/evolv-coder-lite', () => {
     const id = require(GENERATED);
-    assert.equal(id.cacheSlug, 'opengsd-evolv-coder-lite');
+    assert.equal(id.cacheSlug, 'evolvconsulting-evolv-coder-lite');
   });
 
   test('generated module exports updateCacheFileName matching @evolvconsulting/evolv-coder-lite', () => {
     const id = require(GENERATED);
-    assert.equal(id.updateCacheFileName, 'ecl-update-check-opengsd-evolv-coder-lite.json');
+    assert.equal(id.updateCacheFileName, 'ecl-update-check-evolvconsulting-evolv-coder-lite.json');
   });
 
   test('generated manualInstallCommand closes over the baked coordinates', () => {
