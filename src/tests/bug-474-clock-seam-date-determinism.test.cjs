@@ -14,7 +14,7 @@
  *      the clock seam (in-process, using makeFakeClock — no subprocess needed).
  */
 
-const { describe, it, test, before, after } = require('node:test');
+const { describe, test, before, after } = require('node:test');
 const assert = require('node:assert/strict');
 const fs = require('fs');
 const path = require('path');
@@ -228,7 +228,7 @@ describe('bug-474: installer-migrations lock-loop timeout is deterministic via c
     const configDir = fs.mkdtempSync(path.join(os.tmpdir(), 'ecl-474-lock-'));
 
     t.after(() => {
-      fs.rmSync(configDir, { recursive: true, force: true });
+      cleanup(configDir);
     });
 
     const LOCK_NAME = 'ecl-install-migration.lock';

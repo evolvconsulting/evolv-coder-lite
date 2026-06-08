@@ -22,9 +22,7 @@ const {
   resolveModelInternal,
   escapeRegex,
   generateSlugInternal,
-  normalizePhaseName,
   reapStaleTempFiles,
-  comparePhaseNum,
   pathExistsInternal,
   getMilestoneInfo,
   getMilestonePhaseFilter,
@@ -1265,26 +1263,62 @@ describe('shared cache directory (#1421)', () => {
     );
   });
 
-  test('ecl-statusline.js checks shared cache first, falls back to legacy (#1421)', () => {
-    const content = fs.readFileSync(
+  test('ecl-statusline.js reads the per-package shared cache and rejects foreign lineage (#1421/#607)', () => {
+    const { evaluateUpdateCache } = require('../hooks/ecl-statusline.js');
+    const { updateCacheFileName, PACKAGE_NAME } = require('../evolv-coder-lite/bin/lib/package-identity.cjs');
+
+    // Per-package filename embeds the package identity — no generic fallback
+    assert.strictEqual(
+      updateCacheFileName,
+      'ecl-update-check-opengsd-evolv-coder-lite.json',
+      'updateCacheFileName must be the per-package filename'
+    );
+
+    // The statusline must NOT reference a legacyCacheFile — the legacy fallback was removed
+    // allow-test-rule: architectural-invariant
+    const statuslineSrc = fs.readFileSync(
       path.join(__dirname, '..', 'hooks', 'ecl-statusline.js'), 'utf-8'
     );
-    // Statusline must check the shared cache path first
     assert.ok(
-      content.includes("path.join(homeDir, '.cache', 'ecl', 'ecl-update-check.json')"),
-      'statusline must check shared cache at ~/.cache/ecl/ecl-update-check.json'
+      !statuslineSrc.includes('legacyCacheFile'),
+      'ecl-statusline.js must not reference legacyCacheFile — legacy fallback was removed in #607'
     );
-    // Must fall back to legacy runtime-specific cache for backward compat
     assert.ok(
-      content.includes("path.join(claudeDir, 'cache', 'ecl-update-check.json')"),
-      'statusline must fall back to legacy cache at claudeDir/cache/ecl-update-check.json'
+      statuslineSrc.includes(updateCacheFileName) || statuslineSrc.includes('updateCacheFileName'),
+      'ecl-statusline.js must reference the per-package updateCacheFileName'
     );
-    // Shared cache must be checked before legacy (existsSync order matters)
-    const sharedIdx = content.indexOf('sharedCacheFile');
-    const legacyIdx = content.indexOf('legacyCacheFile');
-    assert.ok(
-      sharedIdx < legacyIdx,
-      'shared cache must be defined and checked before legacy cache'
+
+    // evaluateUpdateCache: foreign package_name → no update shown
+    assert.deepStrictEqual(
+      evaluateUpdateCache({ package_name: 'other-package', update_available: true }),
+      { showUpdate: false, staleWarning: 'none' },
+      'foreign package_name must be rejected (lineage guard)'
+    );
+
+    // evaluateUpdateCache: absent package_name → no update shown
+    assert.deepStrictEqual(
+      evaluateUpdateCache({ update_available: true }),
+      { showUpdate: false, staleWarning: 'none' },
+      'absent package_name must be rejected (lineage guard)'
+    );
+
+    // evaluateUpdateCache: null cache → no update shown
+    assert.deepStrictEqual(
+      evaluateUpdateCache(null),
+      { showUpdate: false, staleWarning: 'none' },
+      'null cache must return no-update'
+    );
+
+    // evaluateUpdateCache: matching package_name + update_available:true → show update
+    const result = evaluateUpdateCache({ package_name: PACKAGE_NAME, update_available: true });
+    assert.strictEqual(result.showUpdate, true,
+      'matching package_name with update_available:true must set showUpdate=true'
+    );
+
+    // evaluateUpdateCache: matching package_name + update_available:false → no update
+    const noUpdate = evaluateUpdateCache({ package_name: PACKAGE_NAME, update_available: false });
+    assert.strictEqual(noUpdate.showUpdate, false,
+      'matching package_name with update_available:false must not show update'
     );
   });
 });
@@ -1348,7 +1382,7 @@ describe('resolveWorktreeRoot with linked worktree .planning/', () => {
   afterEach(() => {
     if (worktreeDir) {
       try { execSyncLocal(`git worktree remove "${worktreeDir}" --force`, { cwd: mainDir, stdio: 'pipe' }); } catch { /* ok */ }
-      try { fs.rmSync(worktreeDir, { recursive: true, force: true }); } catch { /* ok */ }
+      cleanup(worktreeDir);
     }
     cleanup(mainDir);
   });
@@ -1359,7 +1393,7 @@ describe('resolveWorktreeRoot with linked worktree .planning/', () => {
 
     // Create a linked worktree
     worktreeDir = normalizePath(fs.mkdtempSync(path.join(os.tmpdir(), 'ecl-wt-linked-')));
-    fs.rmSync(worktreeDir, { recursive: true, force: true });
+    cleanup(worktreeDir);
     execSyncLocal(`git worktree add "${worktreeDir}" -b test-linked`, { cwd: mainDir, stdio: 'pipe' });
 
     // Give the linked worktree its own .planning/
@@ -1374,7 +1408,7 @@ describe('resolveWorktreeRoot with linked worktree .planning/', () => {
   test('returns main repo root when linked worktree has no .planning/', () => {
     // Create a linked worktree (no .planning/ in main or worktree)
     worktreeDir = normalizePath(fs.mkdtempSync(path.join(os.tmpdir(), 'ecl-wt-linked-')));
-    fs.rmSync(worktreeDir, { recursive: true, force: true });
+    cleanup(worktreeDir);
     execSyncLocal(`git worktree add "${worktreeDir}" -b test-linked-no-plan`, { cwd: mainDir, stdio: 'pipe' });
 
     // resolveWorktreeRoot should return the main repo root
@@ -1473,7 +1507,7 @@ describe('detectSubRepos', () => {
   });
 
   afterEach(() => {
-    fs.rmSync(projectRoot, { recursive: true, force: true });
+    cleanup(projectRoot);
   });
 
   test('returns empty array when no child directories have .git', () => {
@@ -1520,7 +1554,7 @@ describe('loadConfig sub_repos auto-sync', () => {
   });
 
   afterEach(() => {
-    fs.rmSync(projectRoot, { recursive: true, force: true });
+    cleanup(projectRoot);
   });
 
   test('migrates multiRepo: true to sub_repos array', () => {
@@ -1590,7 +1624,7 @@ describe('findProjectRoot', () => {
   });
 
   afterEach(() => {
-    fs.rmSync(projectRoot, { recursive: true, force: true });
+    cleanup(projectRoot);
   });
 
   test('returns startDir when no .planning/ exists anywhere', () => {

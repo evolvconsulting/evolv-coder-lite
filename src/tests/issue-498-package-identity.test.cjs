@@ -15,7 +15,7 @@ const path = require('node:path');
 const fs = require('node:fs');
 
 const ROOT = path.join(__dirname, '..');
-const { deriveIdentity, formatManualInstall, render } = require(
+const { deriveIdentity, formatManualInstall, render, slugifyPackageName } = require(
   path.join(ROOT, 'scripts', 'generate-package-identity.cjs'),
 );
 const GENERATED = path.join(ROOT, 'evolv-coder-lite', 'bin', 'lib', 'package-identity.cjs');
@@ -57,6 +57,28 @@ describe('Issue #498: deriveIdentity (pure, package.json -> coordinates)', () =>
     assert.equal(id.binName, 'evolv-coder-lite');
     assert.equal(id.repoSlug, 'evolvconsulting/evolv-coder-lite');
   });
+
+  test('deriveIdentity returns cacheSlug for @evolvconsulting/evolv-coder-lite', () => {
+    const real = require(path.join(ROOT, 'package.json'));
+    const id = deriveIdentity(real);
+    assert.equal(id.cacheSlug, 'opengsd-evolv-coder-lite');
+  });
+
+  test('deriveIdentity returns updateCacheFileName for @evolvconsulting/evolv-coder-lite', () => {
+    const real = require(path.join(ROOT, 'package.json'));
+    const id = deriveIdentity(real);
+    assert.equal(id.updateCacheFileName, 'ecl-update-check-opengsd-evolv-coder-lite.json');
+  });
+});
+
+describe('Issue #498: slugifyPackageName (pure helper for cache filename)', () => {
+  test('slugifyPackageName strips leading @, replaces / with -, for @evolvconsulting/evolv-coder-lite', () => {
+    assert.equal(slugifyPackageName('@evolvconsulting/evolv-coder-lite'), 'opengsd-evolv-coder-lite');
+  });
+
+  test('slugifyPackageName returns empty string for empty input', () => {
+    assert.equal(slugifyPackageName(''), '');
+  });
 });
 
 describe('Issue #498: formatManualInstall (the npx fallback command)', () => {
@@ -91,6 +113,7 @@ describe('Issue #498: generated runtime module (baked, drift-checked)', () => {
     // bug-3707). The sync check is about content, not the checkout's eol.
     const norm = (s) => s.replace(/\r\n/g, '\n');
     const expected = render(deriveIdentity(require(path.join(ROOT, 'package.json'))));
+    // allow-test-rule: architectural-invariant
     const actual = fs.readFileSync(GENERATED, 'utf8');
     assert.equal(norm(actual), norm(expected),
       'package-identity.cjs is stale — run `node scripts/generate-package-identity.cjs`');
@@ -101,6 +124,16 @@ describe('Issue #498: generated runtime module (baked, drift-checked)', () => {
     assert.equal(id.packageName, '@evolvconsulting/evolv-coder-lite');
     assert.equal(id.binName, 'evolv-coder-lite');
     assert.equal(id.repoSlug, 'evolvconsulting/evolv-coder-lite');
+  });
+
+  test('generated module exports cacheSlug matching @evolvconsulting/evolv-coder-lite', () => {
+    const id = require(GENERATED);
+    assert.equal(id.cacheSlug, 'opengsd-evolv-coder-lite');
+  });
+
+  test('generated module exports updateCacheFileName matching @evolvconsulting/evolv-coder-lite', () => {
+    const id = require(GENERATED);
+    assert.equal(id.updateCacheFileName, 'ecl-update-check-opengsd-evolv-coder-lite.json');
   });
 
   test('generated manualInstallCommand closes over the baked coordinates', () => {

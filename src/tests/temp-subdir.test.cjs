@@ -6,7 +6,7 @@
  * directly to os.tmpdir().
  */
 
-const { test, describe, beforeEach, afterEach } = require('node:test');
+const { test, describe, beforeEach } = require('node:test');
 const assert = require('node:assert/strict');
 const fs = require('fs');
 const path = require('path');
@@ -79,6 +79,7 @@ describe('dedicated ecl temp subdirectory', () => {
 
       // Verify it does not exist
       if (fs.existsSync(uniqueSubdir)) {
+        // eslint-disable-next-line local/no-raw-rmsync-in-tests -- mid-test pre-condition reset: ensures uniqueSubdir is absent before testing SUT creation behavior
         fs.rmSync(uniqueSubdir, { recursive: true, force: true });
       }
       assert.ok(!fs.existsSync(uniqueSubdir), 'test subdir should not exist before test');

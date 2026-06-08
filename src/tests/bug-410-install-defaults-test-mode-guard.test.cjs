@@ -11,6 +11,7 @@
  */
 
 const { test, describe } = require('node:test');
+const { cleanup } = require('./helpers.cjs');
 const assert = require('node:assert/strict');
 const path = require('node:path');
 const os = require('node:os');
@@ -109,7 +110,7 @@ describe('Bug #410: finishInstall non-Claude runtime + ECL_TEST_MODE side-effect
     } finally {
       // Restore ECL_TEST_MODE and clean up the written file.
       process.env.ECL_TEST_MODE = saved;
-      try { fs.rmSync(DEFAULTS_PATH); } catch { /* already gone */ }
+      cleanup(DEFAULTS_PATH);
       try { fs.rmdirSync(ECL_DIR); } catch { /* not empty or already gone */ }
     }
   });

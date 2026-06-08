@@ -37,11 +37,12 @@ const fs = require('node:fs');
 const os = require('node:os');
 const path = require('node:path');
 const { execFileSync } = require('node:child_process');
+const { cleanup } = require('./helpers.cjs');
 
 const REPO_ROOT = path.resolve(__dirname, '..');
 const INSTALL_PATH = path.join(REPO_ROOT, 'bin', 'install.js');
 
-const install = require(INSTALL_PATH);
+require(INSTALL_PATH);
 const { readCmdNames } = require(path.join(REPO_ROOT, 'scripts', 'fix-slash-commands.cjs'));
 
 // ---------------------------------------------------------------------------
@@ -135,9 +136,7 @@ describe('bug #3683 — workflow/reference colon-namespace leak (Claude local in
   });
 
   after(() => {
-    if (claudeTmpDir) {
-      fs.rmSync(claudeTmpDir, { recursive: true, force: true, maxRetries: 5, retryDelay: 100 });
-    }
+    cleanup(claudeTmpDir);
   });
 
   // -------------------------------------------------------------------------
@@ -401,7 +400,6 @@ describe('bug #3683 — workflow/reference colon-namespace leak (Claude local in
   describe('G — negative: staged gemini workflows preserve colon-namespace refs', () => {
     let tmpDir;
     const cmdNames = readCmdNames();
-    const rosterRegex = buildRosterRegex(cmdNames);
 
     before(() => {
       tmpDir = fs.mkdtempSync(path.join(os.tmpdir(), 'ecl-3683-gem-'));
@@ -409,9 +407,7 @@ describe('bug #3683 — workflow/reference colon-namespace leak (Claude local in
     });
 
     after(() => {
-      if (tmpDir) {
-        fs.rmSync(tmpDir, { recursive: true, force: true, maxRetries: 5, retryDelay: 100 });
-      }
+      cleanup(tmpDir);
     });
 
     test('G0: staged gemini evolv-coder-lite/workflows/ directory exists after install', () => {

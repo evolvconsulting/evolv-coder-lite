@@ -18,7 +18,10 @@
 const MANAGED_HOOKS = [
   'gsd-check-update-worker.js',
   'gsd-check-update.js',
+  'gsd-config-reload.js',
   'gsd-context-monitor.js',
+  'gsd-cursor-post-tool.js',
+  'gsd-cursor-session-start.js',
   'gsd-graphify-update.sh',
   'gsd-phase-boundary.sh',
   'gsd-prompt-guard.js',
@@ -29,6 +32,7 @@ const MANAGED_HOOKS = [
   'gsd-update-banner.js',
   'gsd-validate-commit.sh',
   'gsd-workflow-guard.js',
+  'gsd-worktree-path-guard.js',
 ];
 
 module.exports = { MANAGED_HOOKS };

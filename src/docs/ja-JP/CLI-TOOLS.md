@@ -1,26 +1,36 @@
 # eCL CLI ツールリファレンス
 
-> `ecl-tools.cjs` のプログラマティック API リファレンスです。ワークフローやエージェントが内部的に使用します。ユーザー向けコマンドについては、[コマンドリファレンス](COMMANDS.md) を参照してください。
+> `ecl-tools` CLI（`evolv-coder-lite/bin/ecl-tools.cjs`）のリファレンスです。スラッシュコマンドとユーザーフローについては [コマンドリファレンス](COMMANDS.md) を参照してください。[docs インデックス](README.md) に戻る。
 
 ---
 
 ## 概要
 
-`ecl-tools.cjs` は、eCL の約50個のコマンド、ワークフロー、エージェントファイル全体で繰り返し使われるインライン bash パターンを置き換える Node.js CLI ユーティリティです。設定の解析、モデル解決、フェーズ検索、git コミット、サマリー検証、状態管理、テンプレート操作を一元化しています。
+`ecl-tools.cjs` は、設定の解析、モデル解決、フェーズ検索、git コミット、サマリー検証、状態管理、テンプレート操作を eCL コマンド・ワークフロー・エージェント全体で一元化します。
 
-**配置場所:** `evolv-coder-lite/bin/ecl-tools.cjs`
-**モジュール:** `evolv-coder-lite/bin/lib/` 内の15個のドメインモジュール
 
-**使い方:**
+|                    |                                                                                                                                                                                                        |
+| ------------------ | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
+| **配置パス**       | `evolv-coder-lite/bin/ecl-tools.cjs`                                                                                                                                                                      |
+| **実装**           | `evolv-coder-lite/bin/lib/` 配下の 20 個のドメインモジュール（ディレクトリが正式）                                                                                                                        |
+| **ステータス**     | オーケストレーション・ワークフロー・自動化処理のための主要ランタイムコマンドサーフェス。 |
+
+
+**使い方（CJS）:**
+
 ```bash
 node ecl-tools.cjs <command> [args] [--raw] [--cwd <path>]
 ```
 
-**グローバルフラグ:**
-| フラグ | 説明 |
-|--------|------|
-| `--raw` | 機械可読な出力（JSON またはプレーンテキスト、フォーマットなし） |
-| `--cwd <path>` | 作業ディレクトリの上書き（サンドボックス化されたサブエージェント向け） |
+**グローバルフラグ（CJS）:**
+
+
+| フラグ         | 説明                                                                         |
+| -------------- | ---------------------------------------------------------------------------- |
+| `--raw`        | 機械可読な出力（JSON またはプレーンテキスト、フォーマットなし）              |
+| `--cwd <path>` | 作業ディレクトリの上書き（サンドボックス化されたサブエージェント向け）       |
+| `--ws <name>`  | `.planning/workstreams/<name>` パス用のワークストリームコンテキスト |
+
 
 ---
 
@@ -64,6 +74,13 @@ node ecl-tools.cjs state resolve-blocker --text "..."
 
 # セッション継続性を記録
 node ecl-tools.cjs state record-session --stopped-at "..." [--resume-file path]
+
+# フェーズ開始 — 新しいフェーズの STATE.md Status/Last activity を更新
+node ecl-tools.cjs state begin-phase --phase N --name SLUG --plans COUNT
+
+# エージェント検出可能なブロッカーシグナル送信（discuss-phase / UI フローで使用）
+node ecl-tools.cjs state signal-waiting --type TYPE --question "..." --options "A|B" --phase P
+node ecl-tools.cjs state signal-resume
 ```
 
 ### State スナップショット
@@ -152,7 +169,9 @@ node ecl-tools.cjs config-set-model-profile <profile>
 ```bash
 # 現在のプロファイルに基づいてエージェント用モデルを取得
 node ecl-tools.cjs resolve-model <agent-name>
-# 戻り値: opus | sonnet | haiku | inherit
+# --raw 出力では選択されたモデル ID/ティアを返します。
+# JSON 出力ではプロファイルも含み、アクティブなランタイムがサポートしている場合は
+# reasoning_effort も含まれます。
 ```
 
 エージェント名: `ecl-planner`, `ecl-executor`, `ecl-phase-researcher`, `ecl-project-researcher`, `ecl-research-synthesizer`, `ecl-verifier`, `ecl-plan-checker`, `ecl-integration-checker`, `ecl-roadmapper`, `ecl-debugger`, `ecl-codebase-mapper`, `ecl-nyquist-auditor`
@@ -198,7 +217,16 @@ node ecl-tools.cjs validate consistency
 
 # .planning/ の整合性チェック、任意で修復
 node ecl-tools.cjs validate health [--repair]
+
+# ステータスライン / フック呼び出し元向けのコンテキストウィンドウ使用率をプローブ（v1.40.0）
+node ecl-tools.cjs validate context
+
+# 型付き JSON サーフェスとしてのコンテキスト使用率（#455）
+node ecl-tools.cjs validate context --json
 ```
+
+`validate context` は `utilization`、`status`（60% / 70% の閾値で `ok` / `warn` / `critical`）、および `suggestion` 文字列を含む構造化エンベロープを出力します。同じデータが `/ecl-health --context` を支えます。
+型付き IR を直接受け取るには `--json` を渡してください（スクリプトやテストアサーションで有用）。
 
 ---
 
@@ -275,9 +303,13 @@ node ecl-tools.cjs init todos [area]
 node ecl-tools.cjs init milestone-op
 node ecl-tools.cjs init map-codebase
 node ecl-tools.cjs init progress
+
+# ワークストリームスコープ付き init（`--ws` フラグ）
+node ecl-tools.cjs init execute-phase <phase> --ws <name>
+node ecl-tools.cjs init plan-phase <phase> --ws <name>
 ```
 
-**大容量ペイロードの処理:** 出力が約50KBを超える場合、CLI は一時ファイルに書き出し、`@file:/tmp/ecl-init-XXXXX.json` を返します。ワークフローは `@file:` プレフィックスを確認し、ディスクから読み込みます:
+**大容量ペイロードの処理:** 出力が約 50KB を超える場合、CLI は一時ファイルに書き出し、`@file:/tmp/ecl-init-XXXXX.json` を返します。ワークフローは `@file:` プレフィックスを確認し、ディスクから読み込みます:
 
 ```bash
 INIT=$(node ecl-tools.cjs init execute-phase "1")
@@ -296,6 +328,38 @@ node ecl-tools.cjs milestone complete <version> [--name <name>] [--archive-phase
 node ecl-tools.cjs requirements mark-complete <ids>
 # 受け付ける形式: REQ-01,REQ-02 または REQ-01 REQ-02 または [REQ-01, REQ-02]
 ```
+
+---
+
+## エージェントスキル
+
+指定されたエージェントタイプのスキルブロックを出力します。
+
+```bash
+# 生の XML スキルブロックを出力（デフォルト — シェル展開に安全）
+node ecl-tools.cjs agent-skills <agent-type>
+
+# 型付き JSON サーフェス（#455）を出力 — { agent_type, block, skills_count }
+node ecl-tools.cjs agent-skills <agent-type> --json
+```
+
+`--json` フラグは構造化消費やテストアサーションに適した型付き IR オブジェクトを返します。デフォルト（フラグなし）はワークフローのシェル展開が依存する生の XML 出力を維持します。
+
+---
+
+## スキルマニフェスト
+
+コマンド読み込みを高速化するためのスキル検出の事前計算とキャッシュ。
+
+```bash
+# スキルマニフェストを生成（.claude/skill-manifest.json に書き込む）
+node ecl-tools.cjs skill-manifest
+
+# カスタム出力パスで生成
+node ecl-tools.cjs skill-manifest --output <path>
+```
+
+利用可能なすべての eCL スキルとそのメタデータ（名前、説明、ファイルパス、引数ヒント）の JSON マッピングを返します。インストーラとセッション開始フックが繰り返しのファイルシステムスキャンを避けるために使用します。
 
 ---
 
@@ -324,8 +388,11 @@ node ecl-tools.cjs summary-extract <path> [--fields field1,field2]
 # プロジェクト統計
 node ecl-tools.cjs stats [json|table]
 
-# 進捗表示
+# 進捗表示（人間が読める形式）
 node ecl-tools.cjs progress [json|table|bar]
+
+# 型付き JSON サーフェスとしての進捗（#455）
+node ecl-tools.cjs progress --json
 
 # TODO を完了にする
 node ecl-tools.cjs todo complete <filename>
@@ -333,16 +400,47 @@ node ecl-tools.cjs todo complete <filename>
 # UAT 監査 — 全フェーズの未解決項目をスキャン
 node ecl-tools.cjs audit-uat
 
+# クロスアーティファクト監査キュー — `.planning/` の未解決監査項目をスキャン
+node ecl-tools.cjs audit-open [--json]
+
+# eCL-2 プロジェクトを現在の構造にリバースマイグレーション（`/ecl-import --from-ecl2` のバックエンド）
+node ecl-tools.cjs from-ecl2 [--path <dir>] [--force] [--dry-run]
+
 # 設定チェック付き git コミット
-node ecl-tools.cjs commit <message> [--files f1 f2] [--amend] [--no-verify]
+node ecl-tools.cjs commit <message> [--files f1 f2] [--amend] [--no-verify] [--respect-staged]
 ```
 
-> **`--no-verify`**: プリコミットフックをスキップします。ウェーブベース実行時に並列エグゼキューターエージェントが使用し、ビルドロックの競合（例: Rust プロジェクトでの cargo ロック競合）を回避します。オーケストレーターは各ウェーブ完了後にフックを一度実行します。順次実行時には `--no-verify` を使用せず、フックを通常通り実行してください。
+> `--no-verify`: プリコミットフックをスキップします。ウェーブベース実行時に並列エグゼキューターエージェントがビルドロックの競合（例: Rust プロジェクトでの cargo ロック競合）を避けるために使用します。オーケストレーターは各ウェーブ完了後にフックを一度実行します。順次実行時には `--no-verify` を使用せず、フックを通常通り実行してください。
+> `--files <paths>` **ステージング動作**: デフォルトでは、`--files` はコミット前に各指定ファイルに対して `git add -- <path>` を実行します。これにより `git add -p` で設定したハンク単位のステージングが上書きされます。`git add` ステップをスキップして指定パス内のステージング済みファイルのみをコミットするには `--respect-staged` を渡してください。そのスコープ内でステージングされたファイルがない場合、コマンドはエラーなしで `{ committed: false, reason: 'nothing staged' }` を返します。コミット時の末尾 `-- <paths>` パス指定は両モードで適用されるため、`--files` スコープ外でステージングされたファイルは決して含まれません（#3061 不変条件）。
 
-```bash
 # Web 検索（Brave API キーが必要）
 node ecl-tools.cjs websearch <query> [--limit N] [--freshness day|week|month]
 ```
+
+---
+
+## Graphify
+
+`.planning/graphs/` 内のプロジェクトナレッジグラフをビルド、クエリ、検査します。`config.json` で `graphify.enabled: true` が必要です（[設定リファレンス](CONFIGURATION.md#graphify-settings) を参照）。
+
+```bash
+# ナレッジグラフをビルドまたは再ビルド
+node ecl-tools.cjs graphify build
+
+# グラフで用語を検索
+node ecl-tools.cjs graphify query <term>
+
+# グラフの鮮度と統計を表示
+node ecl-tools.cjs graphify status
+
+# 前回のビルドからの変更を表示
+node ecl-tools.cjs graphify diff
+
+# 現在のグラフの名前付きスナップショットを書き込む
+node ecl-tools.cjs graphify snapshot [name]
+```
+
+ユーザー向けエントリーポイント: `/ecl-graphify`（[コマンドリファレンス](COMMANDS.md#ecl-graphify) を参照）。
 
 ---
 
@@ -350,9 +448,10 @@ node ecl-tools.cjs websearch <query> [--limit N] [--freshness day|week|month]
 
 | モジュール | ファイル | エクスポート |
 |------------|----------|--------------|
-| Core | `lib/core.cjs` | `error()`, `output()`, `parseArgs()`, 共通ユーティリティ |
+| Core | `lib/core.cjs` | `error()`, `output()`, `parseArgs()`、共通ユーティリティ、互換性再エクスポート |
 | State | `lib/state.cjs` | すべての `state` サブコマンド、`state-snapshot` |
 | Phase | `lib/phase.cjs` | フェーズ CRUD、`find-phase`、`phase-plan-index`、`phases list` |
+| Planning Workspace | `lib/planning-workspace.cjs` | プランニングシーム: `planningDir`、`planningPaths`、アクティブワークストリームルーティング、`.planning/.lock` |
 | Roadmap | `lib/roadmap.cjs` | ロードマップ解析、フェーズ抽出、進捗更新 |
 | Config | `lib/config.cjs` | 設定の読み書き、セクション初期化 |
 | Verify | `lib/verify.cjs` | すべての検証・バリデーションコマンド |
@@ -365,3 +464,36 @@ node ecl-tools.cjs websearch <query> [--limit N] [--freshness day|week|month]
 | UAT | `lib/uat.cjs` | 全フェーズ横断 UAT/検証監査 |
 | Profile Output | `lib/profile-output.cjs` | 開発者プロファイルのフォーマット |
 | Profile Pipeline | `lib/profile-pipeline.cjs` | セッション分析パイプライン |
+| Graphify | `lib/graphify.cjs` | ナレッジグラフのビルド/クエリ/ステータス/差分/スナップショット（`/ecl-graphify` のバックエンド） |
+| Learnings | `lib/learnings.cjs` | フェーズ/SUMMARY アーティファクトからの学習抽出（`/ecl-extract-learnings` のバックエンド） |
+| Audit | `lib/audit.cjs` | フェーズ/マイルストーン監査キューハンドラ; `audit-open` ヘルパー |
+| GSD2 Import | `lib/ecl2-import.cjs` | eCL-2 プロジェクトからのリバースマイグレーションインポーター（`/ecl-import --from-ecl2` のバックエンド） |
+| Intel | `lib/intel.cjs` | クエリ可能なコードベースインテリジェンスインデックス（`/ecl-map-codebase --query` のバックエンド） |
+
+---
+
+## レビュアー CLI ルーティング
+
+`review.models.<cli>` はレビュアーフレーバーをコードレビューワークフローが呼び出すシェルコマンドにマッピングします。[`/ecl-config --integrations`](COMMANDS.md#ecl-config) または直接設定できます:
+
+```bash
+node ecl-tools.cjs config-set review.models.codex    "codex exec --model gpt-5"
+node ecl-tools.cjs config-set review.models.gemini   "gemini -m gemini-2.5-pro"
+node ecl-tools.cjs config-set review.models.opencode "opencode run --model claude-sonnet-4"
+node ecl-tools.cjs config-set review.models.claude   ""   # クリア — セッションモデルにフォールバック
+```
+
+スラッグは `[a-zA-Z0-9_-]+` に対してバリデーションされます。空またはパスを含むスラッグは拒否されます。完全なフィールドリファレンスは [`docs/CONFIGURATION.md`](CONFIGURATION.md#code-review-cli-routing) を参照してください。
+
+## シークレット処理
+
+`/ecl-settings` で設定された API キー（`brave_search`、`firecrawl`、`exa_search`）は `.planning/config.json` に平文で書き込まれますが、`config-set` / `config-get` のすべての出力、確認テーブル、インタラクティブプロンプトでは（`****<last-4>` として）マスクされます。マスキングの実装は `evolv-coder-lite/bin/lib/secrets.cjs` を参照してください。`config.json` ファイル自体がセキュリティ境界です — ファイルシステムのパーミッションで保護し、git には含めないようにしてください（`.planning/` はデフォルトで gitignore されます）。
+
+---
+
+## Related
+
+- [Commands](COMMANDS.md)
+- [Configuration](CONFIGURATION.md)
+- [Architecture](ARCHITECTURE.md)
+- [docs index](README.md)

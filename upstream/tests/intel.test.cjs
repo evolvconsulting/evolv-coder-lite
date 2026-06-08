@@ -1,9 +1,10 @@
 /**
- * Tests for get-shit-done/bin/lib/intel.cjs
+ * Tests for gsd-core/bin/lib/intel.cjs
  *
  * Covers: query, status, diff, validate, snapshot, patch-meta,
  * extract-exports, enabled/disabled gating, and CLI routing via gsd-tools.
  */
+// allow-test-rule: source-text-is-the-product — readFileSync assertions target API-SURFACE.md, which is the generated product of intelApiSurface; asserting on its text content is the only way to verify correct generation.
 
 'use strict';
 
@@ -24,8 +25,7 @@ const {
   intelApiSurface,
   ensureIntelDir,
   isIntelEnabled,
-  INTEL_FILES,
-} = require('../get-shit-done/bin/lib/intel.cjs');
+} = require('../gsd-core/bin/lib/intel.cjs');
 
 // ─── Helpers ────────────────────────────────────────────────────────────────
 
@@ -48,7 +48,7 @@ function writeIntelJson(planningDir, filename, data) {
   );
 }
 
-function writeIntelMd(planningDir, filename, content) {
+function _writeIntelMd(planningDir, filename, content) {
   const intelPath = path.join(planningDir, 'intel');
   fs.mkdirSync(intelPath, { recursive: true });
   fs.writeFileSync(path.join(intelPath, filename), content, 'utf8');

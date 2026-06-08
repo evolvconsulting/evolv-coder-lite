@@ -11,7 +11,6 @@ process.env.ECL_TEST_MODE = '1';
 const { describe, test, beforeEach, afterEach } = require('node:test');
 const assert = require('node:assert/strict');
 const fs = require('node:fs');
-const os = require('node:os');
 const path = require('node:path');
 
 const REPO_ROOT = path.join(__dirname, '..');
@@ -20,7 +19,7 @@ const SHARED_DIR = path.join(REPO_ROOT, 'evolv-coder-lite', 'bin', 'shared');
 
 const { install } = require('../bin/install.js');
 
-const { createTempDir } = require('./helpers.cjs');
+const { createTempDir, cleanup } = require('./helpers.cjs');
 const makeTmpDir = () => createTempDir('ecl-3571-');
 
 function silenceConsole(fn) {
@@ -65,7 +64,7 @@ describe('bug #3571: configuration generated manifests resolve in install layout
     } else {
       process.env.ECL_EXPLICIT_CONFIG_DIR = savedExplicitConfigDir;
     }
-    fs.rmSync(tmpRoot, { recursive: true, force: true, maxRetries: 10, retryDelay: 100 });
+    cleanup(tmpRoot);
   });
 
   test('co-located bin/shared manifests let configuration.cjs load without sdk/shared', () => {

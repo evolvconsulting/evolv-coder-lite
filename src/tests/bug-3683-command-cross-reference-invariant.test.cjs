@@ -24,7 +24,10 @@ function stripFrontmatter(src) {
 
 // Word-boundary lookbehind matching fix-slash-commands.cjs buildColonPattern / buildPattern
 // Excludes path-y characters (~, ., /) so `~/ecl-workspaces`, `./ecl-foo`, `path/ecl-bar` don't match.
-const REF_PATTERN = /(?<![a-zA-Z0-9_~./-])\/ecl[:-]([a-zA-Z0-9_-]+)/g;
+// Trailing `(?![\w-]*\/)` rejects filesystem path segments like `${VAR}/evolv-coder-lite/bin` (the
+// runtime-launcher shim) where a non-path char (e.g. `}`) precedes `/evolv-coder-lite/` — those are
+// directory paths to the evolv-coder-lite/ runtime, not slash-command references (#604 rename).
+const REF_PATTERN = /(?<![a-zA-Z0-9_~./-])\/ecl[:-]([a-zA-Z0-9_-]+)(?![\w-]*\/)/g;
 
 describe('bug-3683 command cross-reference invariant', () => {
   test('all /ecl:<X> and /ecl-<X> body refs resolve to known command base-names', () => {

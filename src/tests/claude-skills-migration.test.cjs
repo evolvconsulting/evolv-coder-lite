@@ -18,13 +18,13 @@ const assert = require('node:assert/strict');
 const path = require('path');
 const os = require('os');
 const fs = require('fs');
+const { cleanup } = require('./helpers.cjs');
 
 const ROOT = path.join(__dirname, '..');
 
 const {
   convertClaudeCommandToClaudeSkill,
   writeManifest,
-  install,
   installRuntimeArtifacts,
   uninstallRuntimeArtifacts,
 } = require(path.join(ROOT, 'bin', 'install.js'));
@@ -201,7 +201,7 @@ describe('installRuntimeArtifacts (claude global) — skill layout', () => {
   });
 
   afterEach(() => {
-    fs.rmSync(tmpDir, { recursive: true, force: true });
+    cleanup(tmpDir);
   });
 
   test('creates correct directory structure skills/ecl-xxx/SKILL.md', () => {
@@ -315,7 +315,7 @@ describe('installRuntimeArtifacts path replacement in Claude global skills (#165
   });
 
   afterEach(() => {
-    fs.rmSync(tmpDir, { recursive: true, force: true });
+    cleanup(tmpDir);
   });
 
   test('replaces ~/.claude/ and $HOME/.claude/ paths with absolute configDir prefix on global install', () => {
@@ -405,7 +405,7 @@ describe('Legacy commands/ecl/ cleanup', () => {
   });
 
   afterEach(() => {
-    fs.rmSync(tmpDir, { recursive: true, force: true });
+    cleanup(tmpDir);
   });
 
   test('install removes legacy commands/ecl/ directory when present', () => {
@@ -440,7 +440,7 @@ describe('writeManifest tracks skills/ for Claude', () => {
   });
 
   afterEach(() => {
-    fs.rmSync(tmpDir, { recursive: true, force: true });
+    cleanup(tmpDir);
   });
 
   test('manifest includes skills/ecl-xxx/SKILL.md entries for Claude runtime', () => {

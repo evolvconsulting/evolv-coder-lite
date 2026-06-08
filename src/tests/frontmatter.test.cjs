@@ -16,7 +16,6 @@ const {
   reconstructFrontmatter,
   spliceFrontmatter,
   parseMustHavesBlock,
-  FRONTMATTER_SCHEMAS,
 } = require('../evolv-coder-lite/bin/lib/frontmatter.cjs');
 
 // ─── extractFrontmatter ─────────────────────────────────────────────────────
