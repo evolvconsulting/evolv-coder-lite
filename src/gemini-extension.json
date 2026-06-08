@@ -1,6 +1,6 @@
 {
   "name": "evolv-coder-lite",
-  "version": "1.3.0",
+  "version": "1.4.0",
   "description": "eCL Core — a meta-prompting, context engineering, and spec-driven development system for AI coding agents. Loads ecl's operating context into every Gemini CLI session.",
   "contextFileName": "GEMINI.md"
 }
