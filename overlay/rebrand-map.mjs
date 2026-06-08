@@ -49,6 +49,13 @@ const RULES = [
   // @opengsd in any context — package paths, escaped paths in test strings,
   // word-boundary mentions in prose. Catches @opengsd/ and @opengsd\/ alike.
   { track: 'pkg:scope',     find: /@opengsd\b/g,                    repl: '@evolvconsulting' },
+  // Bare `opengsd` (no @, no hyphen) — the org token that survives npm-scope
+  // slugification, e.g. slugifyPackageName('@opengsd/gsd-core') → 'opengsd-…'
+  // used for per-package cache slugs (#498) and update-check filenames (#607).
+  // Runs AFTER the @opengsd rule (so it only sees the already-stripped slug
+  // form) and does not match `open-gsd` (hyphen breaks the token) or
+  // `%40opengsd` (the leading %40 digit removes the word boundary).
+  { track: 'pkg:scope-bare', find: /\bopengsd\b/g,                  repl: 'evolvconsulting' },
   // URL-encoded scope embedded in shields.io badge URLs and similar links.
   // %40 → @, %2F → /. Without this rule the badges in README files keep
   // pointing at the original npm package — visible drift on npmjs.com.
