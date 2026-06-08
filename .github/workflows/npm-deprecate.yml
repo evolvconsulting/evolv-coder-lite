@@ -1,0 +1,38 @@
+name: npm-deprecate
+
+# Manually deprecate (or un-deprecate) a published version of
+# @evolvconsulting/evolv-coder-lite on npm. eCL has no local npm auth — the
+# only credential is the NPM_TOKEN repo secret used by release.yml — so
+# deprecation runs here. Un-deprecate by dispatching with an empty message.
+#
+# Trigger: Actions → npm-deprecate → Run workflow (or `gh workflow run`).
+
+on:
+  workflow_dispatch:
+    inputs:
+      version:
+        description: 'Version to deprecate, e.g. 1.3.0'
+        required: true
+      message:
+        description: 'Deprecation message (empty string un-deprecates)'
+        required: true
+        default: 'Superseded — please upgrade'
+
+permissions:
+  contents: read
+
+jobs:
+  deprecate:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/setup-node@v6
+        with:
+          node-version: '24'
+          registry-url: 'https://registry.npmjs.org'
+
+      - name: npm deprecate
+        env:
+          NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
+        run: |
+          npm deprecate "@evolvconsulting/evolv-coder-lite@${{ inputs.version }}" "${{ inputs.message }}"
+          echo "Deprecation applied to ${{ inputs.version }}."
