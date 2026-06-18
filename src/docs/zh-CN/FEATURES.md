@@ -1244,7 +1244,7 @@ PreToolUse 钩子，扫描针对 `.planning/` 的 Write/Edit 调用中的注入�
 **3. 工作流守护钩子**（`ecl-workflow-guard.js`）
 PreToolUse 钩子，检测 Claude 在 eCL 工作流上下文之外尝试文件编辑的情况。建议使用 `/ecl-quick` 或 `/ecl-fast` 替代直接编辑。可通过 `hooks.workflow_guard` 配置（默认：false）。
 
-**4. CI 就绪注入扫描器**（`prompt-injection-scan.test.cjs`）
+**4. CI 就绪注入扫描器**（`prompt-injection-scan.security.test.cjs`）
 扫描所有智能体、工作流和命令文件中嵌入注入向量的测试套件。
 
 **需求：**

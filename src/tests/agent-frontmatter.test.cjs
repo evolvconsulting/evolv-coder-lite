@@ -435,6 +435,7 @@ describe('EDITWRITE: section-writer agents must have both Write and Edit in tool
     'ecl-phase-researcher',
     'ecl-ui-researcher',
     'ecl-debug-session-manager',
+    'ecl-planner', // #973: planner lacked Edit; whole-file Write truncated ROADMAP.md
   ];
 
   for (const agent of SECTION_WRITER_AGENTS) {

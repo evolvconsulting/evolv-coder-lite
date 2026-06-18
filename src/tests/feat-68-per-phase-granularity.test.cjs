@@ -30,7 +30,7 @@ const path = require('node:path');
 const {
   resolveGranularityInternal,
   VALID_GRANULARITIES,
-} = require('../evolv-coder-lite/bin/lib/core.cjs');
+} = require('../evolv-coder-lite/bin/lib/model-resolver.cjs');
 const commands = require('../evolv-coder-lite/bin/lib/commands.cjs');
 const {
   VALID_PHASE_TYPES,

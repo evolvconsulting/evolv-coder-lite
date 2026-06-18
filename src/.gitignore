@@ -66,10 +66,15 @@ build/
 # ADR-457 build-at-publish: TS-generated runtime artifacts (compiled from src/*.cts
 # by `npm run build:lib`). Source of truth is src/; these are emitted, never edited.
 # Published via prepublishOnly; built before test via pretest. Grows as modules migrate.
+/tsconfig.build.tsbuildinfo
 /evolv-coder-lite/bin/lib/research-store.cjs
 /evolv-coder-lite/bin/lib/research-provider.cjs
 /evolv-coder-lite/bin/lib/package-legitimacy.cjs
 /evolv-coder-lite/bin/lib/semver-compare.cjs
+/evolv-coder-lite/bin/lib/plan-drift-guard.cjs
+/evolv-coder-lite/bin/lib/edge-probe.cjs
+/evolv-coder-lite/bin/lib/probe-core.cjs
+/evolv-coder-lite/bin/lib/prohibition-enforcement.cjs
 /evolv-coder-lite/bin/lib/config-types.cjs
 /evolv-coder-lite/bin/lib/cli-exit.cjs
 /evolv-coder-lite/bin/lib/code-review-flags.cjs
@@ -88,6 +93,7 @@ build/
 /evolv-coder-lite/bin/lib/phase-lifecycle.cjs
 /evolv-coder-lite/bin/lib/workstream-name-policy.cjs
 /evolv-coder-lite/bin/lib/decisions.cjs
+/evolv-coder-lite/bin/lib/teams-status.cjs
 /evolv-coder-lite/bin/lib/validate.cjs
 /evolv-coder-lite/bin/lib/schema-detect.cjs
 /evolv-coder-lite/bin/lib/runtime-name-policy.cjs
@@ -113,20 +119,38 @@ build/
 /evolv-coder-lite/bin/lib/model-profiles.cjs
 /evolv-coder-lite/bin/lib/installer-migrations/002-codex-legacy-hooks-json.cjs
 /evolv-coder-lite/bin/lib/installer-migrations/003-rename-evolv-coder-lite-to-evolv-coder-lite.cjs
+/evolv-coder-lite/bin/lib/installer-migrations/004-prune-stale-pristine-snapshots.cjs
 /evolv-coder-lite/bin/lib/observability/logger.cjs
 /evolv-coder-lite/bin/lib/active-workstream-store.cjs
 /evolv-coder-lite/bin/lib/adr-parser.cjs
 /evolv-coder-lite/bin/lib/graphify.cjs
+/evolv-coder-lite/bin/lib/graphify-command-router.cjs
+/evolv-coder-lite/bin/lib/audit-command-router.cjs
+/evolv-coder-lite/bin/lib/intel-command-router.cjs
 /evolv-coder-lite/bin/lib/install-profiles.cjs
 /evolv-coder-lite/bin/lib/intel.cjs
 /evolv-coder-lite/bin/lib/installer-migrations.cjs
 /evolv-coder-lite/bin/lib/worktree-base-ref.cjs
 /evolv-coder-lite/bin/lib/worktree-safety.cjs
 /evolv-coder-lite/bin/lib/planning-workspace.cjs
+/evolv-coder-lite/bin/lib/command-roster.cjs
+/evolv-coder-lite/bin/lib/runtime-artifact-conversion.cjs
 /evolv-coder-lite/bin/lib/runtime-artifact-layout.cjs
 /evolv-coder-lite/bin/lib/runtime-config-adapter-registry.cjs
+/evolv-coder-lite/bin/lib/runtime-hooks-surface.cjs
 /evolv-coder-lite/bin/lib/command-routing-hub.cjs
-/evolv-coder-lite/bin/lib/core.cjs
+/evolv-coder-lite/bin/lib/core-utils.cjs
+/evolv-coder-lite/bin/lib/io.cjs
+/evolv-coder-lite/bin/lib/phase-id.cjs
+/evolv-coder-lite/bin/lib/config-loader.cjs
+/evolv-coder-lite/bin/lib/model-resolver.cjs
+/evolv-coder-lite/bin/lib/loop-resolver.cjs
+/evolv-coder-lite/bin/lib/capability-state.cjs
+/evolv-coder-lite/bin/lib/capability-writer.cjs
+/evolv-coder-lite/bin/lib/capability-activation.cjs
+/evolv-coder-lite/bin/lib/federated-config.cjs
+/evolv-coder-lite/bin/lib/phase-locator.cjs
+/evolv-coder-lite/bin/lib/roadmap-parser.cjs
 /evolv-coder-lite/bin/lib/drift.cjs
 /evolv-coder-lite/bin/lib/cjs-command-router-adapter.cjs
 /evolv-coder-lite/bin/lib/phase-command-router.cjs
@@ -143,6 +167,7 @@ build/
 /evolv-coder-lite/bin/lib/verify-command-router.cjs
 /evolv-coder-lite/bin/lib/init-command-router.cjs
 /evolv-coder-lite/bin/lib/agent-command-router.cjs
+/evolv-coder-lite/bin/lib/agent-install-check.cjs
 /evolv-coder-lite/bin/lib/task-command-router.cjs
 /evolv-coder-lite/bin/lib/validate-command-router.cjs
 /evolv-coder-lite/bin/lib/workstream-inventory.cjs
@@ -158,9 +183,11 @@ build/
 /evolv-coder-lite/bin/lib/verify.cjs
 /evolv-coder-lite/bin/lib/init.cjs
 /evolv-coder-lite/bin/lib/uat.cjs
+/evolv-coder-lite/bin/lib/uat-predicate.cjs
 /evolv-coder-lite/bin/lib/workstream.cjs
 /evolv-coder-lite/bin/lib/roadmap.cjs
 /evolv-coder-lite/bin/lib/audit.cjs
+/evolv-coder-lite/bin/lib/git-base-branch.cjs
 __pycache__/
 *.pyc
 .venv/

@@ -10,7 +10,7 @@ A narrative companion guide to eCL Core — orient yourself here, then follow th
 ## Table of Contents
 
 - [Slash-command forms](#slash-command-forms-hyphen-vs-colon)
-- [Namespace routing primer](#namespace-routing-primer-gsdnamespace-v140)
+- [Namespace routing primer](#namespace-routing-primer-ecl-ns--v140)
 - [Project lifecycle overview](#project-lifecycle-overview)
 - [Workflow Diagrams](#workflow-diagrams)
 - [UI Design Contract](#ui-design-contract)
@@ -40,20 +40,37 @@ eCL ships **the same set of skills** to every supported runtime, but two slash-f
 
 You don't need to choose — the installer writes the correct form into the command directory of each runtime you target. When following a walkthrough on a Gemini terminal, replace the hyphen after `ecl` with a colon as you read each slash command.
 
-## Namespace routing primer (`ecl:<namespace>`, v1.40)
+## Namespace routing primer (`ecl-ns-*`, v1.40+)
 
-v1.40 ships six **namespace meta-skills** as the first-stage entry points for hierarchical routing — they keep the eager skill-listing token cost low (~120 tokens for 6 routers vs ~2,150 for a flat 86-skill listing) while every concrete sub-skill remains directly invocable. Each namespace router's body contains a routing table that maps your intent to the correct concrete sub-skill.
+### Architecture
 
-| Namespace | Router | Routes to |
-|-----------|--------|-----------|
-| Phase pipeline | `/ecl-workflow` | discuss / plan / execute / verify / phase / progress |
-| Project lifecycle | `/ecl-project` | milestones, audits, summary |
-| Quality gates | `/ecl-quality` | code review, debug, audit, security, eval, ui |
-| Codebase intelligence | `/ecl-context` | map, graphify, docs, learnings |
-| Management | `/ecl-manage` | config, workspace, workstreams, thread, update, ship, inbox |
-| Exploration & capture | `/ecl-ideate` | explore, sketch, spike, spec, capture |
+eCL ships six **namespace router bundles** (`ecl-ns-workflow`, `ecl-ns-project`, `ecl-ns-review`, `ecl-ns-context`, `ecl-ns-ideate`, `ecl-ns-manage`). On runtimes with non-recursive skill loaders, the installer emits these 6 routers as the **only top-level skill entries**; the ~61 concrete skills are nested under each router at `<router>/skills/<name>/SKILL.md`. This reduces the eager skill-listing overhead to ≈6 entries instead of ≈67.
 
-You almost never need to type a namespace router yourself. Their value is in the routing layer the model uses to discover the right sub-skill — they exist so the system prompt can list 6 entries instead of 86. If you already know the concrete command (e.g. `/ecl-plan-phase`), call it directly.
+Each router's body contains a routing table. When the model receives a request, it reads the router, identifies the relevant sub-skill by name, then opens `skills/<name>/SKILL.md` via a file-path `Read`. The concrete skill is fully available — it is not invocable by bare name through the Skill tool's top-level listing, but is reachable through the router.
+
+The nested layout applies only to runtimes with confirmed non-recursive skill loaders: **Claude (global), Cline, Qwen, Hermes, Augment, Trae, Antigravity**. Recursive or unconfirmed loaders (Cursor, Codex, Copilot, Windsurf, CodeBuddy, OpenCode, Kilo) retain the flat layout unchanged.
+
+| Namespace | Router bundle | Routes to |
+|-----------|--------------|-----------|
+| Phase pipeline | `ecl-ns-workflow` | discuss / plan / execute / verify / phase / progress |
+| Project lifecycle | `ecl-ns-project` | milestones, audits, summary |
+| Quality gates | `ecl-ns-review` | code review, debug, audit, security, eval, ui |
+| Codebase intelligence | `ecl-ns-context` | map, graphify, docs, learnings |
+| Exploration & capture | `ecl-ns-ideate` | explore, sketch, spike, spec, capture |
+| Management | `ecl-ns-manage` | config, workspace, workstreams, thread, update, ship, inbox |
+
+### Slash commands are unaffected
+
+On runtimes that install a commands surface (`commands/ecl`), slash commands such as `/ecl-plan-phase` continue to work directly — the nesting applies only to the Skill tool's top-level listing, not to the commands directory.
+
+### Migration note (breaking change on nesting runtimes)
+
+On the seven nesting runtimes listed above, upgrading to v1.40 changes skill invocation behaviour:
+
+- **Before:** each of the ~67 concrete `ecl-<name>` skills appeared at the top level and was invocable by bare name through the Skill tool.
+- **After:** only the 6 `ecl-ns-*` router bundles appear at the top level. Concrete skills are reachable via the router's routing table and a `Read skills/<name>/SKILL.md` call. Direct bare-name invocation of concrete skills through the Skill tool's listing no longer works.
+- **Slash commands unchanged:** `/ecl-plan-phase`, `/ecl-discuss-phase`, etc. still work directly where a commands surface is installed.
+- **Upgrade prune:** the installer's existing prune step removes the legacy top-level `ecl-<concrete>/` skill directories on upgrade — no manual cleanup is needed.
 
 ---
 
@@ -245,6 +262,10 @@ The discuss-phase captures implementation decisions in CONTEXT.md under a `<deci
                └── FAIL -> Issues logged for /ecl-verify-work
 ```
 
+### Isolated-run Recovery (fail-safe)
+
+When a worktree-isolated run is rejected — the user declines to merge it, or the run over-reached the requested scope, or the orchestrator surfaces recovery guidance for a blocked plan — eCL halts safely and offers two options: (a) re-attempt in a fresh, narrowly-scoped worktree, or (b) inspect or discard the rejected worktree without merging. eCL never defaults recovery to editing the primary checkout (`main`). Any path that edits the primary checkout requires explicit, clearly-labeled confirmation from the user first. This behavior is unconditional and applies to both `/ecl-execute-phase` (worktree executor waves) and `/ecl-quick` (quick-mode isolated runs).
+
 ---
 
 ## UI Design Contract
@@ -369,7 +390,7 @@ eCL generates markdown files that become LLM system prompts. This means any user
 - `ecl-prompt-guard.js` — Scans Write/Edit calls to `.planning/` for injection patterns (always active, advisory-only)
 - `ecl-workflow-guard.js` — Warns on file edits outside eCL workflow context (opt-in via `hooks.workflow_guard`)
 
-**CI Scanner:** `prompt-injection-scan.test.cjs` scans all agent, workflow, and command files for embedded injection vectors.
+**CI Scanner:** `prompt-injection-scan.security.test.cjs` scans all agent, workflow, and command files for embedded injection vectors.
 
 ---
 
@@ -437,6 +458,26 @@ The review step slots in after execution and before UAT:
 - **Command Reference:** see [`docs/COMMANDS.md`](COMMANDS.md) for every stable command's flags, subcommands, and examples.
 - **Configuration Reference:** see [`docs/CONFIGURATION.md`](CONFIGURATION.md) for the full `config.json` schema, model-profile table, git branching strategies, and security settings.
 - **Discuss Mode:** see [`docs/workflow-discuss-mode.md`](workflow-discuss-mode.md) for interview vs assumptions mode.
+
+### Graphify capability gate (tri-state, v1.43+)
+
+Graphify commands (`graphify status`, `graphify build`, `graphify query`, `graphify diff`) now respect the **full tri-state capability gate**:
+
+1. **Installed** — the `ecl-graphify-*` skills are present in the active install profile.
+2. **Surfaced** — those skills appear on the current runtime surface (e.g., in `~/.claude/commands/ecl/`).
+3. **Config-enabled** — `graphify.enabled: true` is set in `.planning/config.json`.
+
+All three conditions must be true. Setting `graphify.enabled: true` alone is no longer sufficient if graphify has not been installed and surfaced. If graphify commands return `{ disabled: true }` after upgrading, verify that the install profile includes graphify skills (`ecl-tools capability state`) and re-run the installer to surface them.
+
+### Intel capability gate (tri-state, v1.44+)
+
+Intel commands (`intel status`, `intel query`, `intel diff`, `intel snapshot`, `intel validate`, `intel api-surface`) now respect the **full tri-state capability gate** (same resolver as graphify above):
+
+1. **Installed** — the intel capability is present in the active install profile (intel has no skill files, so this is vacuously true for all profiles).
+2. **Surfaced** — the intel capability is on the current runtime surface (vacuously true for all surfaces since intel registers no skill stems).
+3. **Config-enabled** — `intel.enabled: true` is set in `.planning/config.json`.
+
+For intel, conditions 1 and 2 are always satisfied (intel has no skill files). The effective gate is `intel.enabled` in config — the same behaviour as before, but now enforced through the shared `isCapabilityActive('intel', cwd)` resolver rather than a direct config read. This means intel honours the full capability-state pipeline, including any future install-profile or surface restrictions. If intel commands return `{ disabled: true }`, ensure `intel.enabled: true` is set in `.planning/config.json` and verify `ecl-tools capability state` shows intel as active.
 
 ---
 
@@ -690,13 +731,13 @@ To assign different models on a non-Claude runtime:
 
 #### Codex skill picker and agent scheduling (#774)
 
-eCL enriches each Codex install with two additional artifacts:
-
-- **Skill TUI chip** — each installed `ecl-*` skill directory contains an `agents/openai.yaml` file that populates the Codex `/skills` picker with a human-readable display name and a short description, so you can browse and invoke eCL skills from the Codex TUI without typing the full skill name.
+eCL enriches each Codex install with an additional artifact:
 
 - **Flex-tier scheduling** — light-tier agents (haiku-equivalent) emit `service_tier = "flex"` and `model_verbosity = "low"` in their agent TOML. The Codex scheduler routes these agents to the flex tier (lower cost, background processing) and suppresses verbose token output.
 
-Both enrichments are written automatically at install time and require no manual configuration. Requires Codex CLI ≥ 0.130.0.
+eCL skills appear in the Codex `/skills` picker via their `SKILL.md` file, which Codex discovers automatically. No `agents/openai.yaml` sidecar is emitted — doing so caused duplicate autocomplete entries (#1326).
+
+This enrichment is written automatically at install time and requires no manual configuration. Requires Codex CLI ≥ 0.130.0.
 
 #### Switching from Claude to Codex with one config change (#2517)
 
@@ -809,7 +850,7 @@ WINDSURF_CONFIG_DIR=~/.codeium/windsurf-next npx @evolvconsulting/evolv-coder-li
 | Codex | (per Codex CLI) | `--config-dir` flag |
 | Copilot | `~/.copilot` | `COPILOT_CONFIG_DIR` (or `COPILOT_HOME`) |
 | Cursor | `~/.cursor` | `CURSOR_CONFIG_DIR` |
-| Windsurf | `~/.codeium/windsurf` | `WINDSURF_CONFIG_DIR` |
+| Windsurf / Devin Desktop | `~/.codeium/windsurf` | `WINDSURF_CONFIG_DIR` |
 | Antigravity | auto-detected | `ANTIGRAVITY_CONFIG_DIR` |
 | Augment | `~/.augment` | `AUGMENT_CONFIG_DIR` |
 | Trae | `~/.trae` | `TRAE_CONFIG_DIR` |

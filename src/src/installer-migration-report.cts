@@ -33,6 +33,7 @@ export const BUNDLED_GSD_HOOK_FILES: ReadonlySet<string> = Object.freeze(new Set
   'hooks/ecl-context-monitor.js',
   'hooks/ecl-cursor-post-tool.js',
   'hooks/ecl-cursor-session-start.js',
+  'hooks/ecl-ensure-canonical-path.js',
   'hooks/ecl-graphify-update.sh',
   'hooks/ecl-phase-boundary.sh',
   'hooks/ecl-prompt-guard.js',

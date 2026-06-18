@@ -368,7 +368,7 @@ eCL 生成的 Markdown 文件会成为 LLM 系统提示。这意味着流入规�
 - `ecl-prompt-guard.js` — 扫描写入 `.planning/` 的 Write/Edit 调用中的注入模式（始终活跃，仅建议）
 - `ecl-workflow-guard.js` — 对 eCL 工作流上下文之外的文件编辑发出警告（通过 `hooks.workflow_guard` 选择性启用）
 
-**CI 扫描器：** `prompt-injection-scan.test.cjs` 扫描所有 agent、工作流和命令文件中的嵌入式注入向量。
+**CI 扫描器：** `prompt-injection-scan.security.test.cjs` 扫描所有 agent、工作流和命令文件中的嵌入式注入向量。
 
 ---
 

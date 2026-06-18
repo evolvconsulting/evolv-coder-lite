@@ -8,7 +8,7 @@ const assert = require('node:assert/strict');
 const {
   getMilestoneFromPhaseId,
   getPhaseDirFromPhaseId,
-} = require('../evolv-coder-lite/bin/lib/core.cjs');
+} = require('../evolv-coder-lite/bin/lib/phase-id.cjs');
 
 // ─── getMilestoneFromPhaseId ────────────────────────────────────────────────
 

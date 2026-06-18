@@ -1,49 +1,117 @@
 'use strict';
+/**
+ * bug-492-effort-manifest-fallback.test.cjs
+ *
+ * Verifies resolveEffortInternal's fallback chain when no project config.json
+ * is present.
+ *
+ * Isolation strategy: every test that injects custom effort values writes
+ * them to a per-test ~/.ecl/defaults.json rooted under a tmpHome, pointed at
+ * via ECL_HOME. This avoids mutating the module-level CANONICAL_CONFIG_DEFAULTS
+ * singleton (which caused independence violations under parallel runs).
+ *
+ * Test 1 (pure manifest fallback): tmpDir WITH .planning/ but no config.json.
+ * ECL_HOME points to a bare tmpHome (no defaults.json). loadConfig sees
+ * .planning/ → returns effort:null → model-resolver reads CANONICAL_CONFIG_DEFAULTS
+ * directly for routing_tier_defaults.
+ *
+ * Tests 2-4 (global-defaults path): bare tmpDir (no .planning/) so loadConfig
+ * hits the ~/.ecl/defaults.json branch. A test-scoped defaults.json injects
+ * the desired effort sub-object; model-resolver then takes the effortCfg
+ * (non-null) branch — no singleton touched.
+ */
 
-process.env.ECL_TEST_MODE = "1";
+process.env.ECL_TEST_MODE = '1';
 
-const { describe, test, beforeEach, afterEach } = require("node:test");
-const assert = require("node:assert/strict");
-const { createTempProject, cleanup } = require("./helpers.cjs");
-const { resolveEffortInternal } = require("../evolv-coder-lite/bin/lib/core.cjs");
-const { CONFIG_DEFAULTS: CANONICAL_CONFIG_DEFAULTS } = require("../evolv-coder-lite/bin/lib/configuration.cjs");
+const { describe, test } = require('node:test');
+const assert = require('node:assert/strict');
+const fs = require('node:fs');
+const path = require('node:path');
+const os = require('node:os');
+const { cleanup } = require('./helpers.cjs');
+const { resolveEffortInternal } = require('../evolv-coder-lite/bin/lib/model-resolver.cjs');
 
-describe("#492 manifest effort fallback", () => {
-  let tmpDir;
-  beforeEach(() => { tmpDir = createTempProject(); });
-  afterEach(() => { cleanup(tmpDir); });
+/** Create a bare temp directory with no .planning/ structure */
+function createBareTmpDir(prefix = 'ecl-test-') {
+  return fs.mkdtempSync(path.join(os.tmpdir(), prefix));
+}
 
-  test("routing_tier_defaults manifest fallback still works", () => {
-    assert.strictEqual(resolveEffortInternal(tmpDir, "ecl-planner"), "xhigh");
+/** Create a temp home dir and write effort config into .ecl/defaults.json */
+function createTmpHomeWithEffort(effortConfig) {
+  const tmpHome = createBareTmpDir('ecl-home-');
+  const gsdDir = path.join(tmpHome, '.ecl');
+  fs.mkdirSync(gsdDir, { recursive: true });
+  fs.writeFileSync(
+    path.join(gsdDir, 'defaults.json'),
+    JSON.stringify({ effort: effortConfig })
+  );
+  return tmpHome;
+}
+
+describe('#492 manifest effort fallback', () => {
+  // These tests manage ECL_HOME per-test, so no shared beforeEach/afterEach.
+
+  test('routing_tier_defaults manifest fallback still works when no config and no defaults.json', (t) => {
+    // .planning/ exists → loadConfig returns effort:null → model-resolver reads
+    // CANONICAL_CONFIG_DEFAULTS['effort']['routing_tier_defaults']['heavy'] = "xhigh".
+    const tmpDir = createBareTmpDir();
+    fs.mkdirSync(path.join(tmpDir, '.planning'), { recursive: true });
+    const tmpHome = createBareTmpDir('ecl-home-');
+    process.env.ECL_HOME = tmpHome;
+    t.after(() => {
+      delete process.env.ECL_HOME;
+      cleanup(tmpDir);
+      cleanup(tmpHome);
+    });
+
+    // ecl-planner's default tier is "heavy"; manifest routing_tier_defaults.heavy = "xhigh"
+    assert.strictEqual(resolveEffortInternal(tmpDir, 'ecl-planner'), 'xhigh');
   });
 
-  test("manifest effort.agent_overrides wins over routing_tier_defaults when no project config", () => {
-    const original = CANONICAL_CONFIG_DEFAULTS.effort.agent_overrides;
-    try {
-      CANONICAL_CONFIG_DEFAULTS.effort.agent_overrides = { "ecl-planner": "max" };
-      assert.strictEqual(resolveEffortInternal(tmpDir, "ecl-planner"), "max");
-    } finally {
-      CANONICAL_CONFIG_DEFAULTS.effort.agent_overrides = original;
-    }
+  test('global-defaults effort.agent_overrides wins over routing_tier_defaults when no project config', (t) => {
+    // bare tmpDir (no .planning/) → loadConfig reads ~/.ecl/defaults.json
+    // which supplies effort.agent_overrides → resolveEffortInternal returns that value.
+    const tmpDir = createBareTmpDir();
+    const tmpHome = createTmpHomeWithEffort({ agent_overrides: { 'ecl-planner': 'max' } });
+    process.env.ECL_HOME = tmpHome;
+    t.after(() => {
+      delete process.env.ECL_HOME;
+      cleanup(tmpDir);
+      cleanup(tmpHome);
+    });
+
+    assert.strictEqual(resolveEffortInternal(tmpDir, 'ecl-planner'), 'max');
   });
 
-  test("manifest effort.default consulted for unknown agent with no project config", () => {
-    const original = CANONICAL_CONFIG_DEFAULTS.effort.default;
-    try {
-      CANONICAL_CONFIG_DEFAULTS.effort.default = "max";
-      assert.strictEqual(resolveEffortInternal(tmpDir, "fictional-agent-xyz-492"), "max");
-    } finally {
-      CANONICAL_CONFIG_DEFAULTS.effort.default = original;
-    }
+  test('global-defaults effort.default consulted for unknown agent with no project config', (t) => {
+    // effort.default in defaults.json wins for an agent with no tier mapping.
+    const tmpDir = createBareTmpDir();
+    const tmpHome = createTmpHomeWithEffort({ default: 'max' });
+    process.env.ECL_HOME = tmpHome;
+    t.after(() => {
+      delete process.env.ECL_HOME;
+      cleanup(tmpDir);
+      cleanup(tmpHome);
+    });
+
+    assert.strictEqual(resolveEffortInternal(tmpDir, 'fictional-agent-xyz-492'), 'max');
   });
 
-  test("manifest agent_overrides takes precedence over manifest routing_tier_defaults", () => {
-    const originalAgentOverrides = CANONICAL_CONFIG_DEFAULTS.effort.agent_overrides;
-    try {
-      CANONICAL_CONFIG_DEFAULTS.effort.agent_overrides = { "ecl-planner": "minimal" };
-      assert.strictEqual(resolveEffortInternal(tmpDir, "ecl-planner"), "minimal");
-    } finally {
-      CANONICAL_CONFIG_DEFAULTS.effort.agent_overrides = originalAgentOverrides;
-    }
+  test('global-defaults agent_overrides takes precedence over routing_tier_defaults', (t) => {
+    // agent_overrides is checked first (step 2), so "minimal" wins over
+    // routing_tier_defaults.heavy = "xhigh" (step 3).
+    const tmpDir = createBareTmpDir();
+    const tmpHome = createTmpHomeWithEffort({
+      agent_overrides: { 'ecl-planner': 'minimal' },
+      routing_tier_defaults: { heavy: 'xhigh' },
+    });
+    process.env.ECL_HOME = tmpHome;
+    t.after(() => {
+      delete process.env.ECL_HOME;
+      cleanup(tmpDir);
+      cleanup(tmpHome);
+    });
+
+    assert.strictEqual(resolveEffortInternal(tmpDir, 'ecl-planner'), 'minimal');
   });
 });
