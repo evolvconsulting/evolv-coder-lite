@@ -17,6 +17,8 @@
  * (F) Regression locks: the snippet file contains no /ecl-tools substring; and
  *     no line in workflows/do.md matches /\/ecl[:-][a-z]/ (dispatcher-parity
  *     scanner must not read the preamble as a slash-command stub).
+ * (H) Codex shim fallback: when PATH has no ecl-tools, $HOME/.codex/evolv-coder-lite/bin
+ *     can satisfy ecl_run for Codex shim-only installs.
  */
 
 // allow-test-rule: structural parity/drift guard — asserts literal presence/absence of the canonical ecl_run launcher and the retired $ECL_SDK / `/ecl-tools` tokens across workflow markdown; there is no typed IR for "this source file does not contain substring X".
@@ -30,6 +32,7 @@ const { execFileSync } = require('node:child_process');
 const { cleanup } = require('./helpers.cjs');
 
 const WORKFLOWS_DIR = path.join(__dirname, '..', 'evolv-coder-lite', 'workflows');
+const AGENTS_DIR = path.join(__dirname, '..', 'agents');
 const SNIPPET_FILE = path.join(WORKFLOWS_DIR, '_runtime-launcher.snippet.sh');
 
 /**
@@ -110,6 +113,26 @@ function collectWorkflowFiles() {
     }
   }
   walk(WORKFLOWS_DIR);
+  return results;
+}
+
+/**
+ * Collect all agent .md files under AGENTS_DIR (non-recursive — agents/ has no subdirs,
+ * but collectFiles in the sync script is recursive-safe; we mirror that here).
+ */
+function collectAgentFiles() {
+  const results = [];
+  function walk(dir) {
+    for (const entry of fs.readdirSync(dir, { withFileTypes: true })) {
+      const full = path.join(dir, entry.name);
+      if (entry.isDirectory()) {
+        walk(full);
+      } else if (entry.isFile() && entry.name.endsWith('.md')) {
+        results.push(full);
+      }
+    }
+  }
+  walk(AGENTS_DIR);
   return results;
 }
 
@@ -395,6 +418,97 @@ describe('runtime-launcher-parity (#373)', () => {
     );
   });
 
+  // ─── (H) Codex shim fallback behavioral ------------------------------------
+  test('(H) ecl_run resolves $HOME/.codex/evolv-coder-lite/bin/ shim when PATH has no ecl-tools', () => {
+    const CODEX_HOME_PROBE = '.codex/evolv-coder-lite/bin/';
+
+    const snippetContent = fs.readFileSync(SNIPPET_FILE, 'utf8');
+    assert.ok(
+      snippetContent.includes(CODEX_HOME_PROBE),
+      `_runtime-launcher.snippet.sh must contain the Codex fallback arm (probing "${CODEX_HOME_PROBE}").`,
+    );
+
+    const missing = [];
+    for (const f of collectWorkflowFiles()) {
+      const content = fs.readFileSync(f, 'utf8');
+      const blocks = extractShellBlocks(content);
+      const allBlockLines = blocks.flatMap((b) => b.lines);
+      const fileHasGsdRun = allBlockLines.some((l) => /\becl_run\b/.test(l));
+      if (!fileHasGsdRun) continue;
+      if (!allBlockLines.join('\n').includes(CODEX_HOME_PROBE)) {
+        missing.push(path.relative(WORKFLOWS_DIR, f));
+      }
+    }
+    assert.deepStrictEqual(
+      missing,
+      [],
+      `These workflow files use ecl_run but are missing the Codex fallback arm ("${CODEX_HOME_PROBE}"). ` +
+        `Run \`node scripts/sync-runtime-launcher.cjs\` to propagate:\n` +
+        missing.join('\n'),
+    );
+
+    const fakeHome = fs.mkdtempSync(path.join(os.tmpdir(), 'ecl-codex-home-'));
+    const fakeRuntime = fs.mkdtempSync(path.join(os.tmpdir(), 'ecl-codex-rt-'));
+    try {
+      const codexBinDir = path.join(fakeHome, '.codex', 'evolv-coder-lite', 'bin');
+      fs.mkdirSync(codexBinDir, { recursive: true });
+      const stubPath = path.join(codexBinDir, 'ecl-tools.cjs');
+      fs.writeFileSync(
+        stubPath,
+        '#!/usr/bin/env node\nconsole.log("CODEX_HOME_STUB:" + process.argv.slice(2).join(","));\n',
+      );
+      fs.chmodSync(stubPath, 0o755);
+
+      const snippet = fs.readFileSync(SNIPPET_FILE, 'utf8');
+      const scriptContent =
+        `unset ECL_TOOLS\n` +
+        `export RUNTIME_DIR=${JSON.stringify(fakeRuntime)}\n` +
+        `export HOME=${JSON.stringify(fakeHome)}\n` +
+        snippet +
+        `\nprintf "ECL_TOOLS=%s\\n" "$ECL_TOOLS"\n` +
+        `ecl_run query init.quick\n`;
+
+      const scriptPath = path.join(fakeRuntime, 'test-codex-home-fb.sh');
+      fs.writeFileSync(scriptPath, scriptContent);
+
+      const hasExecutable = (dir, name) => {
+        try {
+          fs.accessSync(path.join(dir, name), fs.constants.X_OK);
+          return true;
+        } catch {
+          return false;
+        }
+      };
+      const systemPaths = (process.env.PATH || '/usr/bin:/bin')
+        .split(path.delimiter)
+        .filter((p) => !hasExecutable(p, 'ecl-tools'));
+      if (!systemPaths.some((p) => hasExecutable(p, 'node'))) {
+        const nodeShimDir = path.join(fakeRuntime, 'node-shim');
+        fs.mkdirSync(nodeShimDir, { recursive: true });
+        fs.symlinkSync(process.execPath, path.join(nodeShimDir, 'node'));
+        systemPaths.unshift(nodeShimDir);
+      }
+
+      const stdout = execFileSync('bash', [scriptPath], {
+        encoding: 'utf8',
+        env: { ...process.env, PATH: systemPaths.join(path.delimiter), HOME: fakeHome },
+      });
+
+      const normStdout = stdout.replace(/\\/g, '/');
+      assert.ok(
+        normStdout.includes('.codex/evolv-coder-lite/bin/'),
+        `Expected ECL_TOOLS to resolve into .codex/evolv-coder-lite/bin/, got:\n${stdout.trim()}`,
+      );
+      assert.ok(
+        stdout.includes('CODEX_HOME_STUB:query,init.quick'),
+        `Expected Codex shim stub output, got:\n${stdout.trim()}`,
+      );
+    } finally {
+      cleanup(fakeHome);
+      cleanup(fakeRuntime);
+    }
+  });
+
   // ─── (F) Regression locks: no /ecl-tools substring; no do.md dispatcher false-positive ──
   test('(F) snippet has no /ecl-tools substring; do.md has no /ecl[:-][a-z] matches', () => {
     // (F1) The snippet must not contain the literal substring /ecl-tools.
@@ -428,6 +542,184 @@ describe('runtime-launcher-parity (#373)', () => {
         `scanner (bug-2954) misreads as a slash-command stub. Use \${_GSD_SHIM_NAME} indirection. ` +
         `Offending lines:\n` +
         offendingLines.join('\n'),
+    );
+  });
+});
+
+// ─── Issue #381: standalone ecl_run executable + CLAUDE_ENV_FILE persistence ──
+describe('runtime-launcher-parity — standalone executable (#381)', () => {
+  const BIN_DIR = path.join(__dirname, '..', 'evolv-coder-lite', 'bin');
+  const ECL_RUN_SRC = path.join(BIN_DIR, 'ecl_run');
+
+  // ─── (I) ecl_run executable delegates to ecl-tools.cjs beside it ──────────
+  test('(I) ecl_run executable delegates to ecl-tools.cjs beside it', () => {
+    const base = fs.mkdtempSync(path.join(os.tmpdir(), 'ecl-381-I-'));
+    try {
+      const binDir = path.join(base, 'evolv-coder-lite', 'bin');
+      fs.mkdirSync(binDir, { recursive: true });
+
+      // Copy the real ecl_run executable into the temp bin dir
+      fs.copyFileSync(ECL_RUN_SRC, path.join(binDir, 'ecl_run'));
+      fs.chmodSync(path.join(binDir, 'ecl_run'), 0o755);
+
+      // Write a stub ecl-tools.cjs that echoes its args
+      fs.writeFileSync(
+        path.join(binDir, 'ecl-tools.cjs'),
+        `console.log('ECL_TOOLS_STUB:' + process.argv.slice(2).join(' '))`,
+      );
+
+      const stdout = execFileSync('sh', [path.join(binDir, 'ecl_run'), 'query', 'x'], {
+        encoding: 'utf8',
+      });
+      assert.ok(
+        stdout.includes('ECL_TOOLS_STUB:query x'),
+        `Expected stdout to contain "ECL_TOOLS_STUB:query x", got: ${stdout.trim()}`,
+      );
+    } finally {
+      cleanup(base);
+    }
+  });
+
+  // ─── (J) preamble persists bin dir to CLAUDE_ENV_FILE ─────────────────────
+  test('(J) preamble persists bin dir to CLAUDE_ENV_FILE so a fresh shell resolves ecl_run', () => {
+    // Use a RUNTIME_DIR whose path contains a SPACE to prove single-quote safety.
+    const baseParent = fs.mkdtempSync(path.join(os.tmpdir(), 'ecl-381-J-'));
+    const base = path.join(baseParent, 'has space');
+    try {
+      const binDir = path.join(base, 'evolv-coder-lite', 'bin');
+      fs.mkdirSync(binDir, { recursive: true });
+
+      // ecl_run stub that prints ECL_RUN_STUB:<args>
+      const gsdRunStub = path.join(binDir, 'ecl_run');
+      fs.writeFileSync(gsdRunStub, '#!/bin/sh\necho "ECL_RUN_STUB:$*"\n');
+      fs.chmodSync(gsdRunStub, 0o755);
+
+      // ecl-tools.cjs stub (must exist for preamble first arm to win)
+      fs.writeFileSync(path.join(binDir, 'ecl-tools.cjs'), '// stub');
+
+      const envFile = path.join(baseParent, 'envfile');
+      const snippet = fs.readFileSync(SNIPPET_FILE, 'utf8');
+
+      // Script: just source the preamble with RUNTIME_DIR + CLAUDE_ENV_FILE set
+      const preambleScript = path.join(baseParent, 'run-preamble.sh');
+      fs.writeFileSync(preambleScript, snippet);
+
+      execFileSync('bash', [preambleScript], {
+        encoding: 'utf8',
+        env: {
+          RUNTIME_DIR: base,
+          CLAUDE_ENV_FILE: envFile,
+          PATH: process.env.PATH,
+        },
+      });
+
+      // Assert envfile exists and the persisted line is single-quoted
+      assert.ok(fs.existsSync(envFile), `Expected CLAUDE_ENV_FILE (${envFile}) to be created after preamble runs`);
+      const envFileContent = fs.readFileSync(envFile, 'utf8');
+      // The persisted line must single-quote the directory (neutralising $, spaces, etc.)
+      // and keep "$PATH" expanding at source time.
+      // Expected form: export PATH='<dir>':"$PATH"
+      assert.ok(
+        envFileContent.includes("export PATH='"),
+        `Expected envfile to contain single-quoted export PATH line, got: ${envFileContent.trim()}`,
+      );
+      assert.ok(
+        envFileContent.includes('has space/evolv-coder-lite/bin'),
+        `Expected envfile to contain the spaced bin dir, got: ${envFileContent.trim()}`,
+      );
+      assert.ok(
+        envFileContent.includes(':"$PATH"'),
+        `Expected envfile to contain :"$PATH" (double-quoted, expands at source time), got: ${envFileContent.trim()}`,
+      );
+
+      // Windows Git Bash (msys2) does not honor Node's chmod exec bit for PATH-executing
+      // extension-less scripts; the env-file persistence above is the cross-platform proof.
+      // Global installs on Windows are covered by npm's generated bin shim.
+      if (process.platform !== 'win32') {
+        // Simulate a LATER fresh block that SOURCES the env file to get ecl_run on PATH.
+        // The later shell does NOT have the bin dir on PATH beforehand — it only gets it
+        // by sourcing the env file.  We use a minimal PATH (no temp bin dir pre-injected).
+        const stdout = execFileSync('bash', ['-c', '. "$CLAUDE_ENV_FILE"; ecl_run hello'], {
+          encoding: 'utf8',
+          env: {
+            CLAUDE_ENV_FILE: envFile,
+            PATH: process.env.PATH,
+          },
+        });
+        assert.ok(
+          stdout.includes('ECL_RUN_STUB:hello'),
+          `Expected stdout to contain "ECL_RUN_STUB:hello" after sourcing env file, got: ${stdout.trim()}`,
+        );
+      }
+    } finally {
+      cleanup(baseParent);
+    }
+  });
+});
+
+// ─── Agent parity — runtime-launcher-parity — agents (#1041) ─────────────────
+describe('runtime-launcher-parity — agents (#1041)', () => {
+  // ─── (B-agents) Exactly ONE canonical preamble per using agent file ────────
+  test('(B-agents) each agent .md using ecl_run contains exactly ONE canonical preamble, before the first ecl_run call', () => {
+    const preamble = expectedPreamble();
+    const preambleStr = preamble.join('\n');
+    const files = collectAgentFiles();
+    assert.ok(files.length > 0, 'expected at least one agent .md file');
+
+    const violations = [];
+
+    for (const f of files) {
+      const rel = path.relative(AGENTS_DIR, f);
+      const content = fs.readFileSync(f, 'utf8');
+      const blocks = extractShellBlocks(content);
+
+      // Collect all block lines in document order for flat analysis
+      const allBlockLines = [];
+      for (const blk of blocks) {
+        allBlockLines.push(...blk.lines);
+      }
+
+      // Does this file use ecl_run at all?
+      const fileHasGsdRun = allBlockLines.some((l) => /\becl_run\b/.test(l));
+      if (!fileHasGsdRun) continue; // agents without ecl_run are not checked
+
+      // Count preamble occurrences across all shell content of this file
+      const allContent = allBlockLines.join('\n');
+      let preambleCount = 0;
+      let searchPos = 0;
+      while (true) {
+        const idx = allContent.indexOf(preambleStr, searchPos);
+        if (idx === -1) break;
+        preambleCount++;
+        searchPos = idx + preambleStr.length;
+      }
+
+      if (preambleCount !== 1) {
+        violations.push(
+          `${rel}: expected exactly 1 canonical preamble occurrence in bash blocks, found ${preambleCount}. ` +
+            `Run \`node scripts/sync-runtime-launcher.cjs\` to fix.`,
+        );
+        continue;
+      }
+
+      // Verify preamble appears BEFORE the first ecl_run call (in document order)
+      const preamblePos = allContent.indexOf(preambleStr);
+      const firstGsdRunPos = allContent.search(/\becl_run\b/);
+
+      // The first ecl_run WITHIN the preamble itself (the function definition) is fine.
+      // Simple check: preamble starts at or before the first ecl_run occurrence.
+      if (preamblePos > firstGsdRunPos) {
+        violations.push(
+          `${rel}: preamble appears AFTER the first ecl_run reference — it must precede all ecl_run calls.`,
+        );
+      }
+    }
+
+    assert.deepStrictEqual(
+      violations,
+      [],
+      'Agent files with ecl_run calls have wrong preamble count or ordering:\n' +
+        violations.join('\n---\n'),
     );
   });
 });

@@ -13,6 +13,7 @@ import noSourceGrep from './eslint-rules/no-source-grep.cjs';
 import noMagicSleepInTests from './eslint-rules/no-magic-sleep-in-tests.cjs';
 import noElapsedAssertion from './eslint-rules/no-elapsed-assertion.cjs';
 import noRawRmsyncInTests from './eslint-rules/no-raw-rmsync-in-tests.cjs';
+import noTautologicalAssert from './eslint-rules/no-tautological-assert.cjs';
 
 const localPlugin = {
   rules: {
@@ -20,6 +21,7 @@ const localPlugin = {
     'no-magic-sleep-in-tests': noMagicSleepInTests,
     'no-elapsed-assertion': noElapsedAssertion,
     'no-raw-rmsync-in-tests': noRawRmsyncInTests,
+    'no-tautological-assert': noTautologicalAssert,
   },
 };
 
@@ -35,7 +37,11 @@ export default tseslint.config(
       '**/*.generated.cjs',
       // ADR-457: tsc-generated runtime artifact — lint the src/*.cts source, not the emitted .cjs.
       'evolv-coder-lite/bin/lib/semver-compare.cjs',
+      'evolv-coder-lite/bin/lib/plan-drift-guard.cjs',
       'evolv-coder-lite/bin/lib/cli-exit.cjs',
+      'evolv-coder-lite/bin/lib/edge-probe.cjs',
+      'evolv-coder-lite/bin/lib/probe-core.cjs',
+      'evolv-coder-lite/bin/lib/prohibition-enforcement.cjs',
       'evolv-coder-lite/bin/lib/code-review-flags.cjs',
       'evolv-coder-lite/bin/lib/context-utilization.cjs',
       'evolv-coder-lite/bin/lib/artifacts.cjs',
@@ -73,22 +79,39 @@ export default tseslint.config(
       'evolv-coder-lite/bin/lib/command-aliases.cjs',
       'evolv-coder-lite/bin/lib/config-schema.cjs',
       'evolv-coder-lite/bin/lib/model-profiles.cjs',
+      'evolv-coder-lite/bin/lib/model-resolver.cjs',
+      'evolv-coder-lite/bin/lib/loop-resolver.cjs',
+      'evolv-coder-lite/bin/lib/capability-state.cjs',
+      'evolv-coder-lite/bin/lib/capability-activation.cjs',
+      'evolv-coder-lite/bin/lib/federated-config.cjs',
       'evolv-coder-lite/bin/lib/installer-migrations/002-codex-legacy-hooks-json.cjs',
       'evolv-coder-lite/bin/lib/installer-migrations/003-rename-evolv-coder-lite-to-evolv-coder-lite.cjs',
+      'evolv-coder-lite/bin/lib/installer-migrations/004-prune-stale-pristine-snapshots.cjs',
       'evolv-coder-lite/bin/lib/observability/logger.cjs',
       'evolv-coder-lite/bin/lib/active-workstream-store.cjs',
       'evolv-coder-lite/bin/lib/adr-parser.cjs',
       'evolv-coder-lite/bin/lib/graphify.cjs',
+      'evolv-coder-lite/bin/lib/graphify-command-router.cjs',
+      'evolv-coder-lite/bin/lib/audit-command-router.cjs',
+      'evolv-coder-lite/bin/lib/intel-command-router.cjs',
       'evolv-coder-lite/bin/lib/install-profiles.cjs',
       'evolv-coder-lite/bin/lib/intel.cjs',
       'evolv-coder-lite/bin/lib/installer-migrations.cjs',
       'evolv-coder-lite/bin/lib/worktree-safety.cjs',
       'evolv-coder-lite/bin/lib/worktree-base-ref.cjs',
       'evolv-coder-lite/bin/lib/planning-workspace.cjs',
+      'evolv-coder-lite/bin/lib/command-roster.cjs',
+      'evolv-coder-lite/bin/lib/runtime-artifact-conversion.cjs',
       'evolv-coder-lite/bin/lib/runtime-artifact-layout.cjs',
       'evolv-coder-lite/bin/lib/runtime-config-adapter-registry.cjs',
+      'evolv-coder-lite/bin/lib/runtime-hooks-surface.cjs',
       'evolv-coder-lite/bin/lib/command-routing-hub.cjs',
-      'evolv-coder-lite/bin/lib/core.cjs',
+      'evolv-coder-lite/bin/lib/core-utils.cjs',
+      'evolv-coder-lite/bin/lib/io.cjs',
+      'evolv-coder-lite/bin/lib/phase-id.cjs',
+      'evolv-coder-lite/bin/lib/config-loader.cjs',
+      'evolv-coder-lite/bin/lib/phase-locator.cjs',
+      'evolv-coder-lite/bin/lib/roadmap-parser.cjs',
       'evolv-coder-lite/bin/lib/drift.cjs',
       'evolv-coder-lite/bin/lib/cjs-command-router-adapter.cjs',
       'evolv-coder-lite/bin/lib/phase-command-router.cjs',
@@ -101,6 +124,7 @@ export default tseslint.config(
       'evolv-coder-lite/bin/lib/verification-command-router.cjs',
       'evolv-coder-lite/bin/lib/init-command-router.cjs',
       'evolv-coder-lite/bin/lib/agent-command-router.cjs',
+      'evolv-coder-lite/bin/lib/agent-install-check.cjs',
       'evolv-coder-lite/bin/lib/task-command-router.cjs',
       'evolv-coder-lite/bin/lib/validate-command-router.cjs',
       'evolv-coder-lite/bin/lib/workstream-inventory.cjs',
@@ -123,12 +147,19 @@ export default tseslint.config(
       'evolv-coder-lite/bin/lib/profile-pipeline.cjs',
       'evolv-coder-lite/bin/lib/template.cjs',
       'evolv-coder-lite/bin/lib/uat.cjs',
+      'evolv-coder-lite/bin/lib/uat-predicate.cjs',
       'evolv-coder-lite/bin/lib/workstream.cjs',
       'evolv-coder-lite/bin/lib/roadmap.cjs',
       'evolv-coder-lite/bin/lib/audit.cjs',
       'evolv-coder-lite/bin/lib/research-store.cjs',
       'evolv-coder-lite/bin/lib/research-provider.cjs',
       'evolv-coder-lite/bin/lib/package-legitimacy.cjs',
+      // ADR-457: tsc-generated runtime artifact — lint the src/git-base-branch.cts source.
+      'evolv-coder-lite/bin/lib/git-base-branch.cjs',
+      // ADR-1213: tsc-generated runtime artifact — lint the src/capability-writer.cts source.
+      'evolv-coder-lite/bin/lib/capability-writer.cjs',
+      // issue #1355: tsc-generated runtime artifact — lint the src/teams-status.cts source.
+      'evolv-coder-lite/bin/lib/teams-status.cjs',
     ],
   },
 
@@ -180,6 +211,7 @@ export default tseslint.config(
       'no-unsafe-finally': 'warn',
       // eslint-plugin-n rules
       'n/no-process-exit': 'error',
+      'n/no-path-concat': 'error',
       // Local rules — warn for now; flip to error after cleanup phases
       'local/no-source-grep': 'warn',
     },
@@ -206,6 +238,10 @@ export default tseslint.config(
       'local/no-elapsed-assertion': 'warn',
       // Ban raw fs.rmSync in tests — use helpers.cleanup() for Windows-EBUSY retry budget
       'local/no-raw-rmsync-in-tests': 'error',
+      // Ban tautological assertions (always-truthy arg or identical-literal equality)
+      'local/no-tautological-assert': 'error',
+      // Ban source-grep pattern in tests — use require() + behavior assertions instead
+      'local/no-source-grep': 'error',
       // Ban raw setTimeout sync + elapsed/duration-style assertions via no-restricted-syntax
       'no-restricted-syntax': [
         'error',
@@ -230,5 +266,20 @@ export default tseslint.config(
       'no-control-regex': 'error',
       'no-irregular-whitespace': 'warn',
     },
+  },
+
+  // ── #1279 lint-rule fail-first fixture ──────────────────────────────────────
+  // `tests/_ff_lint_violation.cjs` is a PLAIN `.cjs` (NOT `*.test.cjs`) on purpose: it is a KNOWN
+  // `local/no-source-grep` violation that `defaultProveFailFirst` lints to machine-prove the rule
+  // has teeth, and it must stay OFF the `node --test` runner glob (executing it ENOENTs on the
+  // intentional `lib/foo.cjs` path). It still needs the `local` plugin registered so its inline
+  // `/* eslint-disable local/no-source-grep */` resolves (otherwise `eslint .` errors "rule not
+  // found") and the violation lands in `suppressedMessages` (which the prover reads), keeping the
+  // project's own `eslint .` green. (#1279)
+  {
+    files: ['tests/_ff_lint_violation.cjs'],
+    plugins: { local: localPlugin },
+    languageOptions: { sourceType: 'commonjs', globals: { ...globals.node } },
+    rules: { 'local/no-source-grep': 'error' },
   },
 );

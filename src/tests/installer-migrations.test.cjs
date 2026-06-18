@@ -1465,6 +1465,9 @@ test('shipped installer-migration checksums are locked to a committed baseline (
       'sha256:3e2fa98915bbd272182ebe7ede9e1fc4137c2067d386ba190fa0d37aafa15f77',
     '2026-06-02-rename-evolv-coder-lite-to-evolv-coder-lite':
       'sha256:f8331badfebb311e43d264a52d479f414152a994da57dd1a1f637315fe39f535',
+    // Migration 004: prune stale ecl-pristine/evolv-coder-lite/ snapshots (#934) // ecl-allow-legacy-name
+    '2026-06-09-prune-stale-pristine-evolv-coder-lite': // ecl-allow-legacy-name
+      'sha256:7d07c3964a0c4b226bce738d02e6651b90d2ab691ca92b1bd1998801dabf3cfa',
   };
 
   const { DEFAULT_MIGRATIONS_DIR, migrationChecksum: computeChecksum } = require('../evolv-coder-lite/bin/lib/installer-migrations.cjs');

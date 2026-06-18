@@ -1,7 +1,7 @@
 ---
 name: ecl-ui-auditor
 description: Retroactive 6-pillar visual audit of implemented frontend code. Produces scored UI-REVIEW.md. Spawned by /ecl:ui-review orchestrator.
-tools: Read, Write, Bash, Grep, Glob
+tools: Read, Write, Bash, Grep, Glob, Skill
 color: pink
 # hooks:
 #   PostToolUse:

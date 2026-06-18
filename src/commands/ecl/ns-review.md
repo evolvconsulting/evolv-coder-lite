@@ -5,7 +5,7 @@ argument-hint: ""
 allowed-tools:
   - Read
   - Skill
-requires: [code-review, audit-uat, secure-phase, eval-review, ui-review, validate-phase, debug, forensics]
+requires: [code-review, audit-uat, secure-phase, eval-review, ui-review, validate-phase, debug, forensics, audit-fix, review, ui-phase]
 ---
 
 Route to the appropriate quality / review skill based on the user's intent.
@@ -22,5 +22,8 @@ Route to the appropriate quality / review skill based on the user's intent.
 | Validate phase outputs | ecl-validate-phase |
 | Debug a failing feature or error | ecl-debug |
 | Forensic investigation of a broken system | ecl-forensics |
+| Autonomous audit-to-fix pipeline | ecl-audit-fix |
+| Cross-AI peer review of plans | ecl-review |
+| Generate a UI design contract | ecl-ui-phase |
 
 Invoke the matched skill directly using the Skill tool.

@@ -1,7 +1,7 @@
 ---
 name: ecl-executor
 description: Executes eCL plans with atomic commits, deviation handling, checkpoint protocols, and state management. Spawned by execute-phase orchestrator or execute-plan command.
-tools: Read, Write, Edit, Bash, Grep, Glob, mcp__context7__*
+tools: Read, Write, Edit, Bash, Grep, Glob, Skill, mcp__context7__*
 color: yellow
 # hooks:
 #   PostToolUse:
@@ -73,7 +73,8 @@ Before executing, discover project context:
 Load execution context:
 
 ```bash
-INIT=$(ecl-tools query init.execute-phase "${PHASE}")
+_GSD_SHIM_NAME="ecl-tools.cjs"; _GSD_RUNTIME_ROOT="${RUNTIME_DIR:-$(git rev-parse --show-toplevel 2>/dev/null || pwd)}"; ECL_TOOLS="${_GSD_RUNTIME_ROOT}/evolv-coder-lite/bin/${_GSD_SHIM_NAME}"; if [ -f "$ECL_TOOLS" ]; then ecl_run() { node "$ECL_TOOLS" "$@"; }; elif [ -f "${_GSD_RUNTIME_ROOT}/.claude/evolv-coder-lite/bin/${_GSD_SHIM_NAME}" ]; then ECL_TOOLS="${_GSD_RUNTIME_ROOT}/.claude/evolv-coder-lite/bin/${_GSD_SHIM_NAME}"; ecl_run() { node "$ECL_TOOLS" "$@"; }; elif [ -f "${_GSD_RUNTIME_ROOT}/.codex/evolv-coder-lite/bin/${_GSD_SHIM_NAME}" ]; then ECL_TOOLS="${_GSD_RUNTIME_ROOT}/.codex/evolv-coder-lite/bin/${_GSD_SHIM_NAME}"; ecl_run() { node "$ECL_TOOLS" "$@"; }; elif command -v ecl-tools >/dev/null 2>&1; then ECL_TOOLS="$(command -v ecl-tools)"; ecl_run() { "$ECL_TOOLS" "$@"; }; elif [ -f "$HOME/.claude/evolv-coder-lite/bin/${_GSD_SHIM_NAME}" ]; then ECL_TOOLS="$HOME/.claude/evolv-coder-lite/bin/${_GSD_SHIM_NAME}"; ecl_run() { node "$ECL_TOOLS" "$@"; }; elif [ -f "${HERMES_HOME:-$HOME/.hermes}/evolv-coder-lite/bin/${_GSD_SHIM_NAME}" ]; then ECL_TOOLS="${HERMES_HOME:-$HOME/.hermes}/evolv-coder-lite/bin/${_GSD_SHIM_NAME}"; ecl_run() { node "$ECL_TOOLS" "$@"; }; elif [ -f "${CURSOR_CONFIG_DIR:-$HOME/.cursor}/evolv-coder-lite/bin/${_GSD_SHIM_NAME}" ]; then ECL_TOOLS="${CURSOR_CONFIG_DIR:-$HOME/.cursor}/evolv-coder-lite/bin/${_GSD_SHIM_NAME}"; ecl_run() { node "$ECL_TOOLS" "$@"; }; elif [ -f "${CODEX_HOME:-$HOME/.codex}/evolv-coder-lite/bin/${_GSD_SHIM_NAME}" ]; then ECL_TOOLS="${CODEX_HOME:-$HOME/.codex}/evolv-coder-lite/bin/${_GSD_SHIM_NAME}"; ecl_run() { node "$ECL_TOOLS" "$@"; }; elif [ -f "${GEMINI_CONFIG_DIR:-$HOME/.gemini}/evolv-coder-lite/bin/${_GSD_SHIM_NAME}" ]; then ECL_TOOLS="${GEMINI_CONFIG_DIR:-$HOME/.gemini}/evolv-coder-lite/bin/${_GSD_SHIM_NAME}"; ecl_run() { node "$ECL_TOOLS" "$@"; }; elif [ -f "${COPILOT_CONFIG_DIR:-$HOME/.copilot}/evolv-coder-lite/bin/${_GSD_SHIM_NAME}" ]; then ECL_TOOLS="${COPILOT_CONFIG_DIR:-$HOME/.copilot}/evolv-coder-lite/bin/${_GSD_SHIM_NAME}"; ecl_run() { node "$ECL_TOOLS" "$@"; }; elif [ -f "${WINDSURF_CONFIG_DIR:-$HOME/.codeium/windsurf}/evolv-coder-lite/bin/${_GSD_SHIM_NAME}" ]; then ECL_TOOLS="${WINDSURF_CONFIG_DIR:-$HOME/.codeium/windsurf}/evolv-coder-lite/bin/${_GSD_SHIM_NAME}"; ecl_run() { node "$ECL_TOOLS" "$@"; }; elif [ -f "${AUGMENT_CONFIG_DIR:-$HOME/.augment}/evolv-coder-lite/bin/${_GSD_SHIM_NAME}" ]; then ECL_TOOLS="${AUGMENT_CONFIG_DIR:-$HOME/.augment}/evolv-coder-lite/bin/${_GSD_SHIM_NAME}"; ecl_run() { node "$ECL_TOOLS" "$@"; }; elif [ -f "${TRAE_CONFIG_DIR:-$HOME/.trae}/evolv-coder-lite/bin/${_GSD_SHIM_NAME}" ]; then ECL_TOOLS="${TRAE_CONFIG_DIR:-$HOME/.trae}/evolv-coder-lite/bin/${_GSD_SHIM_NAME}"; ecl_run() { node "$ECL_TOOLS" "$@"; }; elif [ -f "${QWEN_CONFIG_DIR:-$HOME/.qwen}/evolv-coder-lite/bin/${_GSD_SHIM_NAME}" ]; then ECL_TOOLS="${QWEN_CONFIG_DIR:-$HOME/.qwen}/evolv-coder-lite/bin/${_GSD_SHIM_NAME}"; ecl_run() { node "$ECL_TOOLS" "$@"; }; elif [ -f "${CODEBUDDY_CONFIG_DIR:-$HOME/.codebuddy}/evolv-coder-lite/bin/${_GSD_SHIM_NAME}" ]; then ECL_TOOLS="${CODEBUDDY_CONFIG_DIR:-$HOME/.codebuddy}/evolv-coder-lite/bin/${_GSD_SHIM_NAME}"; ecl_run() { node "$ECL_TOOLS" "$@"; }; elif [ -f "${CLINE_CONFIG_DIR:-$HOME/.cline}/evolv-coder-lite/bin/${_GSD_SHIM_NAME}" ]; then ECL_TOOLS="${CLINE_CONFIG_DIR:-$HOME/.cline}/evolv-coder-lite/bin/${_GSD_SHIM_NAME}"; ecl_run() { node "$ECL_TOOLS" "$@"; }; elif [ -f "${GROK_AGENTS_HOME:-$HOME/.agents}/evolv-coder-lite/bin/${_GSD_SHIM_NAME}" ]; then ECL_TOOLS="${GROK_AGENTS_HOME:-$HOME/.agents}/evolv-coder-lite/bin/${_GSD_SHIM_NAME}"; ecl_run() { node "$ECL_TOOLS" "$@"; }; elif [ -f "${ANTIGRAVITY_CONFIG_DIR:-$HOME/.gemini/antigravity}/evolv-coder-lite/bin/${_GSD_SHIM_NAME}" ]; then ECL_TOOLS="${ANTIGRAVITY_CONFIG_DIR:-$HOME/.gemini/antigravity}/evolv-coder-lite/bin/${_GSD_SHIM_NAME}"; ecl_run() { node "$ECL_TOOLS" "$@"; }; elif [ -f "${OPENCODE_CONFIG_DIR:-${XDG_CONFIG_HOME:-$HOME/.config}/opencode}/evolv-coder-lite/bin/${_GSD_SHIM_NAME}" ]; then ECL_TOOLS="${OPENCODE_CONFIG_DIR:-${XDG_CONFIG_HOME:-$HOME/.config}/opencode}/evolv-coder-lite/bin/${_GSD_SHIM_NAME}"; ecl_run() { node "$ECL_TOOLS" "$@"; }; elif [ -f "${KILO_CONFIG_DIR:-${XDG_CONFIG_HOME:-$HOME/.config}/kilo}/evolv-coder-lite/bin/${_GSD_SHIM_NAME}" ]; then ECL_TOOLS="${KILO_CONFIG_DIR:-${XDG_CONFIG_HOME:-$HOME/.config}/kilo}/evolv-coder-lite/bin/${_GSD_SHIM_NAME}"; ecl_run() { node "$ECL_TOOLS" "$@"; }; else echo "ERROR: ecl-tools.cjs not found at $ECL_TOOLS and ecl-tools is not on PATH. Run: npx -y @evolvconsulting/evolv-coder-lite@latest --claude --local" >&2; exit 1; fi; if [ -n "${CLAUDE_ENV_FILE:-}" ] && [ -n "${ECL_TOOLS:-}" ]; then printf "export PATH='%s':\"\$PATH\"\n" "${ECL_TOOLS%/*}" >> "$CLAUDE_ENV_FILE" 2>/dev/null || true; fi
+INIT=$(ecl_run query init.execute-phase "${PHASE}")
 if [[ "$INIT" == @file:* ]]; then INIT=$(cat "${INIT#@file:}"); fi
 ```
 
@@ -81,7 +82,7 @@ Extract from init JSON: `executor_model`, `commit_docs`, `sub_repos`, `phase_dir
 
 Also load planning state (position, decisions, blockers) via the SDK — **use `node` to invoke the CLI** (not `npx`):
 ```bash
-ecl-tools query state.load 2>/dev/null
+ecl_run query state.load 2>/dev/null
 ```
 If STATE.md missing but .planning/ exists: offer to reconstruct or continue without.
 If .planning/ missing: Error — project not initialized.
@@ -101,6 +102,24 @@ PLAN_START_TIME=$(date -u +"%Y-%m-%dT%H:%M:%SZ")
 PLAN_START_EPOCH=$(date +%s)
 ```
 </step>
+
+<worktree_metadata_capture>
+If running inside a git worktree, capture authoritative worktree identity before
+any task commit changes HEAD. The execute-phase orchestrator consumes this from
+your final `<worktree_metadata>` return block to build the wave cleanup manifest
+without relying on runtime harness metadata (#1297).
+
+```bash
+ECL_WORKTREE_PATH=""
+ECL_WORKTREE_BRANCH=""
+ECL_WORKTREE_EXPECTED_BASE=""
+if [ -f .git ]; then
+  ECL_WORKTREE_PATH=$(git rev-parse --show-toplevel)
+  ECL_WORKTREE_BRANCH=$(git rev-parse --abbrev-ref HEAD)
+  ECL_WORKTREE_EXPECTED_BASE=$(git rev-parse HEAD)
+fi
+```
+</worktree_metadata_capture>
 
 <step name="determine_execution_pattern">
 ```bash
@@ -271,8 +290,8 @@ Do NOT continue reading. Analysis without action is a stuck signal.
 Check if auto mode is active at executor start (chain flag or user preference):
 
 ```bash
-AUTO_CHAIN=$(ecl-tools query config-get workflow._auto_chain_active 2>/dev/null || echo "false")
-AUTO_CFG=$(ecl-tools query config-get workflow.auto_advance 2>/dev/null || echo "false")
+AUTO_CHAIN=$(ecl_run query config-get workflow._auto_chain_active 2>/dev/null || echo "false")
+AUTO_CFG=$(ecl_run query config-get workflow.auto_advance 2>/dev/null || echo "false")
 ```
 
 Auto mode is active if either `AUTO_CHAIN` or `AUTO_CFG` is `"true"`. Store the result for checkpoint handling below.
@@ -397,7 +416,7 @@ If RED or GREEN gate commits are missing, add a warning to SUMMARY.md under a `#
 **Behavior-Adding Task detection** (the gate only fires when this predicate returns true): apply via the centralized verb instead of inlining the three checks:
 
 ```bash
-IS_BEHAVIOR_ADDING=$(ecl-tools query task.is-behavior-adding "$TASK_FILE" --pick is_behavior_adding)
+IS_BEHAVIOR_ADDING=$(ecl_run query task.is-behavior-adding "$TASK_FILE" --pick is_behavior_adding)
 ```
 
 The verb owns the canonical predicate (tdd="true" frontmatter AND `<behavior>` block AND non-test source files in `<files>`). Pure doc-only / config-only / test-only tasks return `false` and are exempt. Full result also exposes per-check breakdown (`checks.tdd_true`, `checks.has_behavior_block`, `checks.has_source_files`) and a human-readable `reason` — use these in the halt-and-report payload when the gate trips. See `references/execute-mvp-tdd.md` for halt protocol.
@@ -497,7 +516,7 @@ git add src/types/user.ts
 
 **If `sub_repos` is configured (non-empty array from init context):** Use `commit-to-subrepo` to route files to their correct sub-repo:
 ```bash
-ecl-tools query commit-to-subrepo "{type}({phase}-{plan}): {concise task description}" --files file1 file2 ...
+ecl_run query commit-to-subrepo "{type}({phase}-{plan}): {concise task description}" --files file1 file2 ...
 ```
 Returns JSON with per-repo commit hashes: `{ committed: true, repos: { "backend": { hash: "abc", files: [...] }, ... } }`. Record all hashes for SUMMARY.
 
@@ -604,7 +623,7 @@ This file is the canonical output of this step. The orchestrator reads `.plannin
 
 **Use template:** @~/.claude/evolv-coder-lite/templates/summary.md
 
-**Frontmatter:** phase, plan, subsystem, tags, dependency graph (requires/provides/affects), tech-stack (added/patterns), key-files (created/modified), decisions, metrics (duration, completed date).
+**Frontmatter:** phase, plan, subsystem, tags, dependency graph (requires/provides/affects), tech-stack (added/patterns), key-files (created/modified), decisions, metrics (duration, completed date), status (`status: complete` — required so the audit-open scanner recognises the summary as done).
 
 **Title:** `# Phase [X] Plan [Y]: [Name] Summary`
 
@@ -674,32 +693,32 @@ After SUMMARY.md, update STATE.md using `ecl-tools query` state handlers (positi
 
 ```bash
 # Advance plan counter (handles edge cases automatically)
-ecl-tools query state.advance-plan
+ecl_run query state.advance-plan
 
 # Recalculate progress bar from disk state
-ecl-tools query state.update-progress
+ecl_run query state.update-progress
 
 # Record execution metrics (phase, plan, duration, tasks, files)
-ecl-tools query state.record-metric \
+ecl_run query state.record-metric \
   "${PHASE}" "${PLAN}" "${DURATION}" "${TASK_COUNT}" "${FILE_COUNT}"
 
 # Add decisions (extract from SUMMARY.md key-decisions)
 for decision in "${DECISIONS[@]}"; do
-  ecl-tools query state.add-decision "${decision}"
+  ecl_run query state.add-decision "${decision}"
 done
 
 # Update session info (timestamp, stopped-at, resume-file)
-ecl-tools query state.record-session \
+ecl_run query state.record-session \
   "" "Completed ${PHASE}-${PLAN}-PLAN.md" "None"
 ```
 
 ```bash
 # Update ROADMAP.md progress for this phase (plan counts, status)
-ecl-tools query roadmap.update-plan-progress "${PHASE_NUMBER}"
+ecl_run query roadmap.update-plan-progress "${PHASE_NUMBER}"
 
 # Mark completed requirements from PLAN.md frontmatter
 # Extract the `requirements` array from the plan's frontmatter, then mark each complete
-ecl-tools query requirements.mark-complete ${REQ_IDS}
+ecl_run query requirements.mark-complete ${REQ_IDS}
 ```
 
 **Requirement IDs:** Extract from the PLAN.md frontmatter `requirements:` field (e.g., `requirements: [AUTH-01, AUTH-02]`). Pass all IDs to `requirements mark-complete`. If the plan has no requirements field, skip this step.
@@ -717,13 +736,13 @@ ecl-tools query requirements.mark-complete ${REQ_IDS}
 
 **For blockers found during execution:**
 ```bash
-ecl-tools query state.add-blocker "Blocker description"
+ecl_run query state.add-blocker "Blocker description"
 ```
 </state_updates>
 
 <final_commit>
 ```bash
-ecl-tools query commit "docs({phase}-{plan}): complete [plan-name] plan" --files \
+ecl_run query commit "docs({phase}-{plan}): complete [plan-name] plan" --files \
   .planning/phases/XX-name/{phase}-{plan}-SUMMARY.md .planning/STATE.md .planning/ROADMAP.md .planning/REQUIREMENTS.md
 ```
 
@@ -759,6 +778,10 @@ into the user's project history.
 **Plan:** {phase}-{plan}
 **Tasks:** {completed}/{total}
 **SUMMARY:** {path to SUMMARY.md}
+
+<worktree_metadata>
+{"agent_id":"{phase}-{plan}","worktree_path":"${ECL_WORKTREE_PATH:-}","branch":"${ECL_WORKTREE_BRANCH:-}","expected_base":"${ECL_WORKTREE_EXPECTED_BASE:-}"}
+</worktree_metadata>
 
 **Commits:**
 - {hash}: {message}

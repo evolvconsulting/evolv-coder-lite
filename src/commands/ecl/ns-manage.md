@@ -5,7 +5,7 @@ argument-hint: ""
 allowed-tools:
   - Read
   - Skill
-requires: [config, workspace, workstreams, thread, pause-work, resume-work, update, ship, inbox, pr-branch, undo]
+requires: [config, workspace, workstreams, thread, pause-work, resume-work, update, ship, inbox, pr-branch, undo, cleanup, health, manager, settings, stats, surface, help]
 ---
 
 Route to the appropriate management skill based on the user's intent.
@@ -25,5 +25,12 @@ Route to the appropriate management skill based on the user's intent.
 | Process inbox items | ecl-inbox |
 | Create a clean PR branch | ecl-pr-branch |
 | Undo the last eCL action | ecl-undo |
+| Archive accumulated phase directories | ecl-cleanup |
+| Diagnose planning directory health | ecl-health |
+| Open the interactive command center | ecl-manager |
+| Configure workflow toggles and model profile | ecl-settings |
+| Show project statistics | ecl-stats |
+| Toggle which skills are surfaced | ecl-surface |
+| Show the eCL command guide | ecl-help |
 
 Invoke the matched skill directly using the Skill tool.
