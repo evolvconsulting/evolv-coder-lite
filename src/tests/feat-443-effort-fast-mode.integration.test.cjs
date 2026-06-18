@@ -52,7 +52,7 @@ const {
   resolveFastModeInternal,
   resolveEffortForTier,
   VALID_EFFORTS,
-} = require('../evolv-coder-lite/bin/lib/core.cjs');
+} = require('../evolv-coder-lite/bin/lib/model-resolver.cjs');
 
 const {
   renderEffortForRuntime,

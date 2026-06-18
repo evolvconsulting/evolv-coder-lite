@@ -17,8 +17,8 @@ import path from 'node:path';
 import os from 'node:os';
 import readline from 'node:readline';
 // eslint-disable-next-line @typescript-eslint/no-require-imports
-import core = require('./core.cjs');
-const { output, error, reapStaleTempFiles } = core;
+import ioModule = require('./io.cjs');
+const { output, error, reapStaleTempFiles, ensureGsdTempDir, ECL_TEMP_DIR } = ioModule;
 
 // ─── Types ────────────────────────────────────────────────────────────────────
 
@@ -413,7 +413,8 @@ async function cmdExtractMessages(projectArg: string, options: { sessionId?: str
   }
 
   reapStaleTempFiles('ecl-pipeline-', { dirsOnly: true });
-  const tmpDir = fs.mkdtempSync(path.join(os.tmpdir(), 'ecl-pipeline-'));
+  ensureGsdTempDir();
+  const tmpDir = fs.mkdtempSync(path.join(ECL_TEMP_DIR, 'ecl-pipeline-'));
   const outputPath = path.join(tmpDir, 'extracted-messages.jsonl');
 
   let sessionsProcessed = 0;
@@ -601,7 +602,8 @@ async function cmdProfileSample(overridePath: string | null | undefined, options
   }
 
   reapStaleTempFiles('ecl-profile-', { dirsOnly: true });
-  const tmpDir = fs.mkdtempSync(path.join(os.tmpdir(), 'ecl-profile-'));
+  ensureGsdTempDir();
+  const tmpDir = fs.mkdtempSync(path.join(ECL_TEMP_DIR, 'ecl-profile-'));
   const outputPath = path.join(tmpDir, 'profile-sample.jsonl');
   for (const msg of allMessages) {
     fs.appendFileSync(outputPath, JSON.stringify(msg) + '\n');

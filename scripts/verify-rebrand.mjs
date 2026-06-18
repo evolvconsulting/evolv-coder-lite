@@ -27,6 +27,17 @@ const SRC_ALLOWLIST = [
   /^REBRAND-MANIFEST\.json$/,
   /(^|\/)CHANGELOG(\.md)?$/i,
   /(^|\/)\.changeset\//,
+  // Migration 004 (#934) and its test deliberately reference the upstream-legacy
+  // pristine dir name `get-shit-done` (the pre-`gsd-core`-rename dir). eCL's
+  // rebrand collapses get-shit-done & gsd-core both to evolv-coder-lite, which
+  // would make the migration prune eCL's CURRENT pristine dir — so the eCL build
+  // points the walk at the literal upstream-legacy `get-shit-done` (a dir eCL
+  // installs never create → safe no-op). These files are legacy-name references
+  // by design; allowlist them like CHANGELOG. See overlay/text-patches.mjs
+  // (prune-stale-pristine-legacy-dir-noop-*) and overlay/files/tests/.
+  /^src\/installer-migrations\/004-prune-stale-pristine-snapshots\.cts$/,
+  /^tests\/installer-migration-prune-stale-pristine\.test\.cjs$/,
+  /^evolv-coder-lite\/bin\/lib\/installer-migrations\/004-prune-stale-pristine-snapshots\.cjs$/,
 ];
 
 function isAllowlisted(srcRel) {

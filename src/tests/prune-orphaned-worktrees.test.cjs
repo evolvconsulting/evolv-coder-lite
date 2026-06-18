@@ -16,7 +16,7 @@ const { createTempDir, cleanup } = require('./helpers.cjs');
 
 // Lazy-loaded so tests can fail clearly when the export doesn't exist yet.
 function getPruneOrphanedWorktrees() {
-  const { pruneOrphanedWorktrees } = require('../evolv-coder-lite/bin/lib/core.cjs');
+  const { pruneOrphanedWorktrees } = require('../evolv-coder-lite/bin/lib/worktree-safety.cjs');
   return pruneOrphanedWorktrees;
 }
 

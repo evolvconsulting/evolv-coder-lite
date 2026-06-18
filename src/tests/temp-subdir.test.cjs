@@ -14,7 +14,7 @@ const os = require('os');
 
 const {
   reapStaleTempFiles,
-} = require('../evolv-coder-lite/bin/lib/core.cjs');
+} = require('../evolv-coder-lite/bin/lib/io.cjs');
 
 const ECL_TEMP_DIR = path.join(os.tmpdir(), 'ecl');
 
@@ -121,14 +121,14 @@ describe('dedicated ecl temp subdirectory', () => {
 
       // The legacy reap function should still clean old-location files
       // We import it if exported, or verify the main reap handles both
-      const core = require('../evolv-coder-lite/bin/lib/core.cjs');
-      if (typeof core.reapStaleTempFilesLegacy === 'function') {
-        core.reapStaleTempFilesLegacy(testPrefix, { maxAgeMs: 5 * 60 * 1000 });
+      const ioModule = require('../evolv-coder-lite/bin/lib/io.cjs');
+      if (typeof ioModule.reapStaleTempFilesLegacy === 'function') {
+        ioModule.reapStaleTempFilesLegacy(testPrefix, { maxAgeMs: 5 * 60 * 1000 });
         assert.ok(!fs.existsSync(oldLocationPath), 'legacy reap should clean old location');
       } else {
         // If no separate legacy function, the main output() should do a one-time
         // migration sweep. We just verify the export shape is correct.
-        assert.ok(typeof core.reapStaleTempFiles === 'function');
+        assert.ok(typeof ioModule.reapStaleTempFiles === 'function');
         // Clean up manually since we're not testing migration here
         fs.unlinkSync(oldLocationPath);
       }

@@ -369,7 +369,7 @@ eCL は LLM のシステムプロンプトになるマークダウンファイ�
 - `ecl-prompt-guard.js` — `.planning/` への Write/Edit 呼び出しでインジェクションパターンをスキャンする（常時有効、アドバイザリーのみ）
 - `ecl-workflow-guard.js` — eCL ワークフローコンテキスト外でのファイル編集を警告する（`hooks.workflow_guard` 経由でオプトイン）
 
-**CI スキャナー:** `prompt-injection-scan.test.cjs` はすべてのエージェント、ワークフロー、コマンドファイルに埋め込まれたインジェクションベクターをスキャンします。
+**CI スキャナー:** `prompt-injection-scan.security.test.cjs` はすべてのエージェント、ワークフロー、コマンドファイルに埋め込まれたインジェクションベクターをスキャンします。
 
 ---
 

@@ -27,7 +27,7 @@ const path = require('node:path');
 
 const {
   resolveModelInternal,
-} = require('../evolv-coder-lite/bin/lib/core.cjs');
+} = require('../evolv-coder-lite/bin/lib/model-resolver.cjs');
 const {
   AGENT_TO_PHASE_TYPE,
   VALID_PHASE_TYPES,
@@ -254,7 +254,7 @@ describe('#3023 resolver: models.<phase_type> overrides profile-based tier', () 
 
 // ─── #443 Unified effort: resolveEffortInternal + renderEffortForRuntime ────
 
-const { resolveEffortInternal } = require('../evolv-coder-lite/bin/lib/core.cjs');
+const { resolveEffortInternal } = require('../evolv-coder-lite/bin/lib/model-resolver.cjs');
 const { renderEffortForRuntime } = require('../evolv-coder-lite/bin/lib/model-catalog.cjs');
 
 describe('#3023 + #443: unified effort resolver (resolveEffortInternal) for Codex', () => {
@@ -262,7 +262,7 @@ describe('#3023 + #443: unified effort resolver (resolveEffortInternal) for Code
   beforeEach(() => { projectDir = makeTmp('effort'); });
   afterEach(() => { rmr(projectDir); });
 
-  test('resolveEffortInternal exported from core.cjs', () => {
+  test('resolveEffortInternal exported from model-resolver.cjs', () => {
     assert.equal(typeof resolveEffortInternal, 'function');
   });
 

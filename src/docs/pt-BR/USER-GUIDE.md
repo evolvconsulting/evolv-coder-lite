@@ -369,7 +369,7 @@ O eCL gera arquivos markdown que se tornam prompts de sistema de LLM. Isso signi
 - `ecl-prompt-guard.js` — Verifica chamadas Write/Edit para `.planning/` em busca de padrões de injeção (sempre ativo, somente consultivo)
 - `ecl-workflow-guard.js` — Avisa sobre edições de arquivos fora do contexto do workflow eCL (opt-in via `hooks.workflow_guard`)
 
-**Scanner de CI:** `prompt-injection-scan.test.cjs` verifica todos os arquivos de agentes, workflows e comandos em busca de vetores de injeção incorporados.
+**Scanner de CI:** `prompt-injection-scan.security.test.cjs` verifica todos os arquivos de agentes, workflows e comandos em busca de vetores de injeção incorporados.
 
 ---
 

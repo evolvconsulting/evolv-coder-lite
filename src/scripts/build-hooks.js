@@ -26,6 +26,13 @@ const STAGE_DIR = path.join(HOOKS_DIR, `.dist-staging-${process.pid}`);
 const HOOKS_TO_COPY = [
   'ecl-check-update-worker.js',
   'ecl-check-update.js',
+  // SessionStart canonical-path bootstrap (#997). In a Claude Code marketplace
+  // plugin install, ~/.claude/evolv-coder-lite is never created, so every
+  // `@~/.claude/evolv-coder-lite/...` include in agents/commands/templates resolves to
+  // nothing. This hook symlinks the canonical path's immutable subdirs to the
+  // plugin's bundled evolv-coder-lite/ tree; no-op in classic installs. Must ship to
+  // dist so the installer copies it into the target hooks/ dir.
+  'ecl-ensure-canonical-path.js',
   // Required by ecl-check-update-worker.js at runtime — must ship alongside it
   // so require('./managed-hooks-registry.cjs') resolves in the installed hooks/ dir.
   'managed-hooks-registry.cjs',

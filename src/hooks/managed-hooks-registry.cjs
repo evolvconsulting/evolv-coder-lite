@@ -22,6 +22,7 @@ const MANAGED_HOOKS = [
   'ecl-context-monitor.js',
   'ecl-cursor-post-tool.js',
   'ecl-cursor-session-start.js',
+  'ecl-ensure-canonical-path.js',
   'ecl-graphify-update.sh',
   'ecl-phase-boundary.sh',
   'ecl-prompt-guard.js',
