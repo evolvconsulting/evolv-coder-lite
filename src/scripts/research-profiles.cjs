@@ -13,7 +13,7 @@
  *   color            — verbatim frontmatter `color:` value
  *   tools            — verbatim frontmatter `tools:` value (single string, comma-separated)
  *   requiredIncludes — @~/.claude/evolv-coder-lite/references/<file>.md strings the body MUST contain
- *   requiredSeamCalls — `ecl-tools query <cmd>` strings the body MUST contain
+ *   requiredSeamCalls — `ecl_run query <cmd>` strings the body MUST contain
  *   outputContract   — strings the body MUST contain (output path, return marker, etc.)
  */
 
@@ -24,16 +24,16 @@ const PROFILES = [
       'Researches domain ecosystem before roadmap creation. Produces files in .planning/research/ consumed during roadmap creation. Spawned by /ecl:new-project or /ecl:new-milestone orchestrators.',
     color: 'cyan',
     tools:
-      'Read, Write, Bash, Grep, Glob, WebSearch, WebFetch, mcp__context7__*, mcp__firecrawl__*, mcp__exa__*, mcp__tavily__*, mcp__ref__*, mcp__jina__*',
+      'Read, Write, Bash, Grep, Glob, Skill, WebSearch, WebFetch, mcp__context7__*, mcp__firecrawl__*, mcp__exa__*, mcp__tavily__*, mcp__ref__*, mcp__jina__*, mcp__perplexity__*',
     requiredIncludes: [
       '@~/.claude/evolv-coder-lite/references/research-documentation-lookup.md',
       '@~/.claude/evolv-coder-lite/references/research-philosophy.md',
       '@~/.claude/evolv-coder-lite/references/research-verification-protocol.md',
     ],
     requiredSeamCalls: [
-      'ecl-tools query research-plan',
-      'ecl-tools query research-store put',
-      'ecl-tools query classify-confidence',
+      'ecl_run query research-plan',
+      'ecl_run query research-store put',
+      'ecl_run query classify-confidence',
     ],
     outputContract: [
       '.planning/research/',
@@ -46,17 +46,17 @@ const PROFILES = [
       'Researches how to implement a phase before planning. Produces RESEARCH.md consumed by ecl-planner. Spawned by /ecl:plan-phase orchestrator.',
     color: 'cyan',
     tools:
-      'Read, Write, Edit, Bash, Grep, Glob, WebSearch, WebFetch, mcp__context7__*, mcp__firecrawl__*, mcp__exa__*, mcp__tavily__*, mcp__ref__*, mcp__jina__*',
+      'Read, Write, Edit, Bash, Grep, Glob, Skill, WebSearch, WebFetch, mcp__context7__*, mcp__firecrawl__*, mcp__exa__*, mcp__tavily__*, mcp__ref__*, mcp__jina__*, mcp__perplexity__*',
     requiredIncludes: [
       '@~/.claude/evolv-coder-lite/references/research-documentation-lookup.md',
       '@~/.claude/evolv-coder-lite/references/research-philosophy.md',
       '@~/.claude/evolv-coder-lite/references/research-verification-protocol.md',
     ],
     requiredSeamCalls: [
-      'ecl-tools query research-plan',
-      'ecl-tools query research-store put',
-      'ecl-tools query classify-confidence',
-      'ecl-tools query package-legitimacy check',
+      'ecl_run query research-plan',
+      'ecl_run query research-store put',
+      'ecl_run query classify-confidence',
+      'ecl_run query package-legitimacy check',
     ],
     outputContract: [
       '.planning/phases/XX-name/{phase_num}-RESEARCH.md',
@@ -68,7 +68,7 @@ const PROFILES = [
     description:
       'Researches a single gray area decision and returns a structured comparison table with rationale. Spawned by discuss-phase advisor mode.',
     color: 'cyan',
-    tools: 'Read, Bash, Grep, Glob, WebSearch, WebFetch, mcp__context7__*',
+    tools: 'Read, Bash, Grep, Glob, Skill, WebSearch, WebFetch, mcp__context7__*',
     requiredIncludes: [
       '@~/.claude/evolv-coder-lite/references/research-documentation-lookup.md',
     ],
@@ -117,12 +117,12 @@ const PROFILES = [
       'Produces UI-SPEC.md design contract for frontend phases. Reads upstream artifacts, detects design system state, asks only unanswered questions. Spawned by /ecl:ui-phase orchestrator.',
     color: 'purple',
     tools:
-      'Read, Write, Edit, Bash, Grep, Glob, WebSearch, WebFetch, mcp__context7__*, mcp__firecrawl__*, mcp__exa__*, mcp__tavily__*, mcp__ref__*, mcp__jina__*',
+      'Read, Write, Edit, Bash, Grep, Glob, Skill, WebSearch, WebFetch, mcp__context7__*, mcp__firecrawl__*, mcp__exa__*, mcp__tavily__*, mcp__ref__*, mcp__jina__*',
     requiredIncludes: [
       '@~/.claude/evolv-coder-lite/references/research-documentation-lookup.md',
     ],
     requiredSeamCalls: [
-      'ecl-tools query commit',
+      'ecl_run query commit',
     ],
     outputContract: [
       'UI-SPEC.md',
@@ -134,10 +134,10 @@ const PROFILES = [
     description:
       'Synthesizes research outputs from parallel researcher agents into SUMMARY.md. Spawned by /ecl:new-project after 4 researcher agents complete.',
     color: 'purple',
-    tools: 'Read, Write, Bash',
+    tools: 'Read, Write, Bash, Skill',
     requiredIncludes: [],
     requiredSeamCalls: [
-      'ecl-tools query commit',
+      'ecl_run query commit',
     ],
     outputContract: [
       '.planning/research/SUMMARY.md',

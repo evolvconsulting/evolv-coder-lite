@@ -49,7 +49,7 @@ const path = require('node:path');
 const {
   resolveModelInternal,
   resolveModelForTier,
-} = require('../evolv-coder-lite/bin/lib/core.cjs');
+} = require('../evolv-coder-lite/bin/lib/model-resolver.cjs');
 const {
   AGENT_DEFAULT_TIERS,
   VALID_AGENT_TIERS,

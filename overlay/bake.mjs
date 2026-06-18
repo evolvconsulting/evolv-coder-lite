@@ -133,7 +133,14 @@ async function main() {
   //    resolve their root from __dirname/.. → SRC and are deterministic (no
   //    timestamps), so the release "matches a fresh bake" gate stays green.
   if (!CHECK_ONLY && patched) {
-    for (const rel of ['scripts/generate-package-identity.cjs', 'scripts/sync-manifest-versions.cjs']) {
+    // update-size-baseline.cjs (#1074): upstream commits per-file agent/workflow
+    // size baselines measured against ITS bytes; eCL's rebrand expands every file
+    // (Get Shit Done→evolv Coder Lite, gsd→ecl …) so the upstream-measured
+    // baselines never match the rebranded tree. Regenerate them from the baked
+    // files so the ratchet tracks eCL's real sizes (the absolute tier hard caps,
+    // enforced separately, still apply). Deterministic byte counts → matches a
+    // fresh bake, so the release "src matches fresh bake" gate stays green.
+    for (const rel of ['scripts/generate-package-identity.cjs', 'scripts/sync-manifest-versions.cjs', 'scripts/update-size-baseline.cjs']) {
       const script = join(SRC, rel);
       if (await exists(script)) {
         execFileSync(process.execPath, [script], { stdio: 'pipe' });

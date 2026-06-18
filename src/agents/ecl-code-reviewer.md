@@ -1,7 +1,7 @@
 ---
 name: ecl-code-reviewer
 description: Reviews source files for bugs, security issues, and code quality problems. Produces structured REVIEW.md with severity-classified findings. Spawned by /ecl:code-review.
-tools: Read, Write, Bash, Grep, Glob
+tools: Read, Write, Bash, Grep, Glob, Skill
 color: orange
 # hooks:
 #   - before_write

@@ -130,6 +130,13 @@ const RULES = [
   // no boundary between D and _). Also handles trailing _GSD on env names.
   { track: 'env:GSD-snake',  find: /\bGSD_/g,                       repl: 'ECL_' },
   { track: 'env:snake-GSD',  find: /_GSD\b/g,                       repl: '_ECL' },
+  // Leading-underscore shell var `_GSD_RT` (the spec-phase edge-probe runtime
+  // dir): both neighbours are `_`, so neither \bGSD_ nor _GSD\b fires and it
+  // would ship as a `_GSD_RT` leak. verify-rebrand shares that blind spot, but
+  // edge-probe-spec-phase-contract.test.cjs pins `npm --prefix "$_ECL_RT"`
+  // (its `_?GSD_RT` regex DID rebrand via \bGSD_), so the un-rebranded var
+  // fails the guard. Rebrand the whole token so file and test agree.
+  { track: 'env:_GSD_RT',    find: /_GSD_RT\b/g,                    repl: '_ECL_RT' },
 
   // --- standalone tokens (last; broadest) ---
   { track: 'tok:GSD',        find: /\bGSD\b/g,                      repl: 'eCL' },

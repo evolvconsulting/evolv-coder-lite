@@ -28,7 +28,7 @@ const os = require('node:os');
 const { cleanup } = require('./helpers.cjs');
 
 // Import loadConfig directly (sync, no CLI subprocess needed)
-const { loadConfig } = require('../evolv-coder-lite/bin/lib/core.cjs');
+const { loadConfig } = require('../evolv-coder-lite/bin/lib/config-loader.cjs');
 
 // ─── helpers ──────────────────────────────────────────────────────────────────
 

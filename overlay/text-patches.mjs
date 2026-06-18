@@ -131,26 +131,6 @@ const PATCHES = [
     replace: `  const matches = content.match(/\\becl-[a-z][a-z-]*/g);`,
   },
   {
-    id: 'feat-3594-parser-test-require-path',
-    file: 'tests/feat-3594-parser-property-style.test.cjs',
-    issue: 'evolvconsulting/evolv-coder-lite#17',
-    upstream: {
-      status: 'inappropriate',
-      detail: 'test-fixture-rebrand-adjustment: null-byte fixture skips the rebrand map',
-    },
-    note: [
-      'Upstream embeds a single null byte in this test fixture, so the bake',
-      'classifies the file as binary and copies it verbatim — the rebrand map',
-      'never rewrites the require path on line 24, which stays',
-      '"../gsd-core/bin/lib/frontmatter.cjs". The real module compiles to',
-      'evolv-coder-lite/bin/lib/frontmatter.cjs (from src/frontmatter.cts), so',
-      'rewrite the path. Drop when the bake handles single-null source files',
-      'or upstream removes the embedded null byte.',
-    ].join(' '),
-    find: `const { extractFrontmatter } = require('../gsd-core/bin/lib/frontmatter.cjs');`,
-    replace: `const { extractFrontmatter } = require('../evolv-coder-lite/bin/lib/frontmatter.cjs');`,
-  },
-  {
     id: 'installer-migration-670-baseline-checksum-rebrand',
     file: 'tests/installer-migrations.test.cjs',
     issue: 'evolvconsulting/evolv-coder-lite#upstream-sync-v1.4.0',
@@ -161,7 +141,7 @@ const PATCHES = [
     note: [
       'The #670 guardrail locks shipped installer-migration bodies to committed',
       'sha256 baselines (EXPECTED_CHECKSUMS). eCL rebrands every migration body',
-      '(gsd to ecl), so all four hashes differ from the upstream committed',
+      '(gsd to ecl), so the hashes differ from the upstream committed',
       'values. Re-pin the baselines to the rebranded body hashes. If a migration',
       'body or the rebrand rules change, the guardrail fails loudly with the new',
       'actual hash and the affected baseline must be re-pinned here.',
@@ -175,6 +155,9 @@ const PATCHES = [
       'sha256:5ce55294aa02f25758f604a569c899a6d2d060299189f5f447f68d8033157058',
     '2026-06-02-rename-evolv-coder-lite-to-evolv-coder-lite':
       'sha256:3a9f1d97f64097fb313203d19c6d93a187a38df61dd299afa5eef73e16124e95',
+    // Migration 004: prune stale ecl-pristine/evolv-coder-lite/ snapshots (#934) // ecl-allow-legacy-name
+    '2026-06-09-prune-stale-pristine-evolv-coder-lite': // ecl-allow-legacy-name
+      'sha256:6555dd044659276fbc204e81793cd92c5315d54e7316bcdd82d2c98d15a7e9e8',
   };`,
     replace: `  const EXPECTED_CHECKSUMS = {
     '2026-05-11-first-time-baseline-scan':
@@ -185,25 +168,10 @@ const PATCHES = [
       'sha256:3e2fa98915bbd272182ebe7ede9e1fc4137c2067d386ba190fa0d37aafa15f77',
     '2026-06-02-rename-evolv-coder-lite-to-evolv-coder-lite':
       'sha256:f8331badfebb311e43d264a52d479f414152a994da57dd1a1f637315fe39f535',
+    // Migration 004: prune stale ecl-pristine/evolv-coder-lite/ snapshots (#934) // ecl-allow-legacy-name
+    '2026-06-09-prune-stale-pristine-evolv-coder-lite': // ecl-allow-legacy-name
+      'sha256:7d07c3964a0c4b226bce738d02e6651b90d2ab691ca92b1bd1998801dabf3cfa',
   };`,
-  },
-  {
-    id: 'changelog-1777-augment-auggie-parenthetical',
-    file: 'CHANGELOG.md',
-    issue: 'evolvconsulting/evolv-coder-lite#upstream-sync-v1.4.0',
-    upstream: {
-      status: 'inappropriate',
-      detail: 'brand: drop parenthetical product description (#1777 purity guard)',
-    },
-    note: [
-      'v1.4.0 CHANGELOG adds an entry starting "Augment (Auggie) installs".',
-      'The #1777 product-name-purity guard forbids parenthetical product',
-      'descriptions in the CHANGELOG; "Augment (Auggie)" trips it. Drop the',
-      'parenthetical. Drop this patch when upstream removes it or the next sync',
-      'rewrites the entry (anchor mismatch will surface the change).',
-    ].join(' '),
-    find: `**Augment (Auggie) installs now emit slash command definitions`,
-    replace: `**Augment installs now emit slash command definitions`,
   },
   {
     id: 'enh-2792-namespace-skills-test-routing-regex-1',
@@ -241,6 +209,25 @@ const PATCHES = [
     replace: `        for (const m of cells[cells.length - 1].matchAll(/\\becl-[a-z][a-z0-9-]*/g)) {`,
   },
   {
+    id: 'enh-2792-namespace-skills-test-routing-regex-3',
+    file: 'tests/enh-2792-namespace-skills.test.cjs',
+    issue: 'evolvconsulting/evolv-coder-lite#pre-release-remediation',
+    upstream: {
+      status: 'inappropriate',
+      detail: 'rebrand-artifact: \\bgsd- regex literal',
+    },
+    note: [
+      'v1.5.0 adds a third \\bgsd- regex literal in the same file — the',
+      'requires/cross-reference extraction loop (const match / lastCell form).',
+      'Same blind spot as regex-1/-2: the id:gsd-dash rule (/\\bgsd-/) cannot',
+      'transform a literal preceded by `\\b` (the b kills the word boundary).',
+      'Pattern is /\\bgsd-([a-z][a-z0-9-]*)/g. Rewrite it to ecl-. Drop when',
+      'upstream renames or rebrand-map handles \\bgsd- inside literals.',
+    ].join(' '),
+    find: `        for (const match of lastCell.matchAll(/\\bgsd-([a-z][a-z0-9-]*)/g)) {`,
+    replace: `        for (const match of lastCell.matchAll(/\\becl-([a-z][a-z0-9-]*)/g)) {`,
+  },
+  {
     id: 'planner-decomposition-test-extracted-limit',
     file: 'tests/planner-decomposition.test.cjs',
     issue: 'evolvconsulting/evolv-coder-lite#pre-release-remediation',
@@ -259,6 +246,159 @@ const PATCHES = [
     ].join(' '),
     find: `const PLANNER_EXTRACTED_LIMIT = 48 * 1024;  // 48K — proves extraction happened`,
     replace: `const PLANNER_EXTRACTED_LIMIT = 50 * 1024;  // 50K — proves extraction happened (eCL: +2K vs upstream 48K to absorb rebrand-expansion of the product name)`,
+  },
+  {
+    id: 'agent-size-budget-large-cap-rebrand-expansion',
+    file: 'tests/agent-size-budget.test.cjs',
+    issue: 'evolvconsulting/evolv-coder-lite#upstream-sync-v1.5.0',
+    upstream: {
+      status: 'inappropriate',
+      detail: 'test-fixture-rebrand-adjustment: LARGE agent hard cap 48K -> 50K (rebrand-byte-expansion)',
+    },
+    note: [
+      'v1.5.0 (#1074) adds absolute per-tier agent hard caps. The LARGE cap is',
+      '49152 (48 KiB), calibrated to upstream byte sizes. eCL\'s rebrand expands',
+      'every agent (Get Shit Done→evolv Coder Lite, gsd→ecl …); the rebranded',
+      'ecl-verifier.md is 49,227 — 75 bytes over. Raise the LARGE cap by 2 KiB',
+      'to absorb the uniform rebrand expansion without changing the guard\'s',
+      'intent (XL agents stay well under their 56 KiB cap). Drop/re-pin when',
+      'upstream changes the cap or extracts ecl-verifier boilerplate.',
+    ].join(' '),
+    find: `const LARGE_CAP = 49152;    // 48 KiB`,
+    replace: `const LARGE_CAP = 51200;    // 50 KiB (eCL: +2 KiB over upstream 48 KiB — rebrand byte-expansion pushes ecl-verifier.md to 49,227)`,
+  },
+  {
+    id: 'workflow-size-budget-discuss-phase-target-rebrand-expansion',
+    file: 'tests/workflow-size-budget.test.cjs',
+    issue: 'evolvconsulting/evolv-coder-lite#upstream-sync-v1.5.0',
+    upstream: {
+      status: 'inappropriate',
+      detail: 'test-fixture-rebrand-adjustment: discuss-phase #2551 target 32000 -> 34000 (rebrand-byte-expansion)',
+    },
+    note: [
+      'The #2551 progressive-disclosure target keeps discuss-phase.md a thin',
+      'dispatcher (< 32000 bytes). Upstream discuss-phase.md is 31,965; the',
+      'rebrand pushes eCL\'s to 32,333 (+368) — the dispatcher logic did not',
+      'grow, only the product-name bytes. Raise the target by ~2K to absorb',
+      'the rebrand expansion (still well under the 32,768 Codex doc cap).',
+      'Drop/re-pin when upstream restructures discuss-phase.',
+    ].join(' '),
+    find: `  const DISCUSS_PHASE_TARGET = 32000;`,
+    replace: `  const DISCUSS_PHASE_TARGET = 34000;  // eCL: +2K over upstream 32000 — rebrand byte-expansion pushes discuss-phase.md to 32,333`,
+  },
+  {
+    id: 'phase6-capstone-pre-phase6-baseline-rebrand-expansion',
+    file: 'tests/phase6-capstone-conformance.test.cjs',
+    issue: 'evolvconsulting/evolv-coder-lite#upstream-sync-v1.5.0',
+    upstream: {
+      status: 'inappropriate',
+      detail: 'test-fixture-rebrand-adjustment: pre-phase-6 frozen size raised for rebrand-byte-expansion',
+    },
+    note: [
+      'The #1168 capstone proves host loop bodies SHRANK vs frozen pre-phase-6',
+      'sizes (must be < frozen). Upstream freezes execute-phase.md at 93166;',
+      'eCL\'s rebrand expands it to 93,613 (+456) — the file shrank as designed,',
+      'but the rebrand bytes push it over upstream\'s frozen value. Raise the',
+      'execute-phase frozen baseline by the rebrand expansion so the guard',
+      'holds at eCL\'s byte scale (plan-phase already passes with headroom).',
+    ].join(' '),
+    find: `    const PRE_PHASE6 = { 'plan-phase.md': 94519, 'execute-phase.md': 93166 };`,
+    replace: `    const PRE_PHASE6 = { 'plan-phase.md': 94519, 'execute-phase.md': 93800 };  // eCL: execute-phase frozen +rebrand byte-expansion over upstream 93166 (rebranded body is 93,613)`,
+  },
+  {
+    id: 'changelog-863-claude-code-parenthetical-purity',
+    file: 'CHANGELOG.md',
+    issue: 'evolvconsulting/evolv-coder-lite#upstream-sync-v1.5.0',
+    upstream: {
+      status: 'inappropriate',
+      detail: 'brand: drop parenthetical product description (#1777 purity guard)',
+    },
+    note: [
+      'v1.5.0 CHANGELOG (#863) ends a sentence with "Claude Code (background',
+      'dispatch is kept …)". The #1777 product-name-purity guard forbids a',
+      'parenthetical immediately after a product name. Rewrite to the semicolon',
+      'form already used by the sibling [Unreleased] entry. Drop when upstream',
+      'rewrites the entry (anchor mismatch will surface the change).',
+    ].join(' '),
+    find: `Claude Code (background dispatch is kept on runtimes that support nested subagents).`,
+    replace: `Claude Code; background dispatch is kept on runtimes that support nested subagents.`,
+  },
+  {
+    id: 'changelog-924-claude-path-parenthetical-purity',
+    file: 'CHANGELOG.md',
+    issue: 'evolvconsulting/evolv-coder-lite#upstream-sync-v1.5.0',
+    upstream: {
+      status: 'inappropriate',
+      detail: 'brand: drop parenthetical product description (#1777 purity guard)',
+    },
+    note: [
+      'v1.5.0 CHANGELOG (#924) writes "nested skill layout for Claude (`~/…`)".',
+      'The #1777 guard forbids a parenthetical immediately after a product',
+      'name. Rewrite "Claude (`path`)" → "Claude at `path`" — same information,',
+      'no parenthetical. Drop when upstream rewrites the entry.',
+    ].join(' '),
+    find: `nested skill layout for Claude (\`~/.claude/skills/gsd-ns-<router>/skills/<stem>/SKILL.md\`),`,
+    replace: `nested skill layout for Claude at \`~/.claude/skills/gsd-ns-<router>/skills/<stem>/SKILL.md\`,`,
+  },
+  {
+    id: 'loop-host-contract-crosscheck-newline-agent-refs',
+    file: 'tests/loop-host-contract.test.cjs',
+    issue: 'evolvconsulting/evolv-coder-lite#upstream-sync-v1.5.0',
+    upstream: {
+      status: 'inappropriate',
+      detail: 'rebrand-artifact: \\ngsd- agent ref in a string literal (escape-sequence blind spot)',
+    },
+    note: [
+      'The FIX-3 crossCheckRoles regression feeds a synthetic workflow string',
+      '"gsd-phase-researcher\\ngsd-planner\\ngsd-plan-checker\\n". The first ref',
+      'rebrands (quote boundary) but the \\n-prefixed ones do not: the `n` of the',
+      '`\\n` escape is a word char before `gsd`, defeating the id:gsd-dash',
+      '(/\\bgsd-/) rule — the same blind spot as enh-2792. crossCheckRoles then',
+      'reports ecl-planner/ecl-plan-checker unreferenced. Rewrite the refs to ecl-.',
+    ].join(' '),
+    find: `const content = 'ecl-phase-researcher\\ngsd-planner\\ngsd-plan-checker\\n';`,
+    replace: `const content = 'ecl-phase-researcher\\necl-planner\\necl-plan-checker\\n';`,
+  },
+  {
+    id: 'prune-stale-pristine-legacy-dir-noop-root',
+    file: 'src/installer-migrations/004-prune-stale-pristine-snapshots.cts',
+    issue: 'evolvconsulting/evolv-coder-lite#upstream-sync-v1.5.0',
+    upstream: {
+      status: 'inappropriate',
+      detail: 'rebrand-collision: legacy get-shit-done & current gsd-core both map to evolv-coder-lite',
+    },
+    note: [
+      'Migration 004 (#934) prunes the post-rename LEGACY pristine dir',
+      'gsd-pristine/get-shit-done/, distinct upstream from the CURRENT',
+      'gsd-pristine/gsd-core/. eCL\'s rebrand maps BOTH get-shit-done and gsd-core',
+      'to evolv-coder-lite, so the rebranded walk target ecl-pristine/evolv-coder-lite/',
+      'IS the current pristine dir — pruning it would wipe live snapshots and',
+      'degrade reapply-patches (#2972/#2998). eCL has always installed as',
+      'evolv-coder-lite/ (the get-shit-done->gsd-core rename never happened',
+      'downstream), so point the walk at the upstream-legacy get-shit-done dir,',
+      'which eCL installs never create -> the migration is a safe no-op in',
+      'production and never touches the current snapshots. Companion: walk path',
+      'below + the eCL test override in overlay/files/. The get-shit-done ref is',
+      'allowlisted in scripts/verify-rebrand.mjs as a legacy-name reference.',
+    ].join(' '),
+    find: `const pristineGsdRoot = path.join(ctx.configDir, 'ecl-pristine', 'evolv-coder-lite'); // ecl-allow-legacy-name`,
+    replace: `const pristineGsdRoot = path.join(ctx.configDir, 'ecl-pristine', 'get-shit-done'); // ecl-allow-legacy-name (eCL no-op: upstream-legacy dir eCL installs never have)`,
+  },
+  {
+    id: 'prune-stale-pristine-legacy-dir-noop-walk',
+    file: 'src/installer-migrations/004-prune-stale-pristine-snapshots.cts',
+    issue: 'evolvconsulting/evolv-coder-lite#upstream-sync-v1.5.0',
+    upstream: {
+      status: 'inappropriate',
+      detail: 'rebrand-collision: companion to prune-stale-pristine-legacy-dir-noop-root',
+    },
+    note: [
+      'Companion to prune-stale-pristine-legacy-dir-noop-root: the walk target',
+      'must match the existence check above, else a present get-shit-done dir',
+      'would walk the (empty) evolv-coder-lite dir. Same rebrand-collision no-op.',
+    ].join(' '),
+    find: `walkPristineFiles(ctx.configDir, path.posix.join('ecl-pristine', 'evolv-coder-lite'), baseResolved, relPaths); // ecl-allow-legacy-name`,
+    replace: `walkPristineFiles(ctx.configDir, path.posix.join('ecl-pristine', 'get-shit-done'), baseResolved, relPaths); // ecl-allow-legacy-name`,
   },
   {
     id: 'skill-manifest-test-expected-order',
@@ -842,10 +982,14 @@ export function classifyPromptUserAction(action: MigrationAction): ClassifyResul
       'it. That worker is spawned by ecl-check-update.js, not registered as a',
       'settings.json hook, so it has no command construction and trips this',
       'completeness guard. Exclude *-worker.js scripts (spawned, not',
-      'registered) from the check. Drop alongside the uninstall patch.',
+      'registered) from the check. v1.5.0 (#1767) narrowed the filter with',
+      '`&& !MODULE_OWNED_HOOKS.has(h)`, but that set only lists the Cursor',
+      'session hooks — not the check-update worker — so the worker still',
+      'trips the guard and the `-worker.js` exclusion is still required.',
+      'Drop alongside the uninstall patch.',
     ].join(' '),
-    find: `    const jsHooks = ECL_UNINSTALL_HOOKS.filter(h => h.endsWith('.js'));`,
-    replace: `    const jsHooks = ECL_UNINSTALL_HOOKS.filter(h => h.endsWith('.js') && !h.endsWith('-worker.js'));`,
+    find: `    const jsHooks = ECL_UNINSTALL_HOOKS.filter(h => h.endsWith('.js') && !MODULE_OWNED_HOOKS.has(h));`,
+    replace: `    const jsHooks = ECL_UNINSTALL_HOOKS.filter(h => h.endsWith('.js') && !MODULE_OWNED_HOOKS.has(h) && !h.endsWith('-worker.js'));`,
   },
 ];
 
